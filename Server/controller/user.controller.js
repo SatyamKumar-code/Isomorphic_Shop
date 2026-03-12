@@ -8,7 +8,6 @@ import sendEmailFun from '../config/sendEmail.js';
 import VerificationEmail from '../utils/verifyEmailTemplate.js';
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
-import ReviewModel from '../models/reviews.model.js';
 
 cloudinary.config({
     cloud_name: process.env.cloudinary_Config_Cloud_Name,
@@ -362,12 +361,6 @@ export async function userAvatarController(req, res) {
 
         user.avatar = imagesArr[0];
         await user.save();
-
-        // Update user's avatar in all their existing reviews
-        await ReviewModel.updateMany(
-            { userId: userId },
-            { image: imagesArr[0] }
-        );
 
         return res.status(200).json({
             _id: userId,

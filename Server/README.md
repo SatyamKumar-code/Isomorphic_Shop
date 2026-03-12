@@ -147,6 +147,27 @@ Server/
 | DELETE | `/api/category/:id` | Admin | Delete category & its subcategories |
 | DELETE | `/api/category/subcategory/:id` | Admin | Delete a specific subcategory |
 
+### Product Management
+
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST   | `/api/product/upload-images` | Admin | Upload product images to Cloudinary. Returns URLs.
+| DELETE | `/api/product/deleteImage`   | Admin | Remove a product image from Cloudinary by setting query param `img` to the image URL.
+| POST   | `/api/product/`              | Admin | Create a new product – send `productName` (required) along with other fields.
+| GET    | `/api/product/`              | —     | Get all products (random sample or sorted via `?sortBy=`).
+| GET    | `/api/product/:id`           | —     | Get product by ID.
+| PUT    | `/api/product/:id`           | Admin | Update product details/images.
+| DELETE | `/api/product/:id`           | Admin | Delete product and its images (also removes associated reviews).
+| GET    | `/api/product/category/:categoryId` | — | Get products by category (random or sorted).
+| GET    | `/api/product/subcategory/:subCategoryId` | — | Get products by subcategory (random or sorted).
+| GET    | `/api/product/search`        | —     | Search products (text search plus optional category/subcategory match and sorting).
+| GET    | `/api/product/filter`        | —     | Filter products (category, price range, min rating, sorted).
+| GET    | `/api/product/top-rated`     | —     | Get top‑rated products (limit 10).
+| GET    | `/api/product/latest`        | —     | Get latest products (limit 10).
+| GET    | `/api/product/related/:id`   | —     | Get related products sharing category or subcategory.
+| POST   | `/api/product/:id/review`    | User  | Add a review to a product (requires `rating` and `comment`).
+| GET    | `/api/product/:id/reviews`   | —     | Get all reviews for a product (sorted newest first).
+
 ## Authentication Flow
 
 1. **Register** — User signs up with name, email, and password. A 6-digit OTP is sent via email.
@@ -196,3 +217,22 @@ Server/
 | subCatName | String | Required |
 | categoryId | ObjectId | Reference to Category |
 | timestamps | Auto | createdAt, updatedAt |
+
+### Product
+
+| Field        | Type     | Details |
+|--------------|----------|---------|
+| productName  | String   | Required, text-indexed. **API expects `productName` in request bodies**.  
+| price        | Number   | Required |
+| description  | String   | Optional |
+| category     | ObjectId | Reference to Category |
+| subCategory  | ObjectId | Reference to SubCategory |
+| images       | [String] | Array of Cloudinary URLs |
+| size         | String   | Optional |
+| weight       | String   | Optional |
+| RAM          | String   | Optional |
+| ROM          | String   | Optional || color        | String   | Optional |
+| stock        | Number   | Default: 0 |
+| sales        | Number   | Default: 0, min: 0 |
+| sales        | Number   | Default: 0, min: 0 || timestamps   | Auto     | createdAt, updatedAt |
+
