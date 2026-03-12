@@ -25,7 +25,7 @@ A Node.js/Express.js REST API with MongoDB for the Isomorphic_Shop e-commerce ap
 
 ```bash
 git clone https://github.com/SatyamKumar-code/Isomorphic_Shop.git
-cd Isomorphic
+cd Isomorphic_Shop
 ```
 
 ### Install Dependencies
@@ -78,15 +78,19 @@ Server/
 │   ├── emailService.js      # SendGrid email transport with retry logic
 │   └── sendEmail.js         # Email sender utility
 ├── controller/
-│   └── user.controller.js   # User route handlers
+│   ├── category.controller.js   # Category & subcategory route handlers
+│   └── user.controller.js       # User route handlers
 ├── middlewares/
 │   ├── adminMiddleware.js   # Admin role authentication
 │   ├── multer.js            # File upload configuration
 │   └── userMiddleware.js    # User role authentication (auto token refresh)
 ├── models/
-│   ├── user.model.js        # User schema
-│   └── reviews.model.js     # Reviews schema
+│   ├── category.model.js    # Category schema
+│   ├── reviews.model.js     # Reviews schema
+│   ├── subCategory.model.js # SubCategory schema
+│   └── user.model.js        # User schema
 ├── router/
+│   ├── category.route.js    # Category API routes
 │   └── user.route.js        # User API routes
 ├── uploads/                 # Temporary file storage (before Cloudinary upload)
 └── utils/
@@ -130,6 +134,19 @@ Server/
 |--------|-------|------|-------------|
 | PUT | `/api/user/updateUserStatus/:id` | Admin | Activate/deactivate a user account |
 
+### Category Management
+
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST | `/api/category/upload-images` | Admin | Upload category images to Cloudinary |
+| DELETE | `/api/category/deleteImage` | Admin | Remove image from Cloudinary |
+| POST | `/api/category/` | Admin | Create a new category |
+| GET | `/api/category/` | — | Get all categories (sorted by name) |
+| GET | `/api/category/:id` | — | Get category by ID |
+| GET | `/api/category/subcategories/:id` | — | Get subcategories for a category |
+| DELETE | `/api/category/:id` | Admin | Delete category & its subcategories |
+| DELETE | `/api/category/subcategory/:id` | Admin | Delete a specific subcategory |
+
 ## Authentication Flow
 
 1. **Register** — User signs up with name, email, and password. A 6-digit OTP is sent via email.
@@ -163,3 +180,19 @@ Server/
 | userId | ObjectId | Reference to User |
 | productId | ObjectId | Reference to Product |
 | image | String | Reviewer avatar |
+
+### Category
+
+| Field | Type | Details |
+|-------|------|---------|
+| catName | String | Required, category name |
+| image | String | Cloudinary URL |
+| timestamps | Auto | createdAt, updatedAt |
+
+### SubCategory
+
+| Field | Type | Details |
+|-------|------|---------|
+| subCatName | String | Required |
+| categoryId | ObjectId | Reference to Category |
+| timestamps | Auto | createdAt, updatedAt |
