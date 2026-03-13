@@ -7,6 +7,9 @@ import connectDB from './config/connectDB.js';
 import userRouter from './router/user.route.js';
 import categoryRouter from './router/category.route.js';
 import productRouter from './router/product.route.js';
+import cartRouter from './router/cart.route.js';
+import addressRouter from './router/address.route.js';
+import orderRouter from './router/order.route.js';
 dotenv.config();
 
 const app = express();
@@ -29,6 +32,9 @@ app.get("/", (req, res) => {
 app.use("/api/user", userRouter);
 app.use("/api/category", categoryRouter);
 app.use("/api/product", productRouter);
+app.use("/api/cart", cartRouter);
+app.use("/api/address", addressRouter);
+app.use("/api/order", orderRouter);
 
 
 connectDB().then(() => {
