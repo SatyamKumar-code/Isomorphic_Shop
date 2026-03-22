@@ -46,8 +46,8 @@ const Login = () => {
           </div>
           <Button className='w-full! p-2 bg-blue-500! text-white! mt-5 rounded-md hover:bg-blue-600! transition duration-300'>Login</Button>
         </div>
-        <p className='text-center font-[500] my-4 text-gray-500'>Or continue with social account</p>
-        <Button className='flex gap-3 w-full !bg-[#f1f1f1] !text-black'
+        <p className='text-center font-medium my-4 text-gray-500'>Or continue with social account</p>
+        <Button className='flex gap-3 w-full bg-[#f1f1f1]! text-black!'
 
         >
           <FcGoogle className='text-[20px]' />
