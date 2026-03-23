@@ -29,7 +29,7 @@ const Product = () => {
       </SwiperSlide>
       <SwiperSlide>
         <div className='relative h-35.75 bg-white'>
-          <img src="https://static.vecteezy.com/system/resources/thumbnails/060/843/811/small/close-up-of-raindrops-on-leaves-hd-background-luxury-hd-wallpaper-image-trendy-background-illustration-free-photo.jpg" alt="" className='w-full h-24.75!' />
+          <img src="https://static.vecteezy.com/system/resources/thumbnails/060/843/811/small/close-up-of-raindrops-on-leaves-hd-background-luxury-hd-wallpaper-image-trendy-background-illustration-free-photo.jpg" alt="" className='w-full h-24.75! rounded-t-lg' />
           <div className='p-2 w-full h-11 overflow-hidden leading-tight bg-gray-100'>
             <h2 className='font-bold text-[12px]'>Product Name</h2>
             <p className='text-blue-500 font-bold text-[12px]'>$99.99</p>
@@ -41,7 +41,7 @@ const Product = () => {
       </SwiperSlide>
       <SwiperSlide>
         <div className='relative h-35.75 bg-white'>
-          <img src="https://img.freepik.com/free-photo/closeup-scarlet-macaw-from-side-view-scarlet-macaw-closeup-head_488145-3540.jpg?semt=ais_hybrid&w=740&q=80" alt="" className='w-full! h-24.75!' />
+          <img src="https://img.freepik.com/free-photo/closeup-scarlet-macaw-from-side-view-scarlet-macaw-closeup-head_488145-3540.jpg?semt=ais_hybrid&w=740&q=80" alt="" className='w-full! h-24.75! rounded-t-lg' />
           <div className='p-2 w-full h-11 overflow-hidden leading-tight bg-gray-100'>
             <h2 className='font-bold text-[12px]'>Product Name</h2>
             <p className='text-blue-500 font-bold text-[12px]'>$99.99</p>
