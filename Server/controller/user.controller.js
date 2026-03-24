@@ -190,7 +190,7 @@ export const loginUserController = async (req, res) => {
             })
         }
 
-        const accesstoken = await generateAccessToken(user._id ,user.role);
+        const accessToken = await generateAccessToken(user._id ,user.role);
         const refreshToken = await generateRefreshToken(user._id ,user.role);
 
         await UserModel.findByIdAndUpdate(user?._id, {
@@ -202,7 +202,7 @@ export const loginUserController = async (req, res) => {
             secure: true,
             sameSite: "None"
         }
-        res.cookie('accessToken', accesstoken, cookiesOptions)
+        res.cookie('accessToken', accessToken, cookiesOptions)
         res.cookie('refreshToken', refreshToken, cookiesOptions)
 
         return res.status(200).json({
@@ -210,7 +210,7 @@ export const loginUserController = async (req, res) => {
             error: false,
             success: true,
             user: {
-                accesstoken,
+                accessToken,
                 refreshToken
             }
         });
