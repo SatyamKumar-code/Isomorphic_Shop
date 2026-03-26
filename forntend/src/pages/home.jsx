@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { MyContext } from '../App';
 import { fetchDataFromApi } from '../utils/api';
 import SerchBox from '../components/serchBox';
+import Footer from '../components/footer';
 
 const Home = () => {
     const context = useContext(MyContext);
@@ -65,6 +66,7 @@ const Home = () => {
                 </div>
                 <Product />
             </div>
+            <Footer />
         </div>
     )
 }

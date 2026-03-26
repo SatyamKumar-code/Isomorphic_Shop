@@ -4,7 +4,13 @@ body {
   margin: 0;
   padding: 12px;
 }
+
+/* Only remove padding on ProductDetails page */
+body:has(.product-details-page) {
+  padding: 0 !important;
+}
+
 :root {
-    width: 100%;
-    height: 100%;
+  width: 100%;
+  height: 100%;
 }

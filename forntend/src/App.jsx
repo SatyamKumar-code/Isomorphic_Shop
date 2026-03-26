@@ -10,6 +10,9 @@ import { fetchDataFromApi } from './utils/api';
 import Footer from './components/footer';
 import Search from './pages/search';
 import Profile from './pages/profile';
+import Setting from './pages/setting';
+import ProductDetails from './components/productDetails';
+import Cart from './pages/cart';
 
 const MyContext = createContext();
 
@@ -70,8 +73,10 @@ const App = () => {
             <Route path='/verify-email' exact={true} element={<VerifyEmail />} />
             <Route path='/search' exact={true} element={<Search />} />
             <Route path='/profile' exact={true} element={<Profile />} />
+            <Route path='/setting' exact={true} element={<Setting />} />
+            <Route path='/product/:id' exact={true} element={<ProductDetails />} />
+            <Route path='/cart' exact={true} element={<Cart />} />
           </Routes>
-          <Footer />
         </MyContext.Provider>
       </BrowserRouter>
       <Toaster />

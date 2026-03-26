@@ -30,7 +30,7 @@ export default function Footer() {
                 />
                 <BottomNavigationAction
                     value="nearby"
-                    icon={<Link to="/orders"><MdShoppingBag className='text-2xl' /></Link>}
+                    icon={<Link to="/cart"><MdShoppingBag className='text-2xl' /></Link>}
                 />
                 <BottomNavigationAction
                     value="folder"
