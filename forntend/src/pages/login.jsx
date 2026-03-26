@@ -51,17 +51,22 @@ const Login = () => {
       if (res.error === false) {
         context.alertBox("Success", res.message);
         setIsLoading(false);
-        localStorage.setItem("accessToken", res.accessToken);
-        localStorage.setItem("refreshToken", res.refreshToken);
+        localStorage.setItem("accessToken", res?.user?.accessToken);
+        localStorage.setItem("refreshToken", res?.user?.refreshToken);
+        context?.setIsLoggedIn(true);
         navigate('/');
+        return true;
       } else {
         context.alertBox("error", res.message);
         setIsLoading(false);
+        return false;
       }
-      context.alertBox("error", "Something went wrong, please try again later");
+    }).catch((err) => {
+      context.alertBox("error", "Something went wrong. Please try again later.");
       setIsLoading(false);
-
+      return false;
     });
+    
   }
 
   return (
@@ -114,6 +119,7 @@ const Login = () => {
           </div>
           <Button
             type='submit'
+            disabled={isLoading}
             className='w-full! p-2 bg-blue-500! text-white! mt-5 rounded-md hover:bg-blue-600! transition duration-300'
           >
             Login

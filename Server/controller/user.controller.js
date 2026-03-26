@@ -225,6 +225,36 @@ export const loginUserController = async (req, res) => {
     }
 }
 
+export const getUserController = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const user = await UserModel.findById({ _id: userId }).select("-password -refresh_token -otp -otp_expiry");
+
+        if ( !user ) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false
+            });
+        }
+
+        return res.status(200).json({
+            message: "User found",
+            error: false,
+            success: true,
+            user
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal Server Error" + error.message,
+            error: true,
+            success: false
+        });
+    }
+}
+
+
 export async function logoutController(req, res) {
     try {
         const userid = req.userId

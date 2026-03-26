@@ -1,31 +1,48 @@
-import React from 'react'
+import React, { useContext, useEffect} from 'react'
 import { FaBell } from "react-icons/fa";
-import { FaSearch } from "react-icons/fa";
 import Banner from '../components/Banner/baner';
 import Product from '../components/product';
 import { Link } from 'react-router-dom';
+import { MyContext } from '../App';
+import { fetchDataFromApi } from '../utils/api';
+import SerchBox from '../components/serchBox';
 
 const Home = () => {
-    
+    const context = useContext(MyContext);
+
+
+
+    useEffect(() => {
+        fetchDataFromApi("/api/user/userData").then((res) => {
+            context?.setUserData(res?.user);
+        });
+
+    }, [context.setUserData]);
+
 
     return (
-        <div className='p-3'>
+        <div >
             <div className='flex items-center justify-between'>
-                <div className='flex items-center'>
-                    <img src="profile.png" alt="" width="45px!" height="45px" />
-                    <div className='ml-2 leading-4 '>
-                        <span className='text-gray-600'>Hello!</span>
-                        <h2 className='font-bold'>user.name</h2>
-                    </div>
-                </div>
-                <div className='w-10 h-10 flex items-center justify-center bg-gray-100 rounded-full cursor-pointer'>
-                    <FaBell className='text-lg text-gray-500' />
-                </div>
+                {
+                    context?.isLoggedIn === true && (
+                        <>
+                            <div className='flex items-center'>
+                                <img src="profile.png" alt="" width="45px!" height="45px" />
+                                <div className='ml-2 leading-4 '>
+                                    <span className='text-gray-600'>Hello!</span>
+                                    <h2 className='font-bold'>{context.userData?.name}</h2>
+                                </div>
+                            </div>
+                            <div className='w-10 h-10 flex items-center justify-center bg-gray-100 rounded-full cursor-pointer'>
+                                <FaBell className='text-lg text-gray-500' />
+                            </div>
+                        </>
+                    ) 
+                        
+                }
+
             </div>
-            <div className='flex mt-4 w-full items-center gap-1 bg-gray-100 rounded-full'>
-                <FaSearch className='text-gray-500 ml-2' />
-                <input type="text" placeholder="Search..." className='bg-transparent border-none focus:outline-none w-full h-10' />
-            </div>
+            <SerchBox />
             <div className='mt-4'>
                 <Banner />
             </div>
