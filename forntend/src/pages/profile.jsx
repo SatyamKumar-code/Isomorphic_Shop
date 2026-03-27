@@ -8,6 +8,7 @@ import { MdHelp } from "react-icons/md";
 import { Link, useNavigate } from 'react-router-dom';
 import { MyContext } from '../App';
 import Footer from '../components/footer';
+import { MdShoppingBag } from 'react-icons/md'
 
 const Profile = () => {
 
@@ -47,6 +48,14 @@ const Profile = () => {
                     <Link to="/setting" className='flex items-center gap-3 w-full'>
                         <IoSettings className='text-xl text-gray-700' />
                         <h1 className='font-bold text-gray-700'>Setting</h1>
+                        <IoIosArrowForward className='absolute right-2 text-2xl text-gray-700' />
+                    </Link>
+                </div>
+
+                <div className='relative flex mt-3 w-full justify-start items-center gap-3 bg-gray-100 p-3 rounded-lg'>
+                    <Link to="/orders" className='flex items-center gap-3 w-full'>
+                        <MdShoppingBag className='text-xl text-gray-700' />
+                        <h1 className='font-bold text-gray-700'>Orders</h1>
                         <IoIosArrowForward className='absolute right-2 text-2xl text-gray-700' />
                     </Link>
                 </div>

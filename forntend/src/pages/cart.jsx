@@ -4,6 +4,7 @@ import { BiDotsVerticalRounded } from "react-icons/bi";
 import { MdDeleteForever } from "react-icons/md";
 import { FiMinus } from "react-icons/fi";
 import { FiPlus } from "react-icons/fi";
+import { Link } from 'react-router-dom';
 
 const Cart = () => {
     const [cartItems, setCartItems] = useState("1");
@@ -131,7 +132,9 @@ const Cart = () => {
                         <span className='font-bold text-gray-900'>Total</span>
                         <span className='font-bold text-gray-900'>$397.96</span>
                     </div>
-                    <button className='w-full bg-blue-500 text-white p-3 rounded-full font-bold mt-4'>Check Out</button>
+                    <Link to='/checkout'>
+                        <button className='w-full bg-blue-500 text-white p-3 rounded-full font-bold mt-4'>Check Out</button>
+                    </Link>
                 </div>
             </div>
         </div>

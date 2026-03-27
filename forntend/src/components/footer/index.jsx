@@ -3,7 +3,7 @@ import BottomNavigation from '@mui/material/BottomNavigation';
 import BottomNavigationAction from '@mui/material/BottomNavigationAction';
 import { HiMiniHome } from "react-icons/hi2";
 import { FaSearch } from "react-icons/fa";
-import { MdShoppingBag } from "react-icons/md";
+import { FaCartArrowDown } from "react-icons/fa";
 import { FaUser } from "react-icons/fa";
 import { Link } from 'react-router-dom';
 
@@ -30,7 +30,7 @@ export default function Footer() {
                 />
                 <BottomNavigationAction
                     value="nearby"
-                    icon={<Link to="/cart"><MdShoppingBag className='text-2xl' /></Link>}
+                    icon={<Link to="/cart"><FaCartArrowDown className='text-2xl' /></Link>}
                 />
                 <BottomNavigationAction
                     value="folder"

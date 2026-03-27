@@ -6,7 +6,7 @@ body {
 }
 
 /* Only remove padding on ProductDetails page */
-body:has(.product-details-page) {
+body:has(.product-details-page, .login-page, .register-page) {
   padding: 0 !important;
 }
 

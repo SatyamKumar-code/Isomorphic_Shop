@@ -1,6 +1,6 @@
 import React from 'react'
 import BackButton from '../backButton'
-import { MdShoppingBag } from 'react-icons/md'
+import { FaCartArrowDown } from "react-icons/fa";
 import { FaHeart } from "react-icons/fa6";
 
 const ProductDetails = () => {
@@ -43,7 +43,7 @@ const ProductDetails = () => {
             <div className='fixed bottom-1 left-0 p-3 right-0'>
                 <div className='flex relative items-center'>
                     <button className='w-[70%] bg-blue-500 text-white p-3 rounded-full font-bold'>Buy Now</button>
-                    <MdShoppingBag className='absolute items-center right-10 text-3xl ' />
+                    <FaCartArrowDown className='absolute items-center right-10 text-3xl ' />
                 </div>
             </div>
         </div>

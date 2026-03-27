@@ -80,7 +80,7 @@ const SingUp = () => {
 
 
   return (
-    <div className='w-full h-screen flex-col bg-amber-50 p-6 relative overflow-hidden'>
+    <div className='register-page w-full h-screen flex-col bg-amber-50 p-6 relative overflow-hidden'>
       <h2 className='text-2xl font-semibold text-center'>
         Sign Up
       </h2>

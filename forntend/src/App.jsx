@@ -13,6 +13,8 @@ import Profile from './pages/profile';
 import Setting from './pages/setting';
 import ProductDetails from './components/productDetails';
 import Cart from './pages/cart';
+import CheckOut from './pages/checkOut';
+import Order from './pages/order';
 
 const MyContext = createContext();
 
@@ -76,6 +78,8 @@ const App = () => {
             <Route path='/setting' exact={true} element={<Setting />} />
             <Route path='/product/:id' exact={true} element={<ProductDetails />} />
             <Route path='/cart' exact={true} element={<Cart />} />
+            <Route path='/checkout' exact={true} element={<CheckOut />} />
+            <Route path='/orders' exact={true} element={<Order />} />
           </Routes>
         </MyContext.Provider>
       </BrowserRouter>
