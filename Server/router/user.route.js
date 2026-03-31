@@ -12,6 +12,7 @@ userRouter.post("/verify-email", verifyEmailController);
 userRouter.post("/login", loginUserController);
 userRouter.get("/logout", userMiddleware, logoutController);
 userRouter.get("/userData", userMiddleware, getUserController);
+userRouter.get("/admin/userData", adminMiddleware, getUserController);
 userRouter.post("/refresh-token", refreshTokenController);
 userRouter.put("/user-avatar", userMiddleware, upload.array('avatar'), userAvatarController);
 userRouter.delete("/deleteImage", userMiddleware, removeImageFromCloudinary); 

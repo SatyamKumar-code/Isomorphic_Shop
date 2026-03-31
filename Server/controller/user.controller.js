@@ -211,7 +211,8 @@ export const loginUserController = async (req, res) => {
             success: true,
             user: {
                 accessToken,
-                refreshToken
+                refreshToken,
+                role: user?.role
             }
         });
 
@@ -242,7 +243,7 @@ export const getUserController = async (req, res) => {
             message: "User found",
             error: false,
             success: true,
-            user
+            data: user
         });
 
     } catch (error) {
