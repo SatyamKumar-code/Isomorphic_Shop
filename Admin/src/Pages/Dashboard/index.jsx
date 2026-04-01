@@ -1,20 +1,24 @@
 import React from 'react'
 
+import TotalSalesCard from '../../Components/Dashboard/Card/TotalSales';
+import TotalOrdersCard from '../../Components/Dashboard/Card/TotalOrders';
+import PendingAndCanceledCard from '../../Components/Dashboard/Card/PendingAndCanceled';
+import WeeklyReportCard from '../../Components/Dashboard/WeeklyReportCard';
+
+
 const Dashbord = () => {
   return (
-    <div className='ml-5 dark:shadow-md shadow-md shadow-gray-300 dark:shadow-gray-700 bg-white dark:bg-gray-950'>Dashbord
-      <h1>
-        dhg
-      </h1>
-      hga
-      <h1>
-        dhg
-      </h1>
-      hga
-      <h1>
-        dhg
-      </h1>
-    </div>
+    <>
+      <div className='flex overflow-hidden overflow-x-scroll w-full scrollbarNone'>
+        <TotalSalesCard />
+        <TotalOrdersCard />
+        <PendingAndCanceledCard />
+      </div>
+
+      <div className="mb-6">
+        <WeeklyReportCard />
+      </div>
+    </>
   )
 }
 

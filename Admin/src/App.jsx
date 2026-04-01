@@ -61,13 +61,13 @@ function App() {
       exact: true,
       element: (
         <ProtectedRoute>
-          <section className='main w-full h-screen pr-11 bg-gray-50 dark:bg-black'>
+          <section className='main font-lato w-full h-full pr-11 bg-gray-50 dark:bg-black'>
             <Header />
             <div className='conterntMain flex'>
               <div className='sidebarWrapper w-65 fixed top-0 left-0 bg-white dark:bg-gray-950 dark:shadow-md shadow-md shadow-gray-300 dark:shadow-gray-700 overflow-y-auto h-screen'>
                 <Sidebar />
               </div>
-              <div className='contentRight ml-auto mt-6 dark:bg-gray-950 w-[calc(100%-260px)] '>
+              <div className='contentRight ml-auto h-full mt-1 w-[calc(100%-260px)] '>
                 <Dashboard />
               </div>
             </div>
