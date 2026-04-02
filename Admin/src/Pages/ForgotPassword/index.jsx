@@ -5,7 +5,6 @@ import { CgLogIn } from 'react-icons/cg';
 import { FaRegUser} from 'react-icons/fa';
 import { MyContext } from '../../App';
 import { CircularProgress } from '@mui/material';
-import { postData } from '../../utils/api';
 
 const ForgotPassword = () => {
     const [isLoading, setIsLoading] = useState(false);
@@ -30,18 +29,18 @@ const ForgotPassword = () => {
             localStorage.setItem("userEmail", formFields.email);
             localStorage.setItem("actionType", "forgot-password");
 
-            postData("/api/user/forget-password", {
-                email: formFields.email
-            }).then((res) => {
-                if (res?.error === false) {
-                    context?.alertBox("Success", res?.message);
-                    history('/verify-account');
-                    setIsLoading(false);
-                } else {
-                    context?.alertBox("error", res?.message);
-                    setIsLoading(false);
-                }
-            })
+            // postData("/api/user/forget-password", {
+            //     email: formFields.email
+            // }).then((res) => {
+            //     if (res?.error === false) {
+            //         context?.alertBox("Success", res?.message);
+            //         history('/verify-account');
+            //         setIsLoading(false);
+            //     } else {
+            //         context?.alertBox("error", res?.message);
+            //         setIsLoading(false);
+            //     }
+            // })
         }
 
     }

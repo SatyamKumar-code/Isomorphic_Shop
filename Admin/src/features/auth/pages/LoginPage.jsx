@@ -2,19 +2,11 @@ import Button from '@mui/material/Button';
 import React, { useState } from 'react'
 import { Link,useNavigate, NavLink } from 'react-router-dom';
 import { CgLogIn } from 'react-icons/cg';
-import { FaRegEye, FaRegUser, FaEyeSlash } from 'react-icons/fa';
 import LoadingButton from '@mui/lab/LoadingButton';
 import { FcGoogle } from 'react-icons/fc';
-import { BsFacebook } from 'react-icons/bs';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Checkbox from '@mui/material/Checkbox';
-import { useContext } from 'react';
-import { MyContext } from '../../App';
-import CircularProgress from '@mui/material/CircularProgress';
-import { postData } from '../../utils/api';
-
 import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { firebaseApp } from '../../firebase';
+import { firebaseApp } from '../../../firebase';
+import LoginForm from '../components/LoginForm';
 
 const auth = getAuth(firebaseApp);
 
@@ -28,8 +20,6 @@ const Login = () => {
         email: '',
         password: ''
     });
-
-    const context = useContext(MyContext);
     const history = useNavigate();
 
     const forgotPassword = () => {
@@ -224,77 +214,11 @@ const Login = () => {
 
             <br />
 
-            <form className='w-full px-8 mt-3' onSubmit={handleSubmit}>
-                <div className='form-group mb-4 w-full'>
-                    <h4 className='text-[14px] font-[500] mb-1'>
-                        Email
-                    </h4>
-                    <input 
-                    type="email" 
-                    id="email"
-                    name='email'
-                    value={formFields.email}
-                    disabled={isLoading === true ? true : false}
-                    onChange={onChangeInput}
-                    className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
-                    />
-                </div>
+            {/* <form /> */}
 
-                <div className='form-group mb-4 w-full'>
-                    <h4 className='text-[14px] font-[500] mb-1'>
-                        Password
-                    </h4>
-                    <div className='relative w-full'>
-                        <input
-                            id="password"
-                            name='password'
-                            value={formFields.password}
-                            disabled={isLoading === true ? true : false}
-                            onChange={onChangeInput}
-                            type={ isPasswordShow===false ? "password" : "text" }
-                            className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
-                        />
-                        <Button className='absolute! top-[7px] right-[10px] z-50 rounded-full! w-[35px]! h-[35px]! min-w-[35px]! text-gray-600!'
-                            onClick={() => setisPasswordShow(!isPasswordShow)}
-                        >
-                            {
-                                isPasswordShow===false ? (
-                                    <FaRegEye className='text-[18px]' />
-                                ) : (
-                                    <FaEyeSlash className='text-[18px]' />
-                                )
-                            }
-                        </Button>
-                    </div>
-                    
-                </div>
+            <LoginForm />
 
-                <div className='form-group mb-4 w-full flex items-center justify-between'>
-                    <FormControlLabel
-                        control={<Checkbox defaultChecked/>}
-                        label="Remember me"
-                    />
-                    <a
-                        onClick={forgotPassword}
-                        className='text-primary text-[15px] font-[700] text-[rgba(0,0,0,0.7)] hover:underline hover:text-gray-700! cursor-pointer'>
-                        Forgot Password?
-                    </a>
-                </div>
-
-
-                <Button 
-                type='submit'
-                disabled={!valideValue}
-                className='btn-blue w-full '
-                >
-                {
-                    isLoading === true ? <CircularProgress color='inherit' />
-                    :
-                    "Log in"
-                }
-                    
-                </Button>
-            </form>
+            
 
         </div> 
     </section>

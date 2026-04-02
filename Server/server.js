@@ -13,13 +13,16 @@ import orderRouter from './router/order.route.js';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: 'http://localhost:5173', // Frontend origin
+    credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(helmet({
     crossOriginIsolated: false
-}));    
+}));
 
 
 

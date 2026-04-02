@@ -5,7 +5,7 @@ import './App.css'
 import Login from './pages/login'
 import SingUp from './pages/singup'
 import Home from './pages/home'
-import VerifyEmail from './pages/verifyEmail';
+import VerifyEmail from './pages/verifyEmail
 import { fetchDataFromApi } from './utils/api';
 import Search from './pages/search';
 import Profile from './pages/profile';

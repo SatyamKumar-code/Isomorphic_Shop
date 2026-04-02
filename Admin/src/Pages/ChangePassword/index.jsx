@@ -5,7 +5,6 @@ import { CgLogIn } from 'react-icons/cg';
 import { FaRegEye, FaRegUser, FaEyeSlash } from 'react-icons/fa';
 import { MyContext } from '../../App';
 import CircularProgress from '@mui/material/CircularProgress';
-import { postData } from '../../utils/api';
 
 const ChangePassword = () => {
     const [isPasswordShow, setisPasswordShow] = useState(false);
@@ -44,23 +43,23 @@ const ChangePassword = () => {
             return false
         }
         if (formFields.confirmPassword !== formFields.newPassword) {
-            context.alertBox("error", "Passeord and confirm password not matched")
+            context.alertBox("error", "Password and confirm password not matched")
             setIsLoading(false);
             return false
         }
 
-        postData("/api/user/reset-passwordwithotp", formFields ).then((res) => {
-            if (res?.error === false) {
-                context.alertBox("Success", res?.message);
-                localStorage.removeItem("userEmail");
-                localStorage.removeItem("actionType");
-                setIsLoading(false);
-                history('/login');
-            } else {
-                context.alertBox("error", res?.message);
-                setIsLoading(false);
-            }
-        })
+        // postData("/api/user/reset-passwordwithotp", formFields ).then((res) => {
+        //     if (res?.error === false) {
+        //         context.alertBox("Success", res?.message);
+        //         localStorage.removeItem("userEmail");
+        //         localStorage.removeItem("actionType");
+        //         setIsLoading(false);
+        //         history('/login');
+        //     } else {
+        //         context.alertBox("error", res?.message);
+        //         setIsLoading(false);
+        //     }
+        // })
 
 
     }

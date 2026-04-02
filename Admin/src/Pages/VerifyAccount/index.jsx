@@ -4,7 +4,6 @@ import { Link, NavLink } from 'react-router-dom';
 import { CgLogIn } from 'react-icons/cg';
 import { FaRegUser } from 'react-icons/fa';
 import OtpBox from '../../Components/OtpBox';
-import { postData } from '../../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { MyContext } from '../../App';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -46,18 +45,18 @@ const VerifyAccount = () => {
           }
         })
       } else {
-        postData("/api/user/verify-forgot-password-otp", {
-          email: localStorage.getItem("userEmail"),
-          otp: otp
-        }).then((res) => {
-          if (res?.error === false) {
-            context.alertBox("Success", res?.message);
-            history('/change-password');
-          } else {
-            context.alertBox("error", res?.message);
-            setIsLoading(false);
-          }
-        })
+        // postData("/api/user/verify-forgot-password-otp", {
+        //   email: localStorage.getItem("userEmail"),
+        //   otp: otp
+        // }).then((res) => {
+        //   if (res?.error === false) {
+        //     context.alertBox("Success", res?.message);
+        //     history('/change-password');
+        //   } else {
+        //     context.alertBox("error", res?.message);
+        //     setIsLoading(false);
+        //   }
+        // })
       }
     } else {
       context.alertBox("error", "Please enter OTP");
