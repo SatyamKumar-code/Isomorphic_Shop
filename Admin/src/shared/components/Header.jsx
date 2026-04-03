@@ -1,6 +1,6 @@
 import React from 'react'
 import Badge from '@mui/material/Badge';
-import DarkModeToggle from '../darkButton';
+import DarkModeToggle from './DarkModeToggelButton';
 
 const Header = () => {
   return (

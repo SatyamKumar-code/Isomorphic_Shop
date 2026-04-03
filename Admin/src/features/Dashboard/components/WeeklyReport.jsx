@@ -28,7 +28,7 @@ const stats = [
 
 const WeeklyReportCard = () => {
     return (
-        <div className="max-w-197.5 h-115 ml-5 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg p-6">
+        <div className="max-w-197.5 h-115 ml-5 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg p-6 flex-1">
             <div className="w-full min-h-9.5 gap-8 flex items-center justify-between">
                 <span className="w-full max-w-118.5 text-[18px] text-[#23272E] dark:text-[#c1c6cf] font-bold leading-4.5 ">Report for this week</span>
                 <div className="flex items-center gap-2">

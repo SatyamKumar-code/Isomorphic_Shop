@@ -3,9 +3,8 @@ import React, {useContext, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom';
 import { CgLogIn } from 'react-icons/cg';
 import { FaRegUser } from 'react-icons/fa';
-import OtpBox from '../../Components/OtpBox';
+import OtpBox from '../components/OtpBox';
 import { useNavigate } from 'react-router-dom';
-import { MyContext } from '../../App';
 import CircularProgress from '@mui/material/CircularProgress';
 
 
@@ -20,7 +19,7 @@ const VerifyAccount = () => {
     };
 
   const history = useNavigate();
-  const context = useContext(MyContext);
+  // const context = useContext(MyContext);
 
   const verifyOTP = (e) => {
     e.preventDefault();
@@ -35,12 +34,12 @@ const VerifyAccount = () => {
           otp: otp
         }).then((res) => {
           if (res?.error === false) {
-            context.alertBox("Success", res?.message);
+            // context.alertBox("Success", res?.message);
             localStorage.removeItem("userEmail");
             setIsLoading(false);
             history('/login');
           } else {
-            context.alertBox("error", res?.message);
+            // context.alertBox("error", res?.message);
             setIsLoading(false);    
           }
         })
@@ -59,7 +58,7 @@ const VerifyAccount = () => {
         // })
       }
     } else {
-      context.alertBox("error", "Please enter OTP");
+      // context.alertBox("error", "Please enter OTP");
     }
 
 

@@ -3,7 +3,7 @@ import React, { useContext, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { CgLogIn } from 'react-icons/cg';
 import { FaRegEye, FaRegUser, FaEyeSlash } from 'react-icons/fa';
-import { MyContext } from '../../App';
+import { MyContext } from '../../../App';
 import CircularProgress from '@mui/material/CircularProgress';
 
 const ChangePassword = () => {

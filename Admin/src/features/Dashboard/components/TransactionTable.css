@@ -1,0 +1,78 @@
+.transaction-card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    padding: 0;
+    margin: 0;
+    border: 1px solid #eee;
+    width: 100%;
+    max-width: 800px;
+    font-family: 'Inter', sans-serif;
+}
+
+.transaction-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 20px 0 20px;
+    font-size: 20px;
+    font-weight: 500;
+}
+
+.transaction-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.transaction-table th,
+.transaction-table td {
+    text-align: left;
+    padding: 12px 20px;
+    font-size: 15px;
+}
+
+.transaction-table th {
+    color: #a3a3a3;
+    font-weight: 500;
+    background: #fafafa;
+}
+
+.transaction-table tr {
+    border-bottom: 1px solid #eee;
+}
+
+.transaction-table td {
+    color: #222;
+    font-weight: 400;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.transaction-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 18px 20px 20px 20px;
+}
+
+.details-btn {
+    border: 1px solid #7c3aed;
+    color: #7c3aed;
+    background: #fff;
+    border-radius: 20px;
+    padding: 7px 28px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.details-btn:hover {
+    background: #f3f0ff;
+}

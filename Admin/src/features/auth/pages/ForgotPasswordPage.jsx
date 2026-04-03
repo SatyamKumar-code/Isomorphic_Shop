@@ -3,7 +3,6 @@ import React, { useContext, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { CgLogIn } from 'react-icons/cg';
 import { FaRegUser} from 'react-icons/fa';
-import { MyContext } from '../../App';
 import { CircularProgress } from '@mui/material';
 
 const ForgotPassword = () => {
@@ -13,7 +12,7 @@ const ForgotPassword = () => {
         email: ''
     });
 
-    const context = useContext(MyContext);
+    // const context = useContext(MyContext);
     const history = useNavigate();
 
     const forgotPassword = (e) => {
@@ -21,11 +20,11 @@ const ForgotPassword = () => {
         setIsLoading(true);
 
         if (formFields.email === "") {
-            context?.alertBox("error", "Please enter email id")
+            // context?.alertBox("error", "Please enter email id")
             setIsLoading(false);
             return false
         } else {
-            context?.alertBox("Success", `OTP send to ${formFields.email}`)
+            // context?.alertBox("Success", `OTP send to ${formFields.email}`)
             localStorage.setItem("userEmail", formFields.email);
             localStorage.setItem("actionType", "forgot-password");
 

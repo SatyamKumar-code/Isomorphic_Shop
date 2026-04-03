@@ -25,14 +25,10 @@ export const AuthProvider = ({ children }) => {
                     } else {
                         setUserData(null);
                         setIsLoggedIn(false);
-                        localStorage.removeItem("accessToken");
-                        localStorage.removeItem("refreshToken");
                     }
                 } catch (err) {
                     setUserData(null);
                     setIsLoggedIn(false);
-                    localStorage.removeItem("accessToken");
-                    localStorage.removeItem("refreshToken");
                 } finally {
                     setIsLoading(false);
                 }

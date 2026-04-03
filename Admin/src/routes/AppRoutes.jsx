@@ -1,12 +1,12 @@
 import { createBrowserRouter, Route, RouterProvider, Routes } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
-import Header from "../Components/Header";
-import Sidebar from "../Components/Sidebar";
-import Dashbord from "../Pages/Dashboard";
+import Header from "../shared/components/Header";
+import Sidebar from "../shared/components/Sidebar";
+import Dashbord from "../features/Dashboard/pages/DashboardPage";
 import Login from "../features/auth/pages/LoginPage";
-import ForgotPassword from "../Pages/ForgotPassword";
-import VerifyAccount from "../Pages/VerifyAccount";
-import ChangePassword from "../Pages/ChangePassword";
+import ForgotPasswordPage from "../features/auth/pages/ForgotPasswordPage";
+import VerifyAccountPage from "../features/auth/pages/VerifyAccountPage";
+import ChangePasswordPage from "../features/auth/pages/ChangePasswordPage";
 
 
 const AppRoutes = () => {
@@ -17,7 +17,7 @@ const AppRoutes = () => {
             exact: true,
             element: (
                 <ProtectedRoute>
-                    <section className='main font-lato w-full h-full pr-11 bg-gray-50 dark:bg-black'>
+                    <section className='main font-lato w-full h-full pr-11 bg-gray-50 dark:bg-black '>
                         <Header />
                         <div className='conterntMain flex'>
                             <div className='sidebarWrapper w-65 fixed top-0 left-0 bg-white dark:bg-gray-950 dark:shadow-md shadow-md shadow-gray-300 dark:shadow-gray-700 overflow-y-auto h-screen'>
@@ -47,7 +47,7 @@ const AppRoutes = () => {
             exact: true,
             element: (
                 <>
-                    <ForgotPassword />
+                    <ForgotPasswordPage />
                 </>
             ),
         },
@@ -57,7 +57,7 @@ const AppRoutes = () => {
             exact: true,
             element: (
                 <>
-                    <VerifyAccount />
+                    <VerifyAccountPage />
                 </>
             ),
         },
@@ -67,7 +67,7 @@ const AppRoutes = () => {
             exact: true,
             element: (
                 <>
-                    <ChangePassword />
+                    <ChangePasswordPage />
                 </>
             ),
         },
