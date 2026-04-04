@@ -7,6 +7,9 @@ import PendingAndCanceledCard from '../components/PendingAndCanceled';
 import WeeklyReportCard from '../components/WeeklyReport';
 import UserReport from '../components/UserReport';
 import TransactionTable from '../components/TransactionTable';
+import TopProduct from '../components/TopProduct';
+import BestSelingProductTable from '../components/BestSelingProductTable';
+import AddProductSidebar from '../components/AddProductSidebar';
 
 
 const Dashbord = () => {
@@ -18,14 +21,21 @@ const Dashbord = () => {
         <PendingAndCanceledCard />
       </div>
 
-      <div className="flex w-full mb-5">
+      <div className="flex w-full mb-5 gap-5">
         <WeeklyReportCard />
         <UserReport />
       </div>
 
 
-      <div className="flex w-full justify-center mt-6">
+      <div className="flex w-full mb-5 gap-5">
         <TransactionTable />
+        <TopProduct />
+      </div>
+
+      <div className="flex w-full mb-5 gap-5">
+        <BestSelingProductTable />
+
+        <AddProductSidebar />
       </div>
     </div>
   )

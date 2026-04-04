@@ -16,7 +16,6 @@ const adminMiddleware = async (req, res, next) => {
         try {
             decoded = JWT.verify(token, process.env.SECRET_KEY_ACCESS_TOKEN);
         } catch (err) {
-            console.log(err.name);
             // If token expired or invalid, just return 401. Do not refresh here.
             return res.status(401).json({
                 message: err.name === "TokenExpiredError" ? "access token expired" : "unauthorized access",
