@@ -1,6 +1,4 @@
 import React from 'react'
-
-
 import TotalSalesCard from '../components/TotalSales';
 import TotalOrdersCard from '../components/TotalOrders';
 import PendingAndCanceledCard from '../components/PendingAndCanceled';
@@ -10,9 +8,12 @@ import TransactionTable from '../components/TransactionTable';
 import TopProduct from '../components/TopProduct';
 import BestSelingProductTable from '../components/BestSelingProductTable';
 import AddProductSidebar from '../components/AddProductSidebar';
+import { useDashboard } from '../../../Context/dashboard/useDashboard';
 
 
 const Dashbord = () => {
+  const { weeklyReportProps } = useDashboard();
+
   return (
     <div className="w-full overflow-hidden overflow-x-scroll  scrollbarNone">
       <div className='flex w-full'>
@@ -22,7 +23,7 @@ const Dashbord = () => {
       </div>
 
       <div className="flex w-full mb-5 gap-5">
-        <WeeklyReportCard />
+        <WeeklyReportCard {...weeklyReportProps} />
         <UserReport />
       </div>
 
@@ -34,7 +35,6 @@ const Dashbord = () => {
 
       <div className="flex w-full mb-5 gap-5">
         <BestSelingProductTable />
-
         <AddProductSidebar />
       </div>
     </div>

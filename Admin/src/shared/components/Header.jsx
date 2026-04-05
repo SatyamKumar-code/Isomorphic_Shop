@@ -2,15 +2,15 @@ import React from 'react'
 import Badge from '@mui/material/Badge';
 import DarkModeToggle from './DarkModeToggelButton';
 
-const Header = () => {
+const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, or reports' }) => {
   return (
     <div>
       <header className='header h-24 ml-70 w-[calc(100%-240px)] flex items-center justify-between pl-5 pr-11 py-3 bg-white dark:bg-gray-950 dark:shadow-md  shadow-md shadow-gray-300 dark:shadow-gray-700' >
-        <h2 className='font-bold text-black dark:text-white'>Dashboard</h2>
+        <h2 className='font-bold text-black dark:text-white'>{title}</h2>
 
         <div className='flex items-center md:gap-4 lg:gap-8'>
           <div className='p-1.5 flex items-center justify-between pr-4 pl-6 lg:w-101.75  h-12 rounded-full bg-[#e7e8e8] dark:bg-[#f7fafa52] focus:outline-none focus:ring-2 focus:ring-blue-500'>
-            <input type='text' placeholder='Search data, users, or reports' className='bg-transparent w-full text-[#4B5563] dark:text-white border-none focus:outline-none' />
+            <input type='text' placeholder={searchPlaceholder} className='bg-transparent w-full text-[#4B5563] dark:text-white border-none focus:outline-none' />
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M15.3269 14.44L18.8 17.8M17.68 8.84C17.68 13.1699 14.1699 16.68 9.84 16.68C5.51009 16.68 2 13.1699 2 8.84C2 4.51009 5.51009 1 9.84 1C14.1699 1 17.68 4.51009 17.68 8.84Z" stroke-width="2" stroke-linecap="round" className='stroke-[#4B5563] dark:stroke-white' />
             </svg>
