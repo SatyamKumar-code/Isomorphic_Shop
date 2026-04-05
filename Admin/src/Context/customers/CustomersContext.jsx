@@ -130,8 +130,6 @@ const customers = baseCustomers.map((customer, index) => ({
     uid: String(index + 1),
 }));
 
-// const pagination = [1, 2, 3, 4, 5, "...", 24];
-
 const statusColors = {
     Active: "#22C55E",
     Inactive: "#EF4444",
