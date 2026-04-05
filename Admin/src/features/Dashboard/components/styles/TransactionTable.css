@@ -1,0 +1,56 @@
+.transaction-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 20px 0 20px;
+    font-size: 20px;
+    font-weight: 500;
+}
+
+.transaction-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.transaction-table th,
+.transaction-table td {
+    text-align: left;
+    padding: 12px 20px;
+    font-size: 15px;
+}
+
+.transaction-table th {
+    font-weight: 500;
+    border-bottom: 1px solid #eee;
+}
+
+
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.transaction-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 18px 20px 20px 20px;
+}
+
+.details-btn {
+    border: 1px solid #6467F2;
+    color: #6467F2;
+    border-radius: 20px;
+    padding: 7px 28px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.details-btn:hover {
+    background: #f3f0ff;
+}

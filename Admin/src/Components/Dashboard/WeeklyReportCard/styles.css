@@ -1,8 +1,0 @@
-/* Define CSS variables for chart text color in light and dark mode */
-:root {
-    --chart-text-color: #23272E;
-}
-
-.dark {
-    --chart-text-color: #c1c6cf;
-}

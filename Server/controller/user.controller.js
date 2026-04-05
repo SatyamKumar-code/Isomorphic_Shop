@@ -209,7 +209,7 @@ export const loginUserController = async (req, res) => {
             message: "Login successful",
             error: false,
             success: true,
-            user: {
+            data: {
                 accessToken,
                 refreshToken,
                 role: user?.role
