@@ -52,7 +52,7 @@ const CustomerDetailsCard = () => {
 
     return (
         <div className="xl:w-[25%]">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/70 dark:border-slate-800 dark:bg-gray-950 dark:shadow-slate-800/70">
+            <div className="p-4 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg">
                 <div className="flex items-center gap-3 border-b border-slate-200 pb-4 dark:border-slate-800">
                     <div className="flex h-14 w-14 items-center justify-center rounded-full bg-linear-to-br from-emerald-200 to-emerald-400 text-lg font-bold text-white">{getInitials(selectedCustomer.name)}</div>
                     <div>

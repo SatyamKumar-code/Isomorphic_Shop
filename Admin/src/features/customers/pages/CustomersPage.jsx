@@ -32,7 +32,7 @@ const CustomersPage = () => {
 
             <div className="mt-5 flex flex-col gap-5 xl:flex-row">
                 <div className={selectedCustomerId ? "xl:w-[75%]" : "xl:w-full"}>
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/70 dark:border-slate-800 dark:bg-gray-950 dark:shadow-slate-800/70">
+                    <div className="p-4 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg">
                         <div className="mb-4 text-[16px] font-semibold text-slate-900 dark:text-slate-50">Customer Details</div>
                         <CustomersTable />
                         <CustomersPagination />

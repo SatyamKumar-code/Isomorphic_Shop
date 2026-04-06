@@ -8,7 +8,7 @@ const SummaryCards = () => {
     return (
         <div className="space-y-4 xl:w-[28%]">
             {summaryCards.map((card) => (
-                <div key={card.title} className="relative rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/70 dark:border-slate-800 dark:bg-gray-950 dark:shadow-slate-800/70">
+                <div key={card.title} className="relative p-4 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg">
                     <button className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label={`${card.title} actions`}>
                         <FiMoreVertical />
                     </button>

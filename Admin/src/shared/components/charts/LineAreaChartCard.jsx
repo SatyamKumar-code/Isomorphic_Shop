@@ -71,7 +71,7 @@ const moreIcon = (
 );
 
 const SHARED_AREA_CHART_PRESET = {
-    outerClassName: "rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/70 dark:border-slate-800 dark:bg-gray-950 dark:shadow-slate-800/70",
+    outerClassName: "p-4 h-full bg-white shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg",
     headerClassName: "mb-4 flex items-start justify-between gap-3",
     titleClassName: "text-[18px] font-semibold text-slate-900 dark:text-slate-50",
     actionsClassName: "flex items-start gap-2",
@@ -113,7 +113,6 @@ const STYLE_PRESETS = {
     },
     dashboardWeekly: {
         ...SHARED_AREA_CHART_PRESET,
-        outerClassName: "h-full rounded-lg bg-white p-6 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:bg-gray-950 dark:shadow-gray-700 dark:inset-shadow-gray-700",
         headerClassName: "w-full min-h-9.5 gap-8 flex items-center justify-between",
         titleClassName: "w-full max-w-118.5 text-[18px] text-[#23272E] dark:text-[#c1c6cf] font-bold leading-4.5",
         rangeWrapperClassName: "flex items-center gap-2",
