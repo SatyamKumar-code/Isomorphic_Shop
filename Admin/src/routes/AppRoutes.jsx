@@ -1,13 +1,16 @@
+import { lazy } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import MainLayout from "../layouts/MainLayout";
 import Dashbord from "../features/Dashboard/pages/DashboardPage";
-import OrderManagementPage from "../features/ordersManagement/pages/OrderManagementPage";
-import CustomersPage from "../features/customers/pages/CustomersPage";
 import Login from "../features/auth/pages/LoginPage";
 import ForgotPasswordPage from "../features/auth/pages/ForgotPasswordPage";
 import VerifyAccountPage from "../features/auth/pages/VerifyAccountPage";
 import ChangePasswordPage from "../features/auth/pages/ChangePasswordPage";
+
+const OrderManagementPage = lazy(() => import("../features/ordersManagement/pages/OrderManagementPage"));
+const CustomersPage = lazy(() => import("../features/customers/pages/CustomersPage"));
+
 
 
 const AppRoutes = () => {
