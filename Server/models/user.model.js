@@ -40,14 +40,6 @@ const userSchema = new mongoose.Schema({
         enum: ['Active', 'Inactive'],
         default: 'Active'
     },
-    access_token: {
-        type: String,
-        default: null
-    },
-    refresh_token: {
-        type: String,
-        default: null
-    },
     last_login_date: {
         type: Date,
         default: null

@@ -303,9 +303,9 @@ export const refreshTokenController = async (req, res) => {
 
         const decoded = jwt.verify(refreshToken, process.env.SECRET_KEY_REFRESH_TOKEN);
 
-        const user = await UserModel.findById(decoded.id);
+        const user = await UserModel.findById(decoded.id).select("refresh_token role status");
 
-        if (!user || user.refresh_token !== refreshToken) {
+        if (!user || user.status !== "Active" || user.refresh_token !== refreshToken) {
             return res.status(401).json({
                 message: "Invalid refresh token",
                 error: true,
