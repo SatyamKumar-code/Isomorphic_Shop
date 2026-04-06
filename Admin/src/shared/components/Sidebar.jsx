@@ -8,6 +8,7 @@ const Sidebar = () => {
   const getActiveMenu = (pathname) => {
     if (pathname === '/order-management') return 'order';
     if (pathname === '/customers') return 'customers';
+    if (pathname === '/categories') return 'categories';
     return 'Dashboard';
   };
 
@@ -103,7 +104,7 @@ const Sidebar = () => {
             <span className={`text-[15px] text-[#6A717F] ${active === "coupon" && "text-white font-bold"}`}>Coupon Code</span>
           </li>
 
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "categories" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("categories")}>
+          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "categories" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("categories"); navigate('/categories'); }}>
             {
               active === "categories" ?
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

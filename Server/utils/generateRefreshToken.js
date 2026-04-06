@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 const generateRefreshToken = async ( userId ,role ) => {
     const token = await jwt.sign({ id : userId, role },
         process.env.SECRET_KEY_REFRESH_TOKEN,
-        { expiresIn: '2h' }
+        { expiresIn: '7d' }
     );
     
     await UserModel.updateOne(

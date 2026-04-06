@@ -2,6 +2,7 @@ import { createContext } from 'react'
 import './App.css'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './Context/auth/AuthContext'
+import { CategoriesProvider } from './Context/categories/CategoriesContext'
 import { OrderProvider } from './Context/order/OrderContext'
 import { CustomersProvider } from './Context/customers/CustomersContext'
 import { DashboardProvider } from './Context/dashboard/DashboardContext'
@@ -13,12 +14,14 @@ function App() {
   return (
     <AuthProvider>
       <OrderProvider>
-        <CustomersProvider>
-          <DashboardProvider>
-            <AppRoutes />
-            <Toaster />
-          </DashboardProvider>
-        </CustomersProvider>
+        <CategoriesProvider>
+          <CustomersProvider>
+            <DashboardProvider>
+              <AppRoutes />
+              <Toaster />
+            </DashboardProvider>
+          </CustomersProvider>
+        </CategoriesProvider>
       </OrderProvider>
     </AuthProvider>
   )
