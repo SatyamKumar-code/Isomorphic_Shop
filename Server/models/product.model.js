@@ -43,11 +43,11 @@ const productSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
-    Ram: {
+    RAM: {
         type: String,
         default: ""
     },
-    Rom: {
+    ROM: {
         type: String,
         default: ""
     },
@@ -80,7 +80,7 @@ const productSchema = new mongoose.Schema({
     },
 }, { timestamps: true })
 
-productSchema.index({ productName: "text", description: "text", size: "text", weight: "text", Ram: "text", color: "text" });
+productSchema.index({ productName: "text", description: "text", size: "text", weight: "text", RAM: "text", color: "text" });
 
 const ProductModel = mongoose.model("product", productSchema)
 export default ProductModel;

@@ -27,6 +27,10 @@ const defaultFormData = {
     featured: false,
     category: '',
     subCategory: '',
+    size: '',
+    weight: '',
+    RAM: '',
+    ROM: '',
     color: '',
     searchText: '',
 };
@@ -140,7 +144,15 @@ export const AddProductProvider = ({ children }) => {
 
     const onCategoryChange = useCallback(
         async (value) => {
-            setFormData((prev) => ({ ...prev, category: value, subCategory: '' }));
+            setFormData((prev) => ({
+                ...prev,
+                category: value,
+                subCategory: '',
+                size: '',
+                weight: '',
+                RAM: '',
+                ROM: '',
+            }));
             await loadSubCategories(value);
         },
         [loadSubCategories],
@@ -392,6 +404,10 @@ export const AddProductProvider = ({ children }) => {
                 stock: formData.unlimitedStock ? 999999 : Number(formData.stock),
                 category: formData.category || undefined,
                 subCategory: formData.subCategory || undefined,
+                size: formData.size || undefined,
+                weight: formData.weight || undefined,
+                RAM: formData.RAM || undefined,
+                ROM: formData.ROM || undefined,
                 color: formData.color,
                 images: uploadedImages,
                 ...(formData.expirationStart ? { expirationStart: formData.expirationStart } : {}),

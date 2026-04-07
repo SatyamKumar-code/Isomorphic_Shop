@@ -145,6 +145,8 @@ export const createProductController = async (req, res) => {
         const parsedSalePrice = Number(price ?? 0);
         const parsedExpirationStart = expirationStart ? new Date(expirationStart) : null;
         const parsedExpirationEnd = expirationEnd ? new Date(expirationEnd) : null;
+        const parsedRAM = RAM ?? req.body.Ram ?? '';
+        const parsedROM = ROM ?? req.body.Rom ?? '';
 
         // Validate required fields
         if (!productName || !description || !stock || !parsedOldPrice || !parsedSalePrice) {
@@ -166,8 +168,8 @@ export const createProductController = async (req, res) => {
             images: requestImages.length ? requestImages : imagesArr,
             size,
             weight,
-            RAM,
-            ROM,
+            RAM: parsedRAM,
+            ROM: parsedROM,
             color,
             stock,
             expirationStart: parsedExpirationStart,
@@ -327,6 +329,8 @@ export const updateProductController = async (req, res) => {
         const parsedDiscountPercentage = Math.min(Math.max(Number(discountPercentage ?? discount ?? 0), 0), 99);
         const parsedExpirationStart = expirationStart ? new Date(expirationStart) : null;
         const parsedExpirationEnd = expirationEnd ? new Date(expirationEnd) : null;
+        const parsedRAM = RAM ?? req.body.Ram;
+        const parsedROM = ROM ?? req.body.Rom;
         if (!productId) {
             return res.status(400).json({
                 message: "Product ID is required",
@@ -336,12 +340,18 @@ export const updateProductController = async (req, res) => {
         }
 
         // Build update object
-        const updateObj = { productName, price, description, category, subCategory, size, weight, RAM, ROM, color, stock };
+        const updateObj = { productName, price, description, category, subCategory, size, weight, color, stock };
         if (parsedOldPrice > 0) {
             updateObj.oldPrice = parsedOldPrice;
         }
         if (Number.isFinite(parsedDiscountPercentage)) {
             updateObj.discountPercentage = parsedDiscountPercentage;
+        }
+        if (parsedRAM !== undefined) {
+            updateObj.RAM = parsedRAM;
+        }
+        if (parsedROM !== undefined) {
+            updateObj.ROM = parsedROM;
         }
         updateObj.expirationStart = parsedExpirationStart;
         updateObj.expirationEnd = parsedExpirationEnd;
@@ -635,7 +645,7 @@ export const searchProductsController = async (req, res) => {
         const categoryIds = matchingCategories.map(c => c._id);
         const subCategoryIds = matchingSubCategories.map(s => s._id);
 
-        // $text searches across all text-indexed fields (productName, description, size, weight, Ram, color)
+        // $text searches across all text-indexed fields (productName, description, size, weight, RAM, color)
         // MongoDB $text automatically splits the search term into words and matches each word
         const searchConditions = [
             { $text: { $search: searchTerm } },

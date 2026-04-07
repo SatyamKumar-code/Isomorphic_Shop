@@ -1,9 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { FiCalendar, FiEdit2, FiMoreHorizontal } from 'react-icons/fi';
 import { useAddProduct } from '../../../Context/addproduct/useAddProduct';
 
 const BasicDetailsCard = () => {
-    const { formData, updateField, salePrice, saveDraft, publishProduct, isSubmitting } = useAddProduct();
+    const { formData, categories, subCategories, updateField, salePrice, saveDraft, publishProduct, isSubmitting } = useAddProduct();
     const startDateInputRef = useRef(null);
     const endDateInputRef = useRef(null);
     const labelClass = 'mb-1.5 inline-block text-[13px] font-bold text-slate-900 dark:text-slate-100';
@@ -26,6 +26,42 @@ const BasicDetailsCard = () => {
 
         input.click();
     };
+
+    const selectedCategory = useMemo(
+        () => categories.find((category) => category._id === formData.category),
+        [categories, formData.category],
+    );
+
+    const selectedSubCategory = useMemo(
+        () => subCategories.find((subCategory) => subCategory._id === formData.subCategory),
+        [subCategories, formData.subCategory],
+    );
+
+    const selectionText = `${selectedCategory?.catName || ''} ${selectedSubCategory?.subCatName || ''}`.toLowerCase();
+    const hasKeyword = (keywords) => keywords.some((keyword) => selectionText.includes(keyword));
+
+    const showRamRomFields = hasKeyword(['mobile', 'phone', 'smartphone', 'tab', 'tablet', 'laptop', 'notebook']);
+    const showSizeField = hasKeyword(['cloth', 'clothing', 'fashion', 'shoe', 'footwear', 'apparel', 'wear', 'dress', 'shirt', 'jeans', 'kurta']);
+    const showWeightField = hasKeyword(['grocery', 'food', 'rice', 'flour', 'atta', 'spice', 'oil', 'fruit', 'vegetable', 'milk', 'drink', 'beverage', 'snack']);
+
+    useEffect(() => {
+        if (!showRamRomFields && (formData.RAM || formData.ROM)) {
+            updateField('RAM', '');
+            updateField('ROM', '');
+        }
+    }, [formData.RAM, formData.ROM, showRamRomFields, updateField]);
+
+    useEffect(() => {
+        if (!showSizeField && formData.size) {
+            updateField('size', '');
+        }
+    }, [formData.size, showSizeField, updateField]);
+
+    useEffect(() => {
+        if (!showWeightField && formData.weight) {
+            updateField('weight', '');
+        }
+    }, [formData.weight, showWeightField, updateField]);
 
     return (
         <section className="p-3.5 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg">
@@ -183,6 +219,64 @@ const BasicDetailsCard = () => {
                     </div>
                 </div>
             </div>
+
+            {(showRamRomFields || showSizeField || showWeightField) && (
+                <>
+                    <h3 className="mb-2.5 mt-2 text-[28px] font-bold leading-[1.1] text-slate-900 dark:text-slate-100 xl:text-[24px]">Specifications</h3>
+                    <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+                        {showRamRomFields && (
+                            <>
+                                <div className="mb-3 md:mb-0">
+                                    <label className={labelClass} htmlFor="productRam">RAM</label>
+                                    <input
+                                        id="productRam"
+                                        className={inputClass}
+                                        placeholder="e.g. 8 GB"
+                                        value={formData.RAM}
+                                        onChange={(event) => updateField('RAM', event.target.value)}
+                                    />
+                                </div>
+                                <div className="mb-3 md:mb-0">
+                                    <label className={labelClass} htmlFor="productRom">ROM</label>
+                                    <input
+                                        id="productRom"
+                                        className={inputClass}
+                                        placeholder="e.g. 128 GB"
+                                        value={formData.ROM}
+                                        onChange={(event) => updateField('ROM', event.target.value)}
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        {showSizeField && (
+                            <div className="mb-3 md:mb-0">
+                                <label className={labelClass} htmlFor="productSize">Size</label>
+                                <input
+                                    id="productSize"
+                                    className={inputClass}
+                                    placeholder="e.g. M / L / XL"
+                                    value={formData.size}
+                                    onChange={(event) => updateField('size', event.target.value)}
+                                />
+                            </div>
+                        )}
+
+                        {showWeightField && (
+                            <div className="mb-3 md:mb-0">
+                                <label className={labelClass} htmlFor="productWeight">Weight</label>
+                                <input
+                                    id="productWeight"
+                                    className={inputClass}
+                                    placeholder="e.g. 1 kg"
+                                    value={formData.weight}
+                                    onChange={(event) => updateField('weight', event.target.value)}
+                                />
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
 
             <h3 className="mb-2.5 mt-2 text-[28px] font-bold leading-[1.1] text-slate-900 dark:text-slate-100 xl:text-[24px]">Inventory</h3>
 

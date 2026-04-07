@@ -168,7 +168,7 @@ const ProductMediaCard = () => {
                     <option value="">Select your product</option>
                     {categories.map((category) => (
                         <option key={category._id} value={category._id}>
-                            {category.catName}
+                            {category.catName || category.name || category.categoryName || category.title || 'Unnamed category'}
                         </option>
                     ))}
                 </select>
