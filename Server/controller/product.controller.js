@@ -19,7 +19,19 @@ export async function uploadImages(req, res) {
     try {
         imagesArr = [];
 
-        const image = req.files;
+        const files = Array.isArray(req.files)
+            ? req.files
+            : req.file
+                ? [req.file]
+                : [];
+
+        if (!files.length) {
+            return res.status(400).json({
+                message: "No image file uploaded",
+                error: true,
+                success: false,
+            });
+        }
 
         const option = {
             use_filename: true,
@@ -27,10 +39,12 @@ export async function uploadImages(req, res) {
             overwrite: false,
         };
 
-        for (let i = 0; i < image?.length; i++) {
-            const result = await cloudinary.uploader.upload(image[i].path, option);
+        for (let i = 0; i < files.length; i++) {
+            const result = await cloudinary.uploader.upload(files[i].path, option);
             imagesArr.push(result.secure_url);
-            fs.unlinkSync(`uploads/${req.files[i].filename}`);
+            if (fs.existsSync(files[i].path)) {
+                fs.unlinkSync(files[i].path);
+            }
         }
 
 
@@ -105,10 +119,35 @@ export async function removeImageFromCloudinary(request, response) {
 
 export const createProductController = async (req, res) => {
     try {
-        const { productName, price, description, category, subCategory, size, weight, RAM, ROM, color, stock } = req.body;
+        const {
+            productName,
+            price,
+            oldPrice,
+            productPrice,
+            discountPercentage,
+            discount,
+            description,
+            category,
+            subCategory,
+            size,
+            weight,
+            RAM,
+            ROM,
+            color,
+            stock,
+            images,
+            expirationStart,
+            expirationEnd,
+        } = req.body;
+        const requestImages = Array.isArray(images) ? images : [];
+        const parsedOldPrice = Number(oldPrice ?? productPrice ?? price ?? 0);
+        const parsedDiscountPercentage = Math.min(Math.max(Number(discountPercentage ?? discount ?? 0), 0), 99);
+        const parsedSalePrice = Number(price ?? 0);
+        const parsedExpirationStart = expirationStart ? new Date(expirationStart) : null;
+        const parsedExpirationEnd = expirationEnd ? new Date(expirationEnd) : null;
 
         // Validate required fields
-        if (!productName || !price || !description || !stock) {
+        if (!productName || !description || !stock || !parsedOldPrice || !parsedSalePrice) {
             return res.status(400).json({
                 message: "Product name, price, description, and stock are required",
                 success: false,
@@ -118,20 +157,24 @@ export const createProductController = async (req, res) => {
         // Create a new product object
         const newProduct = new ProductModel({
             productName,
-            price,
+            price: parsedSalePrice,
+            oldPrice: parsedOldPrice,
+            discountPercentage: parsedDiscountPercentage,
             description,
             category,
             subCategory,
-            images : imagesArr,
+            images: requestImages.length ? requestImages : imagesArr,
             size,
             weight,
             RAM,
             ROM,
             color,
-            stock
+            stock,
+            expirationStart: parsedExpirationStart,
+            expirationEnd: parsedExpirationEnd,
         });
 
-        if(!newProduct) {
+        if (!newProduct) {
             imagesArr = []; // Clear the images array if product creation fails
             return res.status(400).json({
                 message: "Failed to create product",
@@ -152,9 +195,9 @@ export const createProductController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in creating product: " + error.message,
-            success : false,
-            error : true
+            message: "Error in creating product: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -164,11 +207,11 @@ export const getAllProductsController = async (req, res) => {
         const sortBy = req.query.sortBy;
         let sortStage = null;
         switch (sortBy) {
-            case "a-z":     sortStage = { $sort: { productName: 1 } };  break;
-            case "z-a":     sortStage = { $sort: { productName: -1 } }; break;
-            case "priceLow":  sortStage = { $sort: { price: 1 } };  break;
+            case "a-z": sortStage = { $sort: { productName: 1 } }; break;
+            case "z-a": sortStage = { $sort: { productName: -1 } }; break;
+            case "priceLow": sortStage = { $sort: { price: 1 } }; break;
             case "priceHigh": sortStage = { $sort: { price: -1 } }; break;
-            case "ratingLow":  sortStage = { $sort: { rating: 1 } };  break;
+            case "ratingLow": sortStage = { $sort: { rating: 1 } }; break;
             case "ratingHigh": sortStage = { $sort: { rating: -1 } }; break;
         }
 
@@ -211,9 +254,9 @@ export const getAllProductsController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in fetching products: " + error.message,
-            success : false,
-            error : true
+            message: "Error in fetching products: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -232,7 +275,7 @@ export const getProductByIdController = async (req, res) => {
         const product = await ProductModel.findById(productId)
             .populate("category", "catName")
             .populate("subCategory", "subCatName");
-        
+
         if (!product) {
             return res.status(404).json({
                 message: "Product not found",
@@ -248,12 +291,12 @@ export const getProductByIdController = async (req, res) => {
             product
         });
 
-         
+
     } catch (error) {
         return res.status(500).json({
-            message : "Error in fetching product: " + error.message,
-            success : false,
-            error : true
+            message: "Error in fetching product: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -261,7 +304,29 @@ export const getProductByIdController = async (req, res) => {
 export const updateProductController = async (req, res) => {
     try {
         const productId = req.params.id;
-        const { productName, price, description, category, subCategory, size, weight, RAM, ROM, color, stock } = req.body;
+        const {
+            productName,
+            price,
+            oldPrice,
+            productPrice,
+            discountPercentage,
+            discount,
+            description,
+            category,
+            subCategory,
+            size,
+            weight,
+            RAM,
+            ROM,
+            color,
+            stock,
+            expirationStart,
+            expirationEnd,
+        } = req.body;
+        const parsedOldPrice = Number(oldPrice ?? productPrice ?? 0);
+        const parsedDiscountPercentage = Math.min(Math.max(Number(discountPercentage ?? discount ?? 0), 0), 99);
+        const parsedExpirationStart = expirationStart ? new Date(expirationStart) : null;
+        const parsedExpirationEnd = expirationEnd ? new Date(expirationEnd) : null;
         if (!productId) {
             return res.status(400).json({
                 message: "Product ID is required",
@@ -272,6 +337,14 @@ export const updateProductController = async (req, res) => {
 
         // Build update object
         const updateObj = { productName, price, description, category, subCategory, size, weight, RAM, ROM, color, stock };
+        if (parsedOldPrice > 0) {
+            updateObj.oldPrice = parsedOldPrice;
+        }
+        if (Number.isFinite(parsedDiscountPercentage)) {
+            updateObj.discountPercentage = parsedDiscountPercentage;
+        }
+        updateObj.expirationStart = parsedExpirationStart;
+        updateObj.expirationEnd = parsedExpirationEnd;
         let usedImagesArr = false;
         if (imagesArr && imagesArr.length > 0) {
             updateObj.images = imagesArr;
@@ -301,11 +374,11 @@ export const updateProductController = async (req, res) => {
             product: updatedProduct
         });
 
-    }catch (error) {
+    } catch (error) {
         return res.status(500).json({
-            message : "Error in updating product: " + error.message,
-            success : false,
-            error : true
+            message: "Error in updating product: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -357,9 +430,9 @@ export const deleteProductController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in deleting product: " + error.message,
-            success : false,
-            error : true
+            message: "Error in deleting product: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -378,11 +451,11 @@ export const getProductsByCategoryIdController = async (req, res) => {
         const sortBy = req.query.sortBy;
         let sortStage = null;
         switch (sortBy) {
-            case "a-z":     sortStage = { $sort: { productName: 1 } };  break;
-            case "z-a":     sortStage = { $sort: { productName: -1 } }; break;
-            case "priceLow":  sortStage = { $sort: { price: 1 } };  break;
+            case "a-z": sortStage = { $sort: { productName: 1 } }; break;
+            case "z-a": sortStage = { $sort: { productName: -1 } }; break;
+            case "priceLow": sortStage = { $sort: { price: 1 } }; break;
             case "priceHigh": sortStage = { $sort: { price: -1 } }; break;
-            case "ratingLow":  sortStage = { $sort: { rating: 1 } };  break;
+            case "ratingLow": sortStage = { $sort: { rating: 1 } }; break;
             case "ratingHigh": sortStage = { $sort: { rating: -1 } }; break;
         }
 
@@ -396,7 +469,7 @@ export const getProductsByCategoryIdController = async (req, res) => {
         }
 
         const products = await ProductModel.aggregate(pipeline);
-        
+
         if (!products || products.length === 0) {
             return res.status(404).json({
                 message: "No products found for this category",
@@ -413,11 +486,11 @@ export const getProductsByCategoryIdController = async (req, res) => {
         });
 
 
-    }catch (error) {
+    } catch (error) {
         return res.status(500).json({
-            message : "Error in fetching products by category: " + error.message,
-            success : false,
-            error : true
+            message: "Error in fetching products by category: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -436,11 +509,11 @@ export const getProductsBySubCategoryIdController = async (req, res) => {
         const sortBy = req.query.sortBy;
         let sortStage = null;
         switch (sortBy) {
-            case "a-z":     sortStage = { $sort: { productName: 1 } };  break;
-            case "z-a":     sortStage = { $sort: { productName: -1 } }; break;
-            case "priceLow":  sortStage = { $sort: { price: 1 } };  break;
+            case "a-z": sortStage = { $sort: { productName: 1 } }; break;
+            case "z-a": sortStage = { $sort: { productName: -1 } }; break;
+            case "priceLow": sortStage = { $sort: { price: 1 } }; break;
             case "priceHigh": sortStage = { $sort: { price: -1 } }; break;
-            case "ratingLow":  sortStage = { $sort: { rating: 1 } };  break;
+            case "ratingLow": sortStage = { $sort: { rating: 1 } }; break;
             case "ratingHigh": sortStage = { $sort: { rating: -1 } }; break;
         }
 
@@ -454,7 +527,7 @@ export const getProductsBySubCategoryIdController = async (req, res) => {
         }
 
         const products = await ProductModel.aggregate(pipeline);
-        
+
         if (!products || products.length === 0) {
             return res.status(404).json({
                 message: "No products found for this subcategory",
@@ -472,9 +545,9 @@ export const getProductsBySubCategoryIdController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in fetching products by subcategory: " + error.message,
-            success : false,
-            error : true
+            message: "Error in fetching products by subcategory: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -499,9 +572,9 @@ export const getTopRatedProductsController = async (req, res) => {
         });
     } catch (error) {
         return res.status(500).json({
-            message : "Error in fetching top-rated products: " + error.message,
-            success : false,
-            error : true
+            message: "Error in fetching top-rated products: " + error.message,
+            success: false,
+            error: true
         })
 
     }
@@ -529,9 +602,9 @@ export const getLatestProductsController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in fetching latest products: " + error.message,
-            success : false,
-            error : true
+            message: "Error in fetching latest products: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -579,11 +652,11 @@ export const searchProductsController = async (req, res) => {
         const sortBy = req.query.sortBy;
         let sortOption = {};
         switch (sortBy) {
-            case "a-z":     sortOption = { productName: 1 };  break;
-            case "z-a":     sortOption = { productName: -1 }; break;
-            case "priceLow":  sortOption = { price: 1 };  break;
+            case "a-z": sortOption = { productName: 1 }; break;
+            case "z-a": sortOption = { productName: -1 }; break;
+            case "priceLow": sortOption = { price: 1 }; break;
             case "priceHigh": sortOption = { price: -1 }; break;
-            case "ratingLow":  sortOption = { Rating: 1 };  break;
+            case "ratingLow": sortOption = { Rating: 1 }; break;
             case "ratingHigh": sortOption = { Rating: -1 }; break;
             default: sortOption = {};
         }
@@ -602,9 +675,9 @@ export const searchProductsController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in searching products: " + error.message,
-            success : false,
-            error : true
+            message: "Error in searching products: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -638,11 +711,11 @@ export const filterProductsController = async (req, res) => {
         const sortBy = req.query.sortBy;
         let sortOption = {};
         switch (sortBy) {
-            case "a-z":     sortOption = { productName: 1 };  break;
-            case "z-a":     sortOption = { productName: -1 }; break;
-            case "priceLow":  sortOption = { price: 1 };  break;
+            case "a-z": sortOption = { productName: 1 }; break;
+            case "z-a": sortOption = { productName: -1 }; break;
+            case "priceLow": sortOption = { price: 1 }; break;
             case "priceHigh": sortOption = { price: -1 }; break;
-            case "ratingLow":  sortOption = { rating: 1 };  break;
+            case "ratingLow": sortOption = { rating: 1 }; break;
             case "ratingHigh": sortOption = { rating: -1 }; break;
             default: sortOption = {};
         }
@@ -661,9 +734,9 @@ export const filterProductsController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in filtering products: " + error.message,
-            success : false,
-            error : true
+            message: "Error in filtering products: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -705,9 +778,9 @@ export const getRelatedProductsController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in fetching related products: " + error.message,
-            success : false,
-            error : true
+            message: "Error in fetching related products: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -779,9 +852,9 @@ export const createProductReviewController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in creating product review: " + error.message,
-            success : false,
-            error : true
+            message: "Error in creating product review: " + error.message,
+            success: false,
+            error: true
         })
     }
 }
@@ -811,9 +884,9 @@ export const getProductReviewsController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message : "Error in fetching product reviews: " + error.message,
-            success : false,
-            error : true
+            message: "Error in fetching product reviews: " + error.message,
+            success: false,
+            error: true
         })
     }
 }

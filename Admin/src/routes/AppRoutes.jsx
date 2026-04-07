@@ -11,6 +11,7 @@ import ChangePasswordPage from "../features/auth/pages/ChangePasswordPage";
 const OrderManagementPage = lazy(() => import("../features/ordersManagement/pages/OrderManagementPage"));
 const CustomersPage = lazy(() => import("../features/customers/pages/CustomersPage"));
 const CategoriesPage = lazy(() => import("../features/categories/pages/CategoriesPage"));
+const AddProductPage = lazy(() => import("../features/addProducts/pages/AddProductPage"));
 
 
 
@@ -60,6 +61,18 @@ const AppRoutes = () => {
                 <ProtectedRoute>
                     <MainLayout title="Categories">
                         <CategoriesPage />
+                    </MainLayout>
+                </ProtectedRoute>
+            )
+        },
+
+        {
+            path: '/add-products',
+            exact: true,
+            element: (
+                <ProtectedRoute>
+                    <MainLayout title="Add Product">
+                        <AddProductPage />
                     </MainLayout>
                 </ProtectedRoute>
             )

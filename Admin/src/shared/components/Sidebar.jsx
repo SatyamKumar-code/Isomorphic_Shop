@@ -9,6 +9,7 @@ const Sidebar = () => {
     if (pathname === '/order-management') return 'order';
     if (pathname === '/customers') return 'customers';
     if (pathname === '/categories') return 'categories';
+    if (pathname === '/add-products') return 'addProducts';
     return 'Dashboard';
   };
 
@@ -162,7 +163,7 @@ const Sidebar = () => {
       <div className='menu px-3.5 w-full gap-2'>
         <span className='text-[15px] text-[#6A717F]'>Product</span>
         <ul className='menuList my-3'>
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "addProducts" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("addProducts")}>
+          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "addProducts" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("addProducts"); navigate('/add-products'); }}>
             {
               active === "addProducts" ?
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

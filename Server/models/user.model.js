@@ -48,7 +48,10 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    
+    refresh_token: {
+        type: String,
+        default: null
+    }
 }, { timestamps: true });
 
 const UserModel = mongoose.model('User', userSchema);

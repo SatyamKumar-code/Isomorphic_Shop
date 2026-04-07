@@ -7,7 +7,7 @@ const generateRefreshToken = async ( userId ,role ) => {
         { expiresIn: '7d' }
     );
     
-    await UserModel.updateOne(
+    const RefreshToken = await UserModel.updateOne(
         { _id: userId },
         {
             refresh_token: token

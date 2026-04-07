@@ -5,7 +5,7 @@ import DarkModeToggle from './DarkModeToggelButton';
 const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, or reports' }) => {
   return (
     <div>
-      <header className='header h-24 ml-70 w-[calc(100%-240px)] flex items-center justify-between pl-5 pr-11 py-3 bg-white dark:bg-gray-950 dark:shadow-md  shadow-md shadow-gray-300 dark:shadow-gray-700' >
+      <header className='header h-24 ml-65 w-[calc(100%-217px)] flex items-center justify-between pl-5 pr-11 py-3 bg-white dark:bg-gray-950 dark:shadow-md  shadow-md shadow-gray-300 dark:shadow-gray-700' >
         <h2 className='font-bold text-black dark:text-white'>{title}</h2>
 
         <div className='flex items-center md:gap-4 lg:gap-8'>
