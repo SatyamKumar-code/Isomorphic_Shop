@@ -13,6 +13,7 @@ const CustomersPage = lazy(() => import("../features/customers/pages/CustomersPa
 const CategoriesPage = lazy(() => import("../features/categories/pages/CategoriesPage"));
 const AddProductPage = lazy(() => import("../features/addProducts/pages/AddProductPage"));
 const ProductListPage = lazy(() => import("../features/productList/pages/ProductListPage"));
+const ProductReviewsPage = lazy(() => import("../features/productReviews/pages/ProductReviewsPage"));
 
 
 
@@ -86,6 +87,18 @@ const AppRoutes = () => {
                 <ProtectedRoute>
                     <MainLayout title="Product List">
                         <ProductListPage />
+                    </MainLayout>
+                </ProtectedRoute>
+            )
+        },
+
+        {
+            path: '/product-reviews',
+            exact: true,
+            element: (
+                <ProtectedRoute>
+                    <MainLayout title="Product Reviews">
+                        <ProductReviewsPage />
                     </MainLayout>
                 </ProtectedRoute>
             )

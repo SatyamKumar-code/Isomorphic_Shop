@@ -3,7 +3,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import ProductModel from "../models/product.model.js";
 import mongoose from "mongoose";
-import ReviewModel from "../models/Review.model.js";
+import ReviewModel from "../models/review.model.js";
 
 cloudinary.config({
     cloud_name: process.env.cloudinary_Config_Cloud_Name,
@@ -934,7 +934,8 @@ export const createProductReviewController = async (req, res) => {
             userId,
             productId,
             rating,
-            comment
+            comment,
+            status: "Pending"
         });
         await newReview.save();
 

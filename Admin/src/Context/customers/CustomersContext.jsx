@@ -1,142 +1,82 @@
-import { createContext, useMemo, useState } from "react";
+import { createContext, useEffect, useMemo, useState } from "react";
+import { getCustomersAnalytics } from "../../features/customers/CustomersAPI";
 
 export const CustomersContext = createContext();
 
-const summaryCards = [
-    { title: "Total Customers", value: "11,040", change: "+14.4%", changeColor: "#22C55E" },
-    { title: "New Customers", value: "2,370", change: "+20%", changeColor: "#22C55E" },
-    { title: "Visitor", value: "250k", change: "+20%", changeColor: "#22C55E" },
-];
+const summaryCards = [];
 
-const overviewStats = [
-    { key: "activeCustomers", label: "Active Customers", value: "25k" },
-    { key: "repeatCustomers", label: "Repeat Customers", value: "5.6k" },
-    { key: "shopVisitor", label: "Shop Visitor", value: "250k" },
-    { key: "conversionRate", label: "Conversion Rate", value: "5.5%" },
-];
+const overviewStats = [];
 
 const weekSeries = {
     "This week": {
-        activeCustomers: [11400, 12454, 13824, 16464, 14200, 15435, 16464],
-        repeatCustomers: [4200, 4158, 4294, 4224, 4126, 4379, 4230],
-        shopVisitor: [152000, 164000, 158000, 172000, 169000, 181000, 176000],
-        conversionRate: [2.8, 5.1, 5.4, 5.2, 5.3, 5.6, 5.5],
+        activeCustomers: [],
+        repeatCustomers: [],
+        shopVisitor: [],
+        conversionRate: [],
     },
     "Last week": {
-        activeCustomers: [9200, 9450, 9700, 9900, 10100, 9800, 9600],
-        repeatCustomers: [3500, 3620, 3740, 3650, 3580, 3690, 3600],
-        shopVisitor: [132000, 138500, 140000, 144000, 141200, 147500, 145000],
-        conversionRate: [3.2, 2.4, 4.6, 4.5, 4.7, 4.9, 4.8],
+        activeCustomers: [],
+        repeatCustomers: [],
+        shopVisitor: [],
+        conversionRate: [],
     },
 };
 
+const periodOptions = [
+    { label: "Last 7 Days", value: "7days" },
+    { label: "Day-wise", value: "daywise" },
+    { label: "Month-wise (Jan-Dec)", value: "month" },
+    { label: "Year-wise", value: "year" },
+];
+
+const monthOptions = [
+    { value: 1, label: "Jan" },
+    { value: 2, label: "Feb" },
+    { value: 3, label: "Mar" },
+    { value: 4, label: "Apr" },
+    { value: 5, label: "May" },
+    { value: 6, label: "Jun" },
+    { value: 7, label: "Jul" },
+    { value: 8, label: "Aug" },
+    { value: 9, label: "Sep" },
+    { value: 10, label: "Oct" },
+    { value: 11, label: "Nov" },
+    { value: 12, label: "Dec" },
+];
+
+const defaultRangeOptions = [
+    { label: "This week", value: "This week" },
+    { label: "Last week", value: "Last week" },
+];
 const getSafeStat = (stats) => {
     if (!Array.isArray(stats) || !stats.length) {
-        return "";
+        return "activeCustomers";
     }
 
     const firstStat = stats[0];
-    return firstStat?.key || firstStat?.valueKey || firstStat?.label || "";
+    return firstStat?.key || firstStat?.valueKey || firstStat?.label || "activeCustomers";
 };
 
-const baseCustomers = [
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST031", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST033", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST031", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST033", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" }, { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Jane Smith", phone: "+1234567890", orderCount: 5, totalSpend: 250, status: "Inactive", email: "jane.smith@example.com", address: "28 Oak St, LA", totalOrders: 72, completedOrders: 61, canceledOrders: 11, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "Emily Davis", phone: "+1234567890", orderCount: 30, totalSpend: 4600, status: "VIP", email: "emily.davis@example.com", address: "45 Pine Ave, CA", totalOrders: 118, completedOrders: 103, canceledOrders: 15, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-    { id: "#CUST001", name: "John Doe", phone: "+1234567890", orderCount: 25, totalSpend: 3450, status: "Active", email: "john.doe@example.com", address: "123 Main St, NY", totalOrders: 150, completedOrders: 140, canceledOrders: 10, registrationDate: "15.01.2025", lastPurchaseDate: "10.01.2025" },
-];
+const formatServerDate = (value) => {
+    if (!value) return "";
 
-const customers = baseCustomers.map((customer, index) => ({
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${day}.${month}.${date.getFullYear()}`;
+};
+
+const normalizeCustomer = (customer, index) => ({
     ...customer,
-    uid: String(index + 1),
-}));
-
-const statusColors = {
-    Active: "#22C55E",
-    Inactive: "#EF4444",
-    VIP: "#F59E0B",
-};
-
-const PAGE_SIZE = 10;
+    uid: customer.uid || customer._id || String(index + 1),
+    id: customer.id || `#CUST${String(index + 1).padStart(4, "0")}`,
+    phone: customer.phone || (customer.mobile ? `+${customer.mobile}` : "-"),
+    address: customer.address || "-",
+    registrationDate: customer.registrationDate || formatServerDate(customer.createdAt),
+    lastPurchaseDate: customer.lastPurchaseDate || formatServerDate(customer.lastPurchaseDateRaw || customer.updatedAt || customer.createdAt),
+});
 
 const getPaginationItems = (currentPage, totalPages) => {
     if (totalPages <= 7) {
@@ -154,43 +94,167 @@ const getPaginationItems = (currentPage, totalPages) => {
     return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
 };
 
+const PAGE_SIZE = 10;
+
+const statusColors = {
+    Active: "#22C55E",
+    Inactive: "#EF4444",
+    VIP: "#F59E0B",
+};
+
 export const CustomersProvider = ({ children }) => {
     const [activeRange, setActiveRange] = useState("This week");
+    const [analyticsPeriod, setAnalyticsPeriod] = useState("7days");
+    const [periodLabel, setPeriodLabel] = useState("Last 7 days");
+    const [selectedYear, setSelectedYear] = useState("");
+    const [selectedMonth, setSelectedMonth] = useState("");
+    const [availableYears, setAvailableYears] = useState([]);
+    const [rangeOptions, setRangeOptions] = useState(defaultRangeOptions);
+    const [xLabelsByRange, setXLabelsByRange] = useState({});
     const [activeStat, setActiveStat] = useState(getSafeStat(overviewStats));
     const [selectedCustomerId, setSelectedCustomerId] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const totalPages = Math.ceil(customers.length / PAGE_SIZE);
+    const [customerRecords, setCustomerRecords] = useState([]);
+    const [summaryCardData, setSummaryCardData] = useState(summaryCards);
+    const [overviewStatData, setOverviewStatData] = useState(overviewStats);
+    const [weekSeriesData, setWeekSeriesData] = useState(weekSeries);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const fetchCustomers = async () => {
+            try {
+                const requestParams = {
+                    period: analyticsPeriod,
+                };
+
+                if (selectedYear) {
+                    requestParams.year = Number(selectedYear);
+                }
+
+                if (selectedMonth) {
+                    requestParams.month = Number(selectedMonth);
+                }
+
+                const response = await getCustomersAnalytics(requestParams);
+                const payload = response.data?.data || response.data || {};
+
+                if (!isMounted) {
+                    return;
+                }
+
+                const nextCustomers = Array.isArray(payload.customers) ? payload.customers.map(normalizeCustomer) : [];
+                setCustomerRecords(nextCustomers);
+                setSummaryCardData(Array.isArray(payload.summaryCards) ? payload.summaryCards : summaryCards);
+                setOverviewStatData(Array.isArray(payload.overviewStats) ? payload.overviewStats : overviewStats);
+                setWeekSeriesData(payload.weekSeries && typeof payload.weekSeries === "object" ? payload.weekSeries : weekSeries);
+                const nextPeriodLabel = payload.periodLabel
+                    || (analyticsPeriod === "month"
+                        ? "Month-wise"
+                        : analyticsPeriod === "year"
+                            ? "Year-wise"
+                            : analyticsPeriod === "daywise"
+                                ? "Day-wise"
+                                : "Last 7 days");
+                setPeriodLabel(nextPeriodLabel);
+                setXLabelsByRange(payload.xLabelsByRange && typeof payload.xLabelsByRange === "object" ? payload.xLabelsByRange : {});
+                const nextAvailableYears = Array.isArray(payload.availableYears) ? payload.availableYears : [];
+                setAvailableYears(nextAvailableYears);
+
+                if (payload.selectedYear) {
+                    setSelectedYear(String(payload.selectedYear));
+                } else if (!selectedYear && nextAvailableYears.length) {
+                    setSelectedYear(String(nextAvailableYears[nextAvailableYears.length - 1]));
+                }
+
+                if (payload.selectedMonth) {
+                    setSelectedMonth(String(payload.selectedMonth));
+                }
+
+                const nextRangeOptions = Array.isArray(payload.ranges) && payload.ranges.length
+                    ? payload.ranges
+                    : defaultRangeOptions;
+                setRangeOptions(nextRangeOptions);
+
+                const rangeValues = nextRangeOptions.map((item) => item.value);
+                setActiveRange((current) => (rangeValues.includes(current) ? current : nextRangeOptions[0].value));
+                setActiveStat((current) => current || getSafeStat(Array.isArray(payload.overviewStats) ? payload.overviewStats : overviewStats));
+            } catch {
+                if (!isMounted) {
+                    return;
+                }
+
+                setCustomerRecords([]);
+                setSummaryCardData(summaryCards);
+                setOverviewStatData(overviewStats);
+                setWeekSeriesData(weekSeries);
+                setPeriodLabel(
+                    analyticsPeriod === "month"
+                        ? "Month-wise"
+                        : analyticsPeriod === "year"
+                            ? "Year-wise"
+                            : analyticsPeriod === "daywise"
+                                ? "Day-wise"
+                                : "Last 7 days",
+                );
+                setRangeOptions(defaultRangeOptions);
+                setXLabelsByRange({});
+                setAvailableYears([]);
+            }
+        };
+
+        fetchCustomers();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [analyticsPeriod, selectedYear, selectedMonth]);
+
+    const totalPages = Math.max(1, Math.ceil(customerRecords.length / PAGE_SIZE));
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
+
     const pagination = useMemo(() => getPaginationItems(currentPage, totalPages), [currentPage, totalPages]);
 
     const visibleCustomers = useMemo(() => {
         const start = (currentPage - 1) * PAGE_SIZE;
-        return customers.slice(start, start + PAGE_SIZE);
-    }, [currentPage]);
-
-    const customersWithVisibleId = useMemo(() => (
-        visibleCustomers.map((customer, index) => ({
-            ...customer,
-            id: `#CUST${String((currentPage - 1) * PAGE_SIZE + index + 1).padStart(4, "0")}`,
-        }))
-    ), [visibleCustomers, currentPage]);
+        return customerRecords.slice(start, start + PAGE_SIZE);
+    }, [currentPage, customerRecords]);
 
     const selectedCustomer = useMemo(() => {
         if (!selectedCustomerId) {
             return null;
         }
 
-        return customers.find((customer) => customer.uid === selectedCustomerId) || null;
-    }, [selectedCustomerId]);
+        return customerRecords.find((customer) => customer.uid === selectedCustomerId) || null;
+    }, [selectedCustomerId, customerRecords]);
 
     const value = useMemo(() => ({
-        summaryCards,
-        overviewStats,
-        weekSeries,
+        summaryCards: summaryCardData,
+        overviewStats: overviewStatData,
+        weekSeries: weekSeriesData,
+        analyticsPeriod,
+        setAnalyticsPeriod,
+        periodOptions,
+        monthOptions,
+        periodLabel,
+        selectedYear,
+        setSelectedYear,
+        selectedMonth,
+        setSelectedMonth,
+        availableYears,
+        rangeOptions,
+        xLabelsByRange,
         activeRange,
         setActiveRange,
         activeStat,
         setActiveStat,
-        customers: customersWithVisibleId,
+        customers: visibleCustomers,
+        allCustomers: customerRecords,
         selectedCustomer,
         selectedCustomerId,
         setSelectedCustomerId,
@@ -199,7 +263,7 @@ export const CustomersProvider = ({ children }) => {
         pagination,
         totalPages,
         statusColors,
-    }), [activeRange, activeStat, customersWithVisibleId, selectedCustomer, selectedCustomerId, currentPage, pagination, totalPages]);
+    }), [activeRange, activeStat, visibleCustomers, customerRecords, selectedCustomer, selectedCustomerId, currentPage, pagination, totalPages, summaryCardData, overviewStatData, weekSeriesData, analyticsPeriod, periodLabel, selectedYear, selectedMonth, availableYears, rangeOptions, xLabelsByRange]);
 
     return <CustomersContext.Provider value={value}>{children}</CustomersContext.Provider>;
 };

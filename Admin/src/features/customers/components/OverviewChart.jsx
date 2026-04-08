@@ -1,7 +1,27 @@
 import React from "react";
 import LineAreaChartCard from "../../../shared/components/charts/LineAreaChartCard";
+import { useCustomers } from "../../../Context/customers/useCustomers";
 
 const WEEK_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const slugify = (value) => String(value || "chart").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+const downloadCsv = (rows, fileName) => {
+    const csvText = rows
+        .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};
 
 const formatAxisValue = (value) => {
     const toSingleDecimal = (num) => Number(num.toFixed(1)).toString();
@@ -61,12 +81,24 @@ const createYAxisMeta = (chartData) => {
     };
 };
 
-const createXLabels = (chartData) => {
+const createXLabels = (chartData, analyticsPeriod) => {
     if (!chartData.length) {
         return [];
     }
 
-    return WEEK_LABELS.slice(0, chartData.length);
+    if (analyticsPeriod === "year") {
+        return MONTH_LABELS.slice(0, chartData.length);
+    }
+
+    if (analyticsPeriod === "month") {
+        return Array.from({ length: chartData.length }, (_, index) => `${index + 1}`);
+    }
+
+    if (chartData.length <= WEEK_LABELS.length) {
+        return WEEK_LABELS.slice(0, chartData.length);
+    }
+
+    return Array.from({ length: chartData.length }, (_, index) => `${index + 1}`);
 };
 
 const resolveSeriesData = (chartSeries, activeRange, activeStat) => {
@@ -114,9 +146,130 @@ const OverviewChart = ({
     activePointIndex,
     tooltip,
 }) => {
+    const {
+        analyticsPeriod,
+        setAnalyticsPeriod,
+        periodOptions,
+        monthOptions,
+        selectedYear,
+        setSelectedYear,
+        selectedMonth,
+        setSelectedMonth,
+        availableYears,
+        xLabelsByRange,
+    } = useCustomers();
+    const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!isMenuOpen) {
+            return undefined;
+        }
+
+        const handleOutsideClick = (event) => {
+            const clickedMenu = event.target.closest(".chart-more-menu");
+            const clickedTrigger = event.target.closest(".chart-more-menu-trigger");
+
+            if (!clickedMenu && !clickedTrigger) {
+                setIsMenuOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handleOutsideClick);
+        return () => {
+            document.removeEventListener("mousedown", handleOutsideClick);
+        };
+    }, [isMenuOpen]);
+
     const selectedChartData = resolveSeriesData(chartSeries, activeRange, activeStat);
     const axisYMeta = createYAxisMeta(selectedChartData);
-    const axisXLabels = createXLabels(selectedChartData);
+    const axisXLabels = Array.isArray(xLabelsByRange?.[activeRange])
+        ? xLabelsByRange[activeRange]
+        : createXLabels(selectedChartData, analyticsPeriod);
+
+    const handleExportChart = React.useCallback(() => {
+        const headers = ["Range", "Label", "Active Customers", "Repeat Customers", "Shop Visitor", "Conversion Rate"];
+        const rows = [headers];
+
+        ranges.forEach((range) => {
+            const rangeName = range.value;
+            const activeCustomers = resolveSeriesData(chartSeries, rangeName, "activeCustomers");
+            const repeatCustomers = resolveSeriesData(chartSeries, rangeName, "repeatCustomers");
+            const shopVisitor = resolveSeriesData(chartSeries, rangeName, "shopVisitor");
+            const conversionRate = resolveSeriesData(chartSeries, rangeName, "conversionRate");
+            const labels = Array.isArray(xLabelsByRange?.[rangeName])
+                ? xLabelsByRange[rangeName]
+                : createXLabels(activeCustomers, analyticsPeriod);
+
+            labels.forEach((label, index) => {
+                rows.push([
+                    rangeName,
+                    label || `Point ${index + 1}`,
+                    activeCustomers[index] ?? "",
+                    repeatCustomers[index] ?? "",
+                    shopVisitor[index] ?? "",
+                    conversionRate[index] ?? "",
+                ]);
+            });
+        });
+
+        downloadCsv(rows, `customers-overview-${slugify(activeRange)}.csv`);
+        setIsMenuOpen(false);
+    }, [activeRange, chartSeries, ranges, analyticsPeriod, xLabelsByRange]);
+
+    const moreMenuContent = (
+        <>
+            {periodOptions.map((option) => (
+                <button
+                    key={option.value}
+                    type="button"
+                    className={`block w-full px-4 py-2 text-left text-sm transition hover:bg-slate-50 dark:hover:bg-gray-900 ${analyticsPeriod === option.value ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-slate-700 dark:text-slate-200"}`}
+                    onClick={() => {
+                        setAnalyticsPeriod(option.value);
+                        setIsMenuOpen(false);
+                    }}
+                >
+                    {option.label}
+                </button>
+            ))}
+            <div className="h-px w-full bg-slate-200 dark:bg-slate-700" />
+            {(analyticsPeriod === "daywise" || analyticsPeriod === "month") ? (
+                <div className="px-3 py-3">
+                    <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Year</label>
+                    <select
+                        className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
+                        value={selectedYear}
+                        onChange={(event) => setSelectedYear(event.target.value)}
+                    >
+                        {availableYears.map((year) => (
+                            <option key={year} value={String(year)}>{year}</option>
+                        ))}
+                    </select>
+                </div>
+            ) : null}
+            {analyticsPeriod === "daywise" ? (
+                <div className="px-3 pb-3">
+                    <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Month</label>
+                    <select
+                        className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
+                        value={selectedMonth}
+                        onChange={(event) => setSelectedMonth(event.target.value)}
+                    >
+                        {monthOptions.map((month) => (
+                            <option key={month.value} value={String(month.value)}>{month.label}</option>
+                        ))}
+                    </select>
+                </div>
+            ) : null}
+            <div className="h-px w-full bg-slate-200 dark:bg-slate-700" />
+            <button
+                type="button"
+                className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900"
+                onClick={handleExportChart}
+            >
+                Export CSV
+            </button>
+        </>
+    );
 
     return (
         <div className="w-full xl:flex-1 xl:min-w-0">
@@ -142,6 +295,9 @@ const OverviewChart = ({
                 activePointIndex={activePointIndex}
                 tooltip={tooltip}
                 showMoreIcon
+                onMoreClick={() => setIsMenuOpen((current) => !current)}
+                moreMenuContent={moreMenuContent}
+                isMoreMenuOpen={isMenuOpen}
             />
         </div>
     );

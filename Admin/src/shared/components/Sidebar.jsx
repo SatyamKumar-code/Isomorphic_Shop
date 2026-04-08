@@ -11,6 +11,7 @@ const Sidebar = () => {
     if (pathname === '/categories') return 'categories';
     if (pathname === '/add-products') return 'addProducts';
     if (pathname === '/product-list') return 'productList';
+    if (pathname === '/product-reviews') return 'productReviews';
     return 'Dashboard';
   };
 
@@ -217,7 +218,7 @@ const Sidebar = () => {
             <span className={`text-[15px] text-[#6A717F] ${active === "productList" && "text-white font-bold"}`}>Product List</span>
           </li>
 
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "productReviews" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("productReviews")}>
+          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "productReviews" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("productReviews"); navigate('/product-reviews'); }}>
             {
               active === "productReviews" ?
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

@@ -1,25 +1,8 @@
 import React from "react";
 import { FiMoreVertical } from "react-icons/fi";
-import { FiMessageSquare, FiTrash2 } from "react-icons/fi";
-import { useCustomers } from "../../../Context/customers/useCustomers";
 import CsvExportDialog from "../../../shared/components/CsvExportDialog";
 import { useCsvExportDialog } from "../../../shared/hooks/useCsvExportDialog";
-
-const formatAmount = (value) => value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const StatusPill = ({ status, color }) => (
-    <span className="inline-flex items-center gap-2 text-[12px] font-medium" style={{ color }}>
-        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-        {status}
-    </span>
-);
-
-const ActionButtons = () => (
-    <div className="flex items-center gap-3 text-slate-500">
-        <FiMessageSquare className="text-[16px]" />
-        <FiTrash2 className="text-[16px]" />
-    </div>
-);
+import { useCustomers } from "../../../Context/customers/useCustomers";
 
 const parseRegistrationDate = (value) => {
     if (!value) return null;
@@ -31,8 +14,8 @@ const parseRegistrationDate = (value) => {
     return `${year}-${month}-${day}`;
 };
 
-const CustomersTable = () => {
-    const { customers, allCustomers, selectedCustomerId, setSelectedCustomerId, statusColors } = useCustomers();
+const CustomersHeader = () => {
+    const { allCustomers } = useCustomers();
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
     const buildCsvAndDownload = React.useCallback((items, fileName) => {
@@ -115,12 +98,12 @@ const CustomersTable = () => {
 
     return (
         <>
-            <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="text-[16px] font-semibold text-slate-900 dark:text-slate-50">Customer Details</div>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <h3 className="text-[22px] font-semibold text-slate-900 dark:text-slate-100">Customers</h3>
 
                 <div className="relative">
                     <button
-                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200 dark:hover:bg-gray-900"
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200 dark:hover:bg-gray-900"
                         onClick={() => setIsMenuOpen((prev) => !prev)}
                     >
                         More Action
@@ -128,7 +111,7 @@ const CustomersTable = () => {
                     </button>
 
                     {isMenuOpen ? (
-                        <div className="absolute right-0 z-20 mt-2 min-w-44 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-gray-950">
+                        <div className="absolute right-0 top-12 z-20 min-w-52 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-gray-950">
                             <button
                                 className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900"
                                 onClick={() => {
@@ -143,43 +126,6 @@ const CustomersTable = () => {
                 </div>
             </div>
 
-            <div className="overflow-x-auto">
-                <table className="min-w-full border-collapse whitespace-nowrap text-left">
-                    <thead>
-                        <tr className="bg-[#EAF8E7] text-[12px] font-semibold text-slate-600">
-                            <th className="rounded-l-lg px-4 py-3">Customer Id</th>
-                            <th className="px-4 py-3">Name</th>
-                            <th className="px-4 py-3">Phone</th>
-                            <th className="px-4 py-3">Order Count</th>
-                            <th className="px-4 py-3">Total Spend</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="rounded-r-lg px-4 py-3">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {customers.map((customer) => {
-                            const isSelected = customer.uid === selectedCustomerId;
-
-                            return (
-                                <tr
-                                    key={customer.uid}
-                                    className={`border-b border-slate-200 text-[13px] text-slate-700 transition dark:border-slate-800 dark:text-slate-200 ${isSelected ? "bg-emerald-50/70 dark:bg-emerald-950/20" : "hover:bg-slate-50 dark:hover:bg-slate-900/40"}`}
-                                    onClick={() => setSelectedCustomerId(isSelected ? null : customer.uid)}
-                                >
-                                    <td className="px-4 py-4 font-medium text-slate-500">{customer.id}</td>
-                                    <td className="px-4 py-4 font-medium text-slate-900 dark:text-slate-100">{customer.name}</td>
-                                    <td className="px-4 py-4">{customer.phone}</td>
-                                    <td className="px-4 py-4">{customer.orderCount}</td>
-                                    <td className="px-4 py-4">{formatAmount(customer.totalSpend)}</td>
-                                    <td className="px-4 py-4"><StatusPill status={customer.status} color={statusColors[customer.status]} /></td>
-                                    <td className="px-4 py-4"><ActionButtons /></td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-
             <CsvExportDialog
                 title="Export Customers CSV"
                 modeLabelMap={modeLabelMap}
@@ -189,4 +135,4 @@ const CustomersTable = () => {
     );
 };
 
-export default CustomersTable;
+export default CustomersHeader;

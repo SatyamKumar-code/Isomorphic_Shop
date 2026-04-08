@@ -175,6 +175,9 @@ const LineAreaChartCard = ({
     yLabelPositions,
     activePointIndex,
     tooltip,
+    onMoreClick,
+    moreMenuContent,
+    isMoreMenuOpen = false,
     width = 720,
     height = 250,
     paddingX,
@@ -393,7 +396,7 @@ const LineAreaChartCard = ({
             <div className={resolvedHeaderClassName}>
                 <h3 className={resolvedTitleClassName}>{title}</h3>
 
-                <div className={mergeClasses(resolvedActionsClassName, resolvedRangeWrapperClassName)}>
+                <div className={mergeClasses("relative", resolvedActionsClassName, resolvedRangeWrapperClassName)}>
                     {ranges.length > 0 && (
                         <div className={resolvedRangeGroupClassName}>
                             {ranges.map((range) => {
@@ -415,10 +418,22 @@ const LineAreaChartCard = ({
                     )}
 
                     {showMoreIcon && (
-                        <button type="button" className="mt-1 text-black dark:text-white" aria-label="More options">
+                        <button
+                            type="button"
+                            className="chart-more-menu-trigger mt-1 text-black dark:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label="More options"
+                            onClick={onMoreClick}
+                            disabled={!onMoreClick}
+                        >
                             {moreIcon}
                         </button>
                     )}
+
+                    {isMoreMenuOpen && moreMenuContent ? (
+                        <div className="chart-more-menu absolute right-0 top-full z-30 mt-2 min-w-44 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-gray-950">
+                            {moreMenuContent}
+                        </div>
+                    ) : null}
                 </div>
             </div>
 

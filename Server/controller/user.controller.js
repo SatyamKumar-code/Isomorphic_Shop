@@ -1,5 +1,6 @@
 import express from 'express';
 import UserModel from '../models/user.model.js';
+import OrderModel from '../models/order.model.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import generateAccessToken from '../utils/generateAccessToken.js';
@@ -16,25 +17,464 @@ cloudinary.config({
     secure: true,
 });
 
+const SHORT_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const formatDateDisplay = (value) => {
+    if (!value) return "";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${day}.${month}.${date.getFullYear()}`;
+};
+
+const formatCompactNumber = (value) => {
+    if (value >= 1000000) {
+        return `${(value / 1000000).toFixed(1).replace(/\.0$/, "")}m`;
+    }
+
+    if (value >= 1000) {
+        return `${(value / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+    }
+
+    return String(Math.round(value));
+};
+
+const getAvailableYears = (users, orders) => {
+    const years = new Set();
+
+    users.forEach((user) => {
+        const date = new Date(user.createdAt);
+        if (!Number.isNaN(date.getTime())) {
+            years.add(date.getFullYear());
+        }
+    });
+
+    orders.forEach((order) => {
+        const date = new Date(order.createdAt);
+        if (!Number.isNaN(date.getTime())) {
+            years.add(date.getFullYear());
+        }
+    });
+
+    if (!years.size) {
+        years.add(new Date().getFullYear());
+    }
+
+    return Array.from(years).sort((a, b) => a - b);
+};
+
+const getPeriodConfig = ({ period, year, month, availableYears }) => {
+    const now = new Date();
+    const normalizedPeriod = ["7days", "daywise", "month", "year"].includes(period) ? period : "7days";
+
+    const defaultYear = now.getFullYear();
+    const fallbackYear = availableYears.includes(defaultYear) ? defaultYear : availableYears[availableYears.length - 1] || defaultYear;
+    const selectedYear = Number.isInteger(year) && availableYears.includes(year) ? year : fallbackYear;
+    const selectedMonth = Number.isInteger(month) && month >= 1 && month <= 12 ? month : (now.getMonth() + 1);
+
+    if (normalizedPeriod === "year") {
+        return {
+            period: normalizedPeriod,
+            selectedYear,
+            selectedMonth,
+            periodLabel: "Year-wise",
+            ranges: [{ label: "All Years", value: "All Years" }],
+            activeRange: "All Years",
+            xLabels: availableYears.map((value) => String(value)),
+        };
+    }
+
+    if (normalizedPeriod === "month") {
+        return {
+            period: normalizedPeriod,
+            selectedYear,
+            selectedMonth,
+            periodLabel: `${selectedYear} (Month-wise)`,
+            ranges: [{ label: `${selectedYear}`, value: `${selectedYear}` }],
+            activeRange: `${selectedYear}`,
+            xLabels: SHORT_MONTH_NAMES,
+        };
+    }
+
+    if (normalizedPeriod === "daywise") {
+        const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+        const label = `${SHORT_MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+        return {
+            period: normalizedPeriod,
+            selectedYear,
+            selectedMonth,
+            periodLabel: `${label} (Day-wise)`,
+            ranges: [{ label, value: label }],
+            activeRange: label,
+            xLabels: Array.from({ length: daysInMonth }, (_, index) => String(index + 1)),
+        };
+    }
+
+    return {
+        period: normalizedPeriod,
+        selectedYear,
+        selectedMonth,
+        periodLabel: "Last 7 days",
+        ranges: [
+            { label: "This week", value: "This week" },
+            { label: "Last week", value: "Last week" },
+        ],
+        activeRange: "This week",
+        xLabels: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    };
+};
+
+const getComparisonWindow = (periodConfig) => {
+    const now = new Date();
+
+    if (periodConfig.period === "month") {
+        const currentStart = new Date(periodConfig.selectedYear, 0, 1, 0, 0, 0, 0);
+        const currentEnd = new Date(periodConfig.selectedYear, 11, 31, 23, 59, 59, 999);
+        const previousStart = new Date(periodConfig.selectedYear - 1, 0, 1, 0, 0, 0, 0);
+        const previousEnd = new Date(periodConfig.selectedYear - 1, 11, 31, 23, 59, 59, 999);
+        return { currentStart, currentEnd, previousStart, previousEnd };
+    }
+
+    if (periodConfig.period === "daywise") {
+        const currentStart = new Date(periodConfig.selectedYear, periodConfig.selectedMonth - 1, 1, 0, 0, 0, 0);
+        const currentEnd = new Date(periodConfig.selectedYear, periodConfig.selectedMonth, 0, 23, 59, 59, 999);
+        const previousStart = new Date(periodConfig.selectedYear, periodConfig.selectedMonth - 2, 1, 0, 0, 0, 0);
+        const previousEnd = new Date(periodConfig.selectedYear, periodConfig.selectedMonth - 1, 0, 23, 59, 59, 999);
+        return { currentStart, currentEnd, previousStart, previousEnd };
+    }
+
+    if (periodConfig.period === "year") {
+        const firstYear = Number(periodConfig.xLabels[0] || now.getFullYear());
+        const lastYear = Number(periodConfig.xLabels[periodConfig.xLabels.length - 1] || now.getFullYear());
+        const currentStart = new Date(firstYear, 0, 1, 0, 0, 0, 0);
+        const currentEnd = new Date(lastYear, 11, 31, 23, 59, 59, 999);
+        const previousStart = new Date(firstYear - 1, 0, 1, 0, 0, 0, 0);
+        const previousEnd = new Date(lastYear - 1, 11, 31, 23, 59, 59, 999);
+        return { currentStart, currentEnd, previousStart, previousEnd };
+    }
+
+    const currentEnd = new Date(now);
+    currentEnd.setHours(23, 59, 59, 999);
+    const currentStart = new Date(currentEnd);
+    currentStart.setDate(currentStart.getDate() - 6);
+    currentStart.setHours(0, 0, 0, 0);
+
+    const previousEnd = new Date(currentStart);
+    previousEnd.setDate(previousEnd.getDate() - 1);
+    previousEnd.setHours(23, 59, 59, 999);
+
+    const previousStart = new Date(previousEnd);
+    previousStart.setDate(previousStart.getDate() - 6);
+    previousStart.setHours(0, 0, 0, 0);
+
+    return { currentStart, currentEnd, previousStart, previousEnd };
+};
+
+const buildSeries = ({ users, orders, secondOrderDateByUser, points }) => {
+    const series = {
+        activeCustomers: [],
+        repeatCustomers: [],
+        shopVisitor: [],
+        conversionRate: [],
+    };
+
+    points.forEach((dayEnd) => {
+        const safeDayEnd = new Date(dayEnd);
+        if (Number.isNaN(safeDayEnd.getTime())) {
+            return;
+        }
+
+        const activeCustomers = users.filter((user) => user.status === "Active" && new Date(user.createdAt) <= safeDayEnd).length;
+        const repeatCustomers = users.filter((user) => {
+            const secondOrderDate = secondOrderDateByUser.get(String(user.uid));
+            return secondOrderDate instanceof Date && secondOrderDate <= safeDayEnd;
+        }).length;
+        const shopVisitor = orders.filter((order) => {
+            const orderDate = new Date(order.createdAt);
+            return !Number.isNaN(orderDate.getTime()) && orderDate <= safeDayEnd;
+        }).length;
+        const conversionRate = activeCustomers ? Number(((shopVisitor / activeCustomers) * 100).toFixed(1)) : 0;
+
+        series.activeCustomers.push(activeCustomers);
+        series.repeatCustomers.push(repeatCustomers);
+        series.shopVisitor.push(shopVisitor);
+        series.conversionRate.push(conversionRate);
+    });
+
+    return series;
+};
+
+export const getCustomersController = async (req, res) => {
+    try {
+        const requestedYear = Number.parseInt(req.query?.year, 10);
+        const requestedMonth = Number.parseInt(req.query?.month, 10);
+
+        const users = await UserModel.find({ role: "user" })
+            .select("-password -refresh_token -otp -otp_expiry")
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const userIds = users.map((user) => user._id);
+        const orders = userIds.length
+            ? await OrderModel.find({ userId: { $in: userIds } })
+                .select("userId totalAmount status createdAt")
+                .sort({ createdAt: -1 })
+                .lean()
+            : [];
+
+        const availableYears = getAvailableYears(users, orders);
+        const periodConfig = getPeriodConfig({
+            period: req.query?.period,
+            year: Number.isInteger(requestedYear) ? requestedYear : null,
+            month: Number.isInteger(requestedMonth) ? requestedMonth : null,
+            availableYears,
+        });
+        const comparisonWindow = getComparisonWindow(periodConfig);
+
+        const orderStatsByUser = orders.reduce((accumulator, order) => {
+            const key = String(order.userId);
+            const current = accumulator.get(key) || {
+                orderCount: 0,
+                totalSpend: 0,
+                completedOrders: 0,
+                canceledOrders: 0,
+                firstOrderDate: null,
+                lastPurchaseDate: null,
+            };
+
+            const orderDate = new Date(order.createdAt);
+            current.orderCount += 1;
+            current.totalSpend += Number(order.totalAmount || 0);
+            current.completedOrders += order.status === "delivered" ? 1 : 0;
+            current.canceledOrders += order.status === "cancelled" ? 1 : 0;
+            current.firstOrderDate = current.firstOrderDate && current.firstOrderDate < orderDate ? current.firstOrderDate : orderDate;
+            current.lastPurchaseDate = current.lastPurchaseDate && current.lastPurchaseDate > orderDate ? current.lastPurchaseDate : orderDate;
+
+            accumulator.set(key, current);
+            return accumulator;
+        }, new Map());
+
+        const orderDatesByUser = orders.reduce((accumulator, order) => {
+            const key = String(order.userId);
+            const current = accumulator.get(key) || [];
+            const orderDate = new Date(order.createdAt);
+
+            if (!Number.isNaN(orderDate.getTime())) {
+                current.push(orderDate);
+            }
+
+            accumulator.set(key, current);
+            return accumulator;
+        }, new Map());
+
+        const secondOrderDateByUser = new Map();
+        orderDatesByUser.forEach((dates, userId) => {
+            if (!Array.isArray(dates) || dates.length < 2) {
+                return;
+            }
+
+            const sortedDates = [...dates].sort((a, b) => a.getTime() - b.getTime());
+            secondOrderDateByUser.set(userId, sortedDates[1]);
+        });
+
+        const customers = users.map((user, index) => {
+            const stats = orderStatsByUser.get(String(user._id)) || {};
+
+            return {
+                uid: String(user._id),
+                id: `#CUST${String(index + 1).padStart(4, "0")}`,
+                name: user.name || "",
+                email: user.email || "",
+                phone: user.mobile ? `+${user.mobile}` : "-",
+                orderCount: stats.orderCount || 0,
+                totalSpend: stats.totalSpend || 0,
+                status: user.status || "Inactive",
+                address: user.address || "-",
+                totalOrders: stats.orderCount || 0,
+                completedOrders: stats.completedOrders || 0,
+                canceledOrders: stats.canceledOrders || 0,
+                registrationDate: formatDateDisplay(user.createdAt),
+                lastPurchaseDate: formatDateDisplay(stats.lastPurchaseDate || user.createdAt),
+                createdAt: user.createdAt,
+                firstOrderDate: stats.firstOrderDate,
+            };
+        });
+
+        const thisPeriodUsers = users.filter((user) => {
+            const createdAt = new Date(user.createdAt);
+            return createdAt >= comparisonWindow.currentStart && createdAt <= comparisonWindow.currentEnd;
+        }).length;
+
+        const previousPeriodUsers = users.filter((user) => {
+            const createdAt = new Date(user.createdAt);
+            return createdAt >= comparisonWindow.previousStart && createdAt <= comparisonWindow.previousEnd;
+        }).length;
+
+        const thisPeriodOrders = orders.filter((order) => {
+            const createdAt = new Date(order.createdAt);
+            return createdAt >= comparisonWindow.currentStart && createdAt <= comparisonWindow.currentEnd;
+        }).length;
+
+        const previousPeriodOrders = orders.filter((order) => {
+            const createdAt = new Date(order.createdAt);
+            return createdAt >= comparisonWindow.previousStart && createdAt <= comparisonWindow.previousEnd;
+        }).length;
+
+        const activeCustomersCount = customers.filter((customer) => {
+            const createdAt = new Date(customer.createdAt);
+            return customer.status === "Active" && createdAt >= comparisonWindow.currentStart && createdAt <= comparisonWindow.currentEnd;
+        }).length;
+
+        const repeatCustomersCount = customers.filter((customer) => {
+            const secondOrderDate = secondOrderDateByUser.get(String(customer.uid));
+            return secondOrderDate instanceof Date
+                && secondOrderDate >= comparisonWindow.currentStart
+                && secondOrderDate <= comparisonWindow.currentEnd;
+        }).length;
+
+        const conversionRate = thisPeriodUsers ? Number(((thisPeriodOrders / thisPeriodUsers) * 100).toFixed(1)) : 0;
+
+        const summaryCards = [
+            {
+                title: "Total Customers",
+                value: formatCompactNumber(thisPeriodUsers),
+                change: previousPeriodUsers ? `${(((thisPeriodUsers - previousPeriodUsers) / previousPeriodUsers) * 100).toFixed(1)}%` : "+0%",
+                changeColor: thisPeriodUsers >= previousPeriodUsers ? "#22C55E" : "#EF4444",
+            },
+            {
+                title: "New Customers",
+                value: formatCompactNumber(thisPeriodUsers),
+                change: previousPeriodUsers ? `${(((thisPeriodUsers - previousPeriodUsers) / previousPeriodUsers) * 100).toFixed(1)}%` : "+0%",
+                changeColor: thisPeriodUsers >= previousPeriodUsers ? "#22C55E" : "#EF4444",
+            },
+            {
+                title: "Visitor",
+                value: formatCompactNumber(thisPeriodOrders),
+                change: previousPeriodOrders ? `${(((thisPeriodOrders - previousPeriodOrders) / previousPeriodOrders) * 100).toFixed(1)}%` : "+0%",
+                changeColor: thisPeriodOrders >= previousPeriodOrders ? "#22C55E" : "#EF4444",
+            },
+        ];
+
+        const overviewStats = [
+            { key: "activeCustomers", label: "Active Customers", value: formatCompactNumber(activeCustomersCount) },
+            { key: "repeatCustomers", label: "Repeat Customers", value: formatCompactNumber(repeatCustomersCount) },
+            { key: "shopVisitor", label: "Shop Visitor", value: formatCompactNumber(thisPeriodOrders) },
+            { key: "conversionRate", label: "Conversion Rate", value: `${conversionRate}%` },
+        ];
+
+        const buildPointEnds = () => {
+            if (periodConfig.period === "year") {
+                return availableYears.map((year) => new Date(year, 11, 31, 23, 59, 59, 999));
+            }
+
+            if (periodConfig.period === "month") {
+                return Array.from({ length: 12 }, (_, index) => new Date(periodConfig.selectedYear, index + 1, 0, 23, 59, 59, 999));
+            }
+
+            if (periodConfig.period === "daywise") {
+                const daysInMonth = new Date(periodConfig.selectedYear, periodConfig.selectedMonth, 0).getDate();
+                return Array.from({ length: daysInMonth }, (_, index) => new Date(periodConfig.selectedYear, periodConfig.selectedMonth - 1, index + 1, 23, 59, 59, 999));
+            }
+
+            const currentEnd = comparisonWindow.currentEnd;
+            return Array.from({ length: 7 }, (_, index) => {
+                const date = new Date(currentEnd);
+                date.setDate(currentEnd.getDate() - (6 - index));
+                date.setHours(23, 59, 59, 999);
+                return date;
+            });
+        };
+
+        const buildLastPointEnds = () => {
+            if (periodConfig.period !== "7days") {
+                return [];
+            }
+
+            const previousEnd = comparisonWindow.previousEnd;
+            return Array.from({ length: 7 }, (_, index) => {
+                const date = new Date(previousEnd);
+                date.setDate(previousEnd.getDate() - (6 - index));
+                date.setHours(23, 59, 59, 999);
+                return date;
+            });
+        };
+
+        const currentRangeValue = periodConfig.ranges[0].value;
+        const weekSeries = {
+            [currentRangeValue]: buildSeries({
+                users: customers,
+                orders,
+                secondOrderDateByUser,
+                points: buildPointEnds(),
+            }),
+        };
+
+        if (periodConfig.period === "7days" && periodConfig.ranges[1]) {
+            weekSeries[periodConfig.ranges[1].value] = buildSeries({
+                users: customers,
+                orders,
+                secondOrderDateByUser,
+                points: buildLastPointEnds(),
+            });
+        }
+
+        const xLabelsByRange = {
+            [currentRangeValue]: periodConfig.xLabels,
+        };
+
+        if (periodConfig.period === "7days" && periodConfig.ranges[1]) {
+            xLabelsByRange[periodConfig.ranges[1].value] = periodConfig.xLabels;
+        }
+
+        return res.status(200).json({
+            message: "Customers fetched successfully",
+            error: false,
+            success: true,
+            data: {
+                customers,
+                summaryCards,
+                overviewStats,
+                weekSeries,
+                ranges: periodConfig.ranges,
+                periodLabel: periodConfig.periodLabel,
+                activeRange: periodConfig.activeRange,
+                selectedYear: periodConfig.selectedYear,
+                selectedMonth: periodConfig.selectedMonth,
+                availableYears,
+                xLabelsByRange,
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal Server Error",
+            error: error.message,
+            success: false,
+        });
+    }
+};
+
 export const registerUserController = async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
-        if ( !name || !email || !password ) {
+        if (!name || !email || !password) {
             return res.status(400).json({
                 message: "All fields are required",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
         const existingUser = await UserModel.findOne({ email });
 
-        if ( existingUser ) {
+        if (existingUser) {
             return res.status(400).json({
                 message: "User already Registered with this email",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
@@ -50,11 +490,11 @@ export const registerUserController = async (req, res) => {
             html: VerificationEmail(name, verifyCode)
         })
 
-        if(!sendEmai) {
+        if (!sendEmai) {
             return res.status(500).json({
                 message: "Failed to send verification email",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
@@ -68,7 +508,7 @@ export const registerUserController = async (req, res) => {
 
         await newUser.save();
 
-        
+
 
         const token = jwt.sign(
             { id: newUser._id, email: newUser.email, role: newUser.role },
@@ -88,7 +528,7 @@ export const registerUserController = async (req, res) => {
         return res.status(500).json({
             message: "Internal Server Error",
             error: error.message,
-            success : false
+            success: false
         });
     }
 }
@@ -98,46 +538,46 @@ export const verifyEmailController = async (req, res) => {
         const { email, otp } = req.body;
         const user = await UserModel.findOne({ email });
 
-        if ( !user ) {
+        if (!user) {
             return res.status(400).json({
                 message: "User not found",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
-        const isCodeValid = user.otp === otp ;
+        const isCodeValid = user.otp === otp;
         const isNotExpired = user.otp_expiry > Date.now();
 
-        if( isCodeValid && isNotExpired ) {
+        if (isCodeValid && isNotExpired) {
             user.emailVerified = true;
             user.otp = null;
             user.otp_expiry = null;
             await user.save();
             return res.status(200).json({
                 message: "Email verified successfully",
-                error : false,
-                success : true
+                error: false,
+                success: true
             })
-        }else if( !isCodeValid ) {
+        } else if (!isCodeValid) {
             return res.status(400).json({
                 message: "Invalid OTP",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
-        }else {
+        } else {
             return res.status(400).json({
                 message: "OTP Expired",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
-    } catch(error) {
+    } catch (error) {
         return res.status(500).json({
             message: "Internal Server Error",
             error: error.message,
-            success : false
+            success: false
         });
     }
 }
@@ -146,52 +586,52 @@ export const loginUserController = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        if ( !email || !password ) {
+        if (!email || !password) {
             return res.status(400).json({
                 message: "All fields are required",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
         const user = await UserModel.findOne({ email });
 
-        if ( !user ) {
+        if (!user) {
             return res.status(400).json({
                 message: "user not Registered",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
-        if(user.status !== "Active") {
+        if (user.status !== "Active") {
             return res.status(403).json({
                 message: "Contact to Admin, Your Account is Inactive",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
-        if(!user.emailVerified ) {
+        if (!user.emailVerified) {
             return res.status(403).json({
                 message: "Please verify your email to login",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
 
-        if ( !isPasswordValid ) {
+        if (!isPasswordValid) {
             return res.status(400).json({
                 message: "Invalid Password",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
-        const accessToken = await generateAccessToken(user._id ,user.role);
-        const refreshToken = await generateRefreshToken(user._id ,user.role);
+        const accessToken = await generateAccessToken(user._id, user.role);
+        const refreshToken = await generateRefreshToken(user._id, user.role);
 
         await UserModel.findByIdAndUpdate(user?._id, {
             last_login_date: Date.now()
@@ -217,11 +657,11 @@ export const loginUserController = async (req, res) => {
         });
 
 
-    }catch (error) {
+    } catch (error) {
         return res.status(500).json({
             message: "Internal Server Error",
             error: error.message,
-            success : false
+            success: false
         });
     }
 }
@@ -231,7 +671,7 @@ export const getUserController = async (req, res) => {
         const userId = req.userId;
         const user = await UserModel.findById({ _id: userId }).select("-password -refresh_token -otp -otp_expiry");
 
-        if ( !user ) {
+        if (!user) {
             return res.status(404).json({
                 message: "User not found",
                 error: true,
@@ -489,8 +929,8 @@ export const forgotPasswordController = async (req, res) => {
 
 export const verifyForgotPasswordOtpController = async (req, res) => {
     try {
-        const { email, otp} = req.body;
-        if( !email || !otp ) {
+        const { email, otp } = req.body;
+        if (!email || !otp) {
             return res.status(400).json({
                 message: "All fields are required",
                 error: true,
@@ -507,9 +947,9 @@ export const verifyForgotPasswordOtpController = async (req, res) => {
             });
         }
 
-        const isCodeValid = user.otp === otp ;
+        const isCodeValid = user.otp === otp;
         const isNotExpired = user.otp_expiry > Date.now();
-        if( isCodeValid && isNotExpired ) {
+        if (isCodeValid && isNotExpired) {
 
             user.otp = null;
             user.otp_expiry = null;
@@ -517,26 +957,26 @@ export const verifyForgotPasswordOtpController = async (req, res) => {
 
             return res.status(200).json({
                 message: "OTP verified successfully",
-                error : false,
-                success : true
+                error: false,
+                success: true
             })
 
-        }else if( !isCodeValid ) {
+        } else if (!isCodeValid) {
             return res.status(400).json({
                 message: "Invalid OTP",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
-        }else {
+        } else {
             return res.status(400).json({
                 message: "OTP Expired",
-                error : true,
-                success : false
+                error: true,
+                success: false
             })
         }
 
 
-    }catch (error) {
+    } catch (error) {
         return res.status(500).json({
             message: error.message || error,
             error: true,
@@ -560,7 +1000,7 @@ export const resetPasswordController = async (req, res) => {
             });
         }
 
-        if( !newPassword || !confirmPassword || oldPassword ) {
+        if (!newPassword || !confirmPassword || oldPassword) {
             return res.status(400).json({
                 message: "All fields are required",
                 error: true,
@@ -570,7 +1010,7 @@ export const resetPasswordController = async (req, res) => {
 
         const checkPassword = bcrypt.compare(oldPassword, user.password)
 
-        if(!checkPassword) {
+        if (!checkPassword) {
             return res.status(400).json({
                 message: "Your OldPassword is Worng",
                 error: true,
@@ -578,7 +1018,7 @@ export const resetPasswordController = async (req, res) => {
             })
         }
 
-        if( newPassword !== confirmPassword ) {
+        if (newPassword !== confirmPassword) {
             return res.status(400).json({
                 message: "Password and Confirm Password must be same",
                 error: true,
@@ -599,7 +1039,7 @@ export const resetPasswordController = async (req, res) => {
         })
 
 
-    }catch(error) {
+    } catch (error) {
         return res.status(500).json({
             message: error.message || error,
             error: true,
@@ -612,7 +1052,7 @@ export const resetPasswordWithOtpController = async (req, res) => {
     try {
         const { email, newPassword, confirmPassword } = req.body;
 
-        if(!email || !newPassword || !confirmPassword){
+        if (!email || !newPassword || !confirmPassword) {
             return res.status(400).jso({
                 message: "All field are Required",
                 error: true,
@@ -620,9 +1060,9 @@ export const resetPasswordWithOtpController = async (req, res) => {
             })
         }
 
-        const user = await UserModel.findOne({email});
+        const user = await UserModel.findOne({ email });
 
-        if(!user) {
+        if (!user) {
             return res.status(400).json({
                 message: "user not found",
                 error: true,
@@ -630,7 +1070,7 @@ export const resetPasswordWithOtpController = async (req, res) => {
             })
         }
 
-        if(newPassword !== confirmPassword) {
+        if (newPassword !== confirmPassword) {
             return res.status(400).json({
                 message: "NewPassword and confirmPassword must be same",
                 error: true,
@@ -663,41 +1103,41 @@ export const resetPasswordWithOtpController = async (req, res) => {
 
 export const updateUserDetails = async (req, res) => {
     try {
-            const userId = req.userId;
-            const { name, password, mobile } = req.body;
-            
-            const user = await UserModel.findById({ _id: userId });
-            if(!user) {
-                return res.status(404).json({
-                    message: "User not found",
-                    error: true,
-                    success: false
-                })
-            }
+        const userId = req.userId;
+        const { name, password, mobile } = req.body;
 
-            if(name) {
-                user.name = name;
-            }
-
-            if(password) {
-                const salt = await bcrypt.genSalt(10);
-                const hashedPassword = await bcrypt.hash(password, salt);
-                user.password = hashedPassword;
-            }
-
-            if(mobile) {
-                user.mobile = mobile;
-            }
-
-            await user.save();
-
-            return res.status(200).json({
-                message: "User details updated successfully",
-                error: false,
-                success: true,
-                user
+        const user = await UserModel.findById({ _id: userId });
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false
             })
-    }catch (error) {
+        }
+
+        if (name) {
+            user.name = name;
+        }
+
+        if (password) {
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(password, salt);
+            user.password = hashedPassword;
+        }
+
+        if (mobile) {
+            user.mobile = mobile;
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            message: "User details updated successfully",
+            error: false,
+            success: true,
+            user
+        })
+    } catch (error) {
         return res.status(500).json({
             message: error.message || error,
             error: true,
