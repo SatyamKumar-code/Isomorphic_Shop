@@ -134,6 +134,7 @@ export const createProductController = async (req, res) => {
             RAM,
             ROM,
             color,
+            featured,
             stock,
             images,
             expirationStart,
@@ -171,6 +172,7 @@ export const createProductController = async (req, res) => {
             RAM: parsedRAM,
             ROM: parsedROM,
             color,
+            featured: Boolean(featured),
             stock,
             expirationStart: parsedExpirationStart,
             expirationEnd: parsedExpirationEnd,
@@ -207,7 +209,15 @@ export const createProductController = async (req, res) => {
 export const getAllProductsController = async (req, res) => {
     try {
         const sortBy = req.query.sortBy;
+        const rawPage = Number(req.query.page || 1);
+        const rawLimit = Number(req.query.limit || 10);
+        const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
+        const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.floor(rawLimit) : 10;
+        const search = String(req.query.search || '').trim();
+        const paginate = req.query.paginate === 'true' || Boolean(req.query.page) || Boolean(req.query.limit) || Boolean(search);
+
         let sortStage = null;
+        let filterStage = null;
         switch (sortBy) {
             case "a-z": sortStage = { $sort: { productName: 1 } }; break;
             case "z-a": sortStage = { $sort: { productName: -1 } }; break;
@@ -215,15 +225,25 @@ export const getAllProductsController = async (req, res) => {
             case "priceHigh": sortStage = { $sort: { price: -1 } }; break;
             case "ratingLow": sortStage = { $sort: { rating: 1 } }; break;
             case "ratingHigh": sortStage = { $sort: { rating: -1 } }; break;
+            case "latest": sortStage = { $sort: { createdAt: -1, _id: -1 } }; break;
+            case "oldest": sortStage = { $sort: { createdAt: 1, _id: 1 } }; break;
+            case "stockHigh": sortStage = { $sort: { stock: -1, _id: -1 } }; break;
+            case "stockLow": sortStage = { $sort: { stock: 1, _id: 1 } }; break;
+            case "salesHigh": sortStage = { $sort: { sales: -1, _id: -1 } }; break;
+            case "salesLow": sortStage = { $sort: { sales: 1, _id: 1 } }; break;
+            case "outOfStock":
+                filterStage = { $match: { stock: { $lte: 0 } } };
+                sortStage = { $sort: { createdAt: -1, _id: -1 } };
+                break;
+            case "featured":
+                filterStage = { $match: { featured: true } };
+                sortStage = { $sort: { createdAt: -1, _id: -1 } };
+                break;
         }
 
-        const pipeline = [];
-        if (sortStage) {
-            pipeline.push(sortStage);
-        } else {
-            pipeline.push({ $sample: { size: await ProductModel.countDocuments() } });
-        }
-        pipeline.push(
+        const basePipeline = [];
+
+        basePipeline.push(
             {
                 $lookup: {
                     from: "categories",
@@ -246,12 +266,78 @@ export const getAllProductsController = async (req, res) => {
             { $unwind: { path: "$subCategory", preserveNullAndEmptyArrays: true } }
         );
 
-        const products = await ProductModel.aggregate(pipeline);
+        if (search) {
+            const safePattern = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const searchRegex = new RegExp(safePattern, 'i');
+            basePipeline.push({
+                $match: {
+                    $or: [
+                        { productName: searchRegex },
+                        { description: searchRegex },
+                        { "category.catName": searchRegex },
+                        { "subCategory.subCatName": searchRegex },
+                    ]
+                }
+            });
+        }
+
+        if (filterStage) {
+            basePipeline.push(filterStage);
+        }
+
+        if (sortStage) {
+            basePipeline.push(sortStage);
+        } else if (paginate) {
+            // Stable default sort is required for deterministic pagination.
+            basePipeline.push({ $sort: { createdAt: -1, _id: -1 } });
+        } else {
+            basePipeline.push({ $sample: { size: await ProductModel.countDocuments() } });
+        }
+
+        if (!paginate) {
+            const products = await ProductModel.aggregate(basePipeline);
+            return res.status(200).json({
+                message: "Products fetched successfully",
+                success: true,
+                error: false,
+                products
+            });
+        }
+
+        const skip = (page - 1) * limit;
+        const paginatedPipeline = [
+            ...basePipeline,
+            {
+                $facet: {
+                    products: [
+                        { $skip: skip },
+                        { $limit: limit },
+                    ],
+                    totalCount: [
+                        { $count: 'count' }
+                    ]
+                }
+            }
+        ];
+
+        const result = await ProductModel.aggregate(paginatedPipeline);
+        const products = result?.[0]?.products || [];
+        const totalCount = result?.[0]?.totalCount?.[0]?.count || 0;
+        const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+
         return res.status(200).json({
             message: "Products fetched successfully",
             success: true,
             error: false,
-            products
+            products,
+            pagination: {
+                page,
+                limit,
+                totalCount,
+                totalPages,
+                hasNextPage: page < totalPages,
+                hasPrevPage: page > 1,
+            },
         });
 
     } catch (error) {
@@ -321,6 +407,7 @@ export const updateProductController = async (req, res) => {
             RAM,
             ROM,
             color,
+            featured,
             stock,
             expirationStart,
             expirationEnd,
@@ -341,6 +428,9 @@ export const updateProductController = async (req, res) => {
 
         // Build update object
         const updateObj = { productName, price, description, category, subCategory, size, weight, color, stock };
+        if (featured !== undefined) {
+            updateObj.featured = Boolean(featured);
+        }
         if (parsedOldPrice > 0) {
             updateObj.oldPrice = parsedOldPrice;
         }

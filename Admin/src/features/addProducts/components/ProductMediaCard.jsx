@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiImage, FiRefreshCcw, FiTrash2 } from 'react-icons/fi';
-import { useAddProduct } from '../../../Context/addproduct/useAddProduct';
+import { useAddProduct } from '../../../Context/addProduct/useAddProduct';
 
 
 

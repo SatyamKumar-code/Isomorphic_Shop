@@ -1,20 +1,55 @@
 import React from 'react';
 import { FiTrash2 } from 'react-icons/fi';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import AddProductActionBar from '../components/AddProductActionBar';
 import BasicDetailsCard from '../components/BasicDetailsCard';
 import ProductMediaCard from '../components/ProductMediaCard';
-import { useAddProduct } from '../../../Context/addproduct/useAddProduct';
+import { useAddProduct } from '../../../Context/addProduct/useAddProduct';
 
 const AddProductPage = () => {
-    const { isLoadingCategories, drafts, activeDraftId, loadDraft, deleteDraft } = useAddProduct();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const editId = searchParams.get('edit');
+    const {
+        isLoadingCategories,
+        isLoadingEditProduct,
+        drafts,
+        activeDraftId,
+        loadDraft,
+        deleteDraft,
+        beginEditProduct,
+        clearEditingProduct,
+        shouldNavigateToProductList,
+        clearProductListNavigation,
+        pageTitle,
+    } = useAddProduct();
+
+    React.useEffect(() => {
+        if (editId && typeof beginEditProduct === 'function') {
+            beginEditProduct(editId);
+            return;
+        }
+
+        if (typeof clearEditingProduct === 'function') {
+            clearEditingProduct();
+        }
+    }, [beginEditProduct, clearEditingProduct, editId]);
+
+    React.useEffect(() => {
+        if (shouldNavigateToProductList) {
+            navigate('/product-list');
+            clearProductListNavigation();
+        }
+    }, [shouldNavigateToProductList, navigate, clearProductListNavigation]);
 
     return (
         <div className="w-full min-h-[calc(100vh-96px)] px-5 pb-6 pt-4">
             <div className="mb-3.5 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-                <h2 className="text-[22px] font-bold leading-[1.2] text-slate-900 dark:text-slate-100">Add New Product</h2>
+                <h2 className="text-[22px] font-bold leading-[1.2] text-slate-900 dark:text-slate-100">{pageTitle}</h2>
                 <AddProductActionBar />
             </div>
             {isLoadingCategories ? <p className="mb-2.5 text-xs text-[#6f7d88]">Loading category data...</p> : null}
+            {isLoadingEditProduct ? <p className="mb-2.5 text-xs text-[#6f7d88]">Loading product data for edit...</p> : null}
 
             {drafts.length > 0 && (
                 <div className="mb-3.5 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg p-3">

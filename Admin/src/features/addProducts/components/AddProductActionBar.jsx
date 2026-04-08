@@ -1,9 +1,9 @@
 import React from 'react';
 import { FiPlus, FiSave, FiSearch } from 'react-icons/fi';
-import { useAddProduct } from '../../../Context/addproduct/useAddProduct';
+import { useAddProduct } from '../../../Context/addProduct/useAddProduct';
 
 const AddProductActionBar = () => {
-    const { formData, onSearchChange, publishProduct, saveDraft, createNewDraft, isSubmitting } = useAddProduct();
+    const { formData, onSearchChange, publishProduct, saveDraft, createNewDraft, isSubmitting, submitButtonLabel } = useAddProduct();
 
     return (
         <div className="flex w-full flex-wrap items-center justify-end gap-2.5 lg:w-auto lg:flex-nowrap">
@@ -25,7 +25,7 @@ const AddProductActionBar = () => {
                     onClick={publishProduct}
                     disabled={isSubmitting}
                 >
-                    {isSubmitting ? 'Publishing...' : 'Publish Product'}
+                    {isSubmitting ? 'Saving...' : submitButtonLabel}
                 </button>
                 <button
                     type="button"

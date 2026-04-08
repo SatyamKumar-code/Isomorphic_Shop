@@ -55,6 +55,10 @@ const productSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    featured: {
+        type: Boolean,
+        default: false,
+    },
     stock: {
         type: Number,
         default: 0

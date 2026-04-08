@@ -198,10 +198,20 @@ const OrdersTable = ({
                                 <td className="px-4 py-4">{item.stock ?? item.order ?? 0}</td>
                                 <td className="px-4 py-4">
                                     <div className="inline-flex items-center gap-3 text-slate-500">
-                                        <button className="transition hover:text-[#4EA674]" aria-label="Edit row">
+                                        <button
+                                            className="transition hover:text-[#4EA674]"
+                                            aria-label="Edit row"
+                                            onClick={item.onEdit}
+                                            disabled={!item.onEdit}
+                                        >
                                             <FiEdit2 />
                                         </button>
-                                        <button className="transition hover:text-red-500" aria-label="Delete row">
+                                        <button
+                                            className="transition hover:text-red-500"
+                                            aria-label="Delete row"
+                                            onClick={item.onDelete}
+                                            disabled={!item.onDelete}
+                                        >
                                             <FiTrash2 />
                                         </button>
                                     </div>

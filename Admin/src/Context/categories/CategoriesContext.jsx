@@ -21,6 +21,14 @@ const initialTabs = [
     { label: 'Out of Stock', count: null },
 ];
 
+const matchesTab = (item, activeTab) => {
+    if (activeTab === 'All Product') return true;
+    if (activeTab === 'Featured Products') return item.featured;
+    if (activeTab === 'On Sale') return item.onSale;
+    if (activeTab === 'Out of Stock') return item.stock === 0;
+    return true;
+};
+
 const formatDate = (value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
@@ -75,17 +83,8 @@ export const CategoriesProvider = ({ children }) => {
             const items = response?.data?.products;
 
             if (Array.isArray(items) && items.length) {
-                const normalized = items.map((item, index) => {
+                const normalized = items.map((item) => {
                     const stock = Number(item.stock || 0);
-                    let tag = 'All Product';
-
-                    if (stock === 0) {
-                        tag = 'Out of Stock';
-                    } else if (stock <= 20) {
-                        tag = 'On Sale';
-                    } else if (index % 2 === 0) {
-                        tag = 'Featured Products';
-                    }
 
                     return {
                         id: item._id,
@@ -93,12 +92,24 @@ export const CategoriesProvider = ({ children }) => {
                         image: item.images?.[0],
                         date: formatDate(item.createdAt),
                         stock: Math.max(stock),
-                        tag,
+                        featured: Boolean(item.featured),
+                        onSale: Number(item.discountPercentage || 0) > 0,
                     };
                 });
 
                 setProducts(normalized);
-                setTabs((prev) => prev.map((tab) => (tab.label === 'All Product' ? { ...tab, count: normalized.length } : tab)));
+                setTabs((prev) =>
+                    prev.map((tab) => {
+                        if (tab.label === 'All Product') {
+                            return { ...tab, count: normalized.length };
+                        }
+
+                        return { ...tab, count: normalized.filter((item) => matchesTab(item, tab.label)).length };
+                    }),
+                );
+            } else {
+                setProducts([]);
+                setTabs((prev) => prev.map((tab) => ({ ...tab, count: 0 })));
             }
         } catch (error) {
             // Keep fallback table rows when API is unavailable.
@@ -125,7 +136,7 @@ export const CategoriesProvider = ({ children }) => {
         const query = searchText.trim().toLowerCase();
 
         return products.filter((item) => {
-            const tabMatch = activeTab === 'All Product' || item.tag === activeTab;
+            const tabMatch = matchesTab(item, activeTab);
             if (!query) {
                 return tabMatch;
             }

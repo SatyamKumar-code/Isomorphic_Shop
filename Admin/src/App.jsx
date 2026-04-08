@@ -6,7 +6,8 @@ import { CategoriesProvider } from './Context/categories/CategoriesContext'
 import { OrderProvider } from './Context/order/OrderContext'
 import { CustomersProvider } from './Context/customers/CustomersContext'
 import { DashboardProvider } from './Context/dashboard/DashboardContext'
-import { AddProductProvider } from './Context/addproduct/AddProductContext'
+import { AddProductProvider } from './Context/addProduct/AddProductContext'
+import { ProductListProvider } from './Context/productList/ProductListContext'
 import AppRoutes from './routes/AppRoutes'
 
 const MyContext = createContext();
@@ -19,8 +20,10 @@ function App() {
           <CustomersProvider>
             <DashboardProvider>
               <AddProductProvider>
-                <AppRoutes />
-                <Toaster />
+                <ProductListProvider>
+                  <AppRoutes />
+                  <Toaster />
+                </ProductListProvider>
               </AddProductProvider>
             </DashboardProvider>
           </CustomersProvider>

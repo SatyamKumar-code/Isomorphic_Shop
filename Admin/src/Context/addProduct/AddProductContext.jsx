@@ -2,9 +2,11 @@ import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast';
 import {
     createAddProduct,
+    getAddProductById,
     getAddProductCategories,
     getAddProductSubCategories,
     removeAddProductImage,
+    updateAddProduct,
     uploadAddProductImage,
 } from '../../features/addProducts/AddProductAPI';
 
@@ -18,7 +20,6 @@ const defaultFormData = {
     description: '',
     price: '',
     discountedPrice: '',
-    taxIncluded: false,
     expirationStart: '',
     expirationEnd: '',
     stock: '',
@@ -61,6 +62,36 @@ const getStoredDrafts = () => {
     }
 };
 
+const buildFormDataFromProduct = (product, previousSearchText = '') => {
+    const oldPrice = Number(product?.oldPrice || product?.price || 0);
+    const salePrice = Number(product?.price || 0);
+    const discountPercentage = oldPrice > 0
+        ? Math.round(Math.max(((oldPrice - salePrice) / oldPrice) * 100, 0))
+        : Number(product?.discountPercentage || 0);
+
+    return {
+        ...defaultFormData,
+        productName: product?.productName || '',
+        description: product?.description || '',
+        price: oldPrice ? String(oldPrice) : '',
+        discountedPrice: Number.isFinite(discountPercentage) ? String(discountPercentage) : '',
+        expirationStart: product?.expirationStart ? String(product.expirationStart).slice(0, 10) : '',
+        expirationEnd: product?.expirationEnd ? String(product.expirationEnd).slice(0, 10) : '',
+        stock: String(product?.stock ?? ''),
+        stockStatus: Number(product?.stock || 0) > 0 ? 'In Stock' : 'Out of Stock',
+        unlimitedStock: Number(product?.stock || 0) >= 999999,
+        featured: Boolean(product?.featured),
+        category: product?.category?._id || product?.category || '',
+        subCategory: product?.subCategory?._id || product?.subCategory || '',
+        size: product?.size || '',
+        weight: product?.weight || '',
+        RAM: product?.RAM || '',
+        ROM: product?.ROM || '',
+        color: product?.color || '',
+        searchText: previousSearchText,
+    };
+};
+
 export const AddProductProvider = ({ children }) => {
     const [formData, setFormData] = useState(defaultFormData);
     const [categories, setCategories] = useState([]);
@@ -71,6 +102,9 @@ export const AddProductProvider = ({ children }) => {
     const [isLoadingCategories, setIsLoadingCategories] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [isLoadingEditProduct, setIsLoadingEditProduct] = useState(false);
+    const [editingProductId, setEditingProductId] = useState('');
+    const [shouldNavigateToProductList, setShouldNavigateToProductList] = useState(false);
 
     const persistDrafts = useCallback((nextDrafts) => {
         localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(nextDrafts));
@@ -343,6 +377,7 @@ export const AddProductProvider = ({ children }) => {
             setFormData({ ...defaultFormData, ...selectedDraft.formData });
             setUploadedImages(Array.isArray(selectedDraft.uploadedImages) ? selectedDraft.uploadedImages : []);
             setActiveDraftId(draftId);
+            setEditingProductId('');
 
             if (selectedDraft?.formData?.category) {
                 await loadSubCategories(selectedDraft.formData.category);
@@ -352,6 +387,50 @@ export const AddProductProvider = ({ children }) => {
         },
         [drafts, loadSubCategories],
     );
+
+    const beginEditProduct = useCallback(
+        async (productId) => {
+            if (!productId) {
+                return;
+            }
+
+            try {
+                setIsLoadingEditProduct(true);
+                const response = await getAddProductById(productId);
+                const product = response?.data?.product;
+
+                if (!product) {
+                    toast.error('Product not found');
+                    return;
+                }
+
+                const previousSearchText = formData.searchText || '';
+                setFormData(buildFormDataFromProduct(product, previousSearchText));
+                setUploadedImages(Array.isArray(product.images) ? product.images : []);
+                setActiveDraftId(null);
+                setEditingProductId(productId);
+
+                if (product?.category?._id || product?.category) {
+                    await loadSubCategories(product?.category?._id || product?.category);
+                } else {
+                    setSubCategories([]);
+                }
+            } catch (error) {
+                toast.error(error?.response?.data?.message || 'Failed to load product for edit');
+            } finally {
+                setIsLoadingEditProduct(false);
+            }
+        },
+        [formData.searchText, loadSubCategories],
+    );
+
+    const clearEditingProduct = useCallback(() => {
+        setEditingProductId('');
+    }, []);
+
+    const clearProductListNavigation = useCallback(() => {
+        setShouldNavigateToProductList(false);
+    }, []);
 
     const deleteDraft = useCallback(
         (draftId) => {
@@ -372,6 +451,8 @@ export const AddProductProvider = ({ children }) => {
 
     const createNewDraft = useCallback(() => {
         setActiveDraftId(null);
+        setEditingProductId('');
+        setShouldNavigateToProductList(false);
         setFormData(defaultFormData);
         setUploadedImages([]);
         setSubCategories([]);
@@ -409,28 +490,38 @@ export const AddProductProvider = ({ children }) => {
                 RAM: formData.RAM || undefined,
                 ROM: formData.ROM || undefined,
                 color: formData.color,
+                featured: Boolean(formData.featured),
                 images: uploadedImages,
                 ...(formData.expirationStart ? { expirationStart: formData.expirationStart } : {}),
                 ...(formData.expirationEnd ? { expirationEnd: formData.expirationEnd } : {}),
             };
 
-            await createAddProduct(payload);
-            toast.success('Product published successfully');
+            if (editingProductId) {
+                await updateAddProduct(editingProductId, payload);
+                toast.success('Product updated successfully');
+                setShouldNavigateToProductList(true);
+            } else {
+                await createAddProduct(payload);
+                toast.success('Product published successfully');
+                setShouldNavigateToProductList(false);
+            }
+
             const currentSearch = formData.searchText || '';
             setFormData({ ...defaultFormData, searchText: currentSearch });
             setSubCategories([]);
             setUploadedImages([]);
+            setEditingProductId('');
             if (activeDraftId) {
                 const nextDrafts = drafts.filter((item) => item.id !== activeDraftId);
                 persistDrafts(nextDrafts);
                 setActiveDraftId(null);
             }
         } catch (error) {
-            toast.error(error?.response?.data?.message || 'Failed to publish product');
+            toast.error(error?.response?.data?.message || 'Failed to save product');
         } finally {
             setIsSubmitting(false);
         }
-    }, [activeDraftId, drafts, formData, uploadedImages, persistDrafts]);
+    }, [activeDraftId, drafts, editingProductId, formData, uploadedImages, persistDrafts]);
 
     const value = useMemo(
         () => ({
@@ -443,6 +534,12 @@ export const AddProductProvider = ({ children }) => {
             isLoadingCategories,
             isSubmitting,
             isUploadingImage,
+            isLoadingEditProduct,
+            isEditMode: Boolean(editingProductId),
+            editingProductId,
+            shouldNavigateToProductList,
+            submitButtonLabel: editingProductId ? 'Update Product' : 'Publish Product',
+            pageTitle: editingProductId ? 'Edit Product' : 'Add New Product',
             salePrice,
             updateField,
             onCategoryChange,
@@ -456,6 +553,9 @@ export const AddProductProvider = ({ children }) => {
             loadDraft,
             deleteDraft,
             createNewDraft,
+            beginEditProduct,
+            clearEditingProduct,
+            clearProductListNavigation,
             publishProduct,
             reloadCategories: loadCategories,
         }),
@@ -469,6 +569,9 @@ export const AddProductProvider = ({ children }) => {
             isLoadingCategories,
             isSubmitting,
             isUploadingImage,
+            isLoadingEditProduct,
+            editingProductId,
+            shouldNavigateToProductList,
             salePrice,
             updateField,
             onCategoryChange,
@@ -482,6 +585,9 @@ export const AddProductProvider = ({ children }) => {
             loadDraft,
             deleteDraft,
             createNewDraft,
+            beginEditProduct,
+            clearEditingProduct,
+            clearProductListNavigation,
             publishProduct,
             loadCategories,
         ],

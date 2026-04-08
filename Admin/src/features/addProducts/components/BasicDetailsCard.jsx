@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { FiCalendar, FiEdit2, FiMoreHorizontal } from 'react-icons/fi';
-import { useAddProduct } from '../../../Context/addproduct/useAddProduct';
+import { useAddProduct } from '../../../Context/addProduct/useAddProduct';
 
 const BasicDetailsCard = () => {
-    const { formData, categories, subCategories, updateField, salePrice, saveDraft, publishProduct, isSubmitting } = useAddProduct();
+    const { formData, categories, subCategories, updateField, salePrice, saveDraft, publishProduct, isSubmitting, submitButtonLabel } = useAddProduct();
     const startDateInputRef = useRef(null);
     const endDateInputRef = useRef(null);
     const labelClass = 'mb-1.5 inline-block text-[13px] font-bold text-slate-900 dark:text-slate-100';
@@ -95,20 +95,21 @@ const BasicDetailsCard = () => {
 
             <h3 className="mb-2.5 mt-2 text-[28px] font-bold leading-[1.1] text-slate-900 dark:text-slate-100 xl:text-[24px]">Pricing</h3>
 
-            <div className="mb-3">
-                <label className={labelClass} htmlFor="productPrice">Product Price</label>
-                <div className="relative">
-                    <input
-                        id="productPrice"
-                        className={inputClass}
-                        value={formData.price}
-                        onChange={(event) => updateField('price', event.target.value)}
-                    />
-                    <button className="absolute right-1.5 top-1.5 h-7.5 min-w-11 rounded-md border border-[#dbe3e8] dark:border-gray-600 bg-white dark:bg-gray-950 text-xs font-bold text-[#5d6a74]" type="button">INR</button>
-                </div>
-            </div>
-
             <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+                <div className="mb-3 md:mb-0">
+                    <label className={labelClass} htmlFor="productPrice">Product Price</label>
+                    <div className="relative">
+                        <input
+                            id="productPrice"
+                            type='number'
+                            className={inputClass}
+                            value={formData.price}
+                            onChange={(event) => updateField('price', event.target.value)}
+                        />
+                        <button className="absolute right-1.5 top-1.5 h-7.5 min-w-11 rounded-md border border-[#dbe3e8] dark:border-gray-600 bg-white dark:bg-gray-950 text-xs font-bold text-[#5d6a74]" type="button">INR</button>
+                    </div>
+                </div>
+
                 <div className="mb-3 md:mb-0">
                     <label className={labelClass} htmlFor="discountPrice">Discount Percentage (%) <span className="font-medium text-[#8696a2]">(Optional)</span></label>
                     <div className="flex h-10.5 items-center justify-between overflow-hidden rounded-lg border border-[#dde5ea] bg-[#f7fbf8] dark:bg-gray-950">
@@ -126,30 +127,6 @@ const BasicDetailsCard = () => {
                             />
                         </div>
                         <span className="px-2.5 text-xs font-bold text-slate-900 dark:text-slate-100">Sale= ₹{salePrice}</span>
-                    </div>
-                </div>
-
-                <div className="mb-3 md:mb-0">
-                    <label className={labelClass}>Tax Included</label>
-                    <div className="flex flex-col gap-1 pt-0.5">
-                        <label className="inline-flex items-center gap-1.5 text-[13px] text-slate-900 dark:text-slate-100">
-                            <input
-                                type="radio"
-                                name="tax"
-                                checked={formData.taxIncluded}
-                                onChange={() => updateField('taxIncluded', true)}
-                            />
-                            Yes
-                        </label>
-                        <label className="inline-flex items-center gap-1.5 text-[13px] text-slate-900 dark:text-slate-100">
-                            <input
-                                type="radio"
-                                name="tax"
-                                checked={!formData.taxIncluded}
-                                onChange={() => updateField('taxIncluded', false)}
-                            />
-                            No
-                        </label>
                     </div>
                 </div>
             </div>
@@ -346,7 +323,7 @@ const BasicDetailsCard = () => {
                     onClick={publishProduct}
                     disabled={isSubmitting}
                 >
-                    {isSubmitting ? 'Publishing...' : 'Publish Product'}
+                    {isSubmitting ? 'Saving...' : submitButtonLabel}
                 </button>
             </div>
         </section>
