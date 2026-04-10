@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
 
 const orderSchema = new mongoose.Schema({
-    userId : {
-        type : mongoose.Schema.Types.ObjectId,
-        ref : "User",
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
         required: true
     },
     products: {
@@ -11,7 +11,7 @@ const orderSchema = new mongoose.Schema({
             {
                 productId: {
                     type: mongoose.Schema.Types.ObjectId,
-                    ref: "Product",
+                    ref: "product",
                     required: true
                 },
                 quantity: {
@@ -23,7 +23,7 @@ const orderSchema = new mongoose.Schema({
         ],
         required: true,
         validate: {
-            validator: function(arr) {
+            validator: function (arr) {
                 return Array.isArray(arr) && arr.length > 0;
             },
             message: 'Order must have at least one product.'
@@ -31,7 +31,7 @@ const orderSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ["pending", "shipped", "delivered", "cancelled"],
+        enum: ["pending", "confirmed", "packed", "shipped", "out_for_delivery", "delivered", "cancelled"],
         default: "pending"
     },
     paymentMethod: {
@@ -57,10 +57,39 @@ const orderSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 0
+    },
+    refundStatus: {
+        type: String,
+        enum: ["none", "requested", "approved", "pickup_completed", "initiated", "processed", "rejected"],
+        default: "none"
+    },
+    refundReason: {
+        type: String,
+        default: ""
+    },
+    refundAmount: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    refundRequestedAt: {
+        type: Date,
+        default: null
+    },
+    refundProcessedAt: {
+        type: Date,
+        default: null
     }
 
-} , { timestamps : true });
+}, { timestamps: true });
 
-const OrderModel = mongoose.model("Order" , orderSchema);
+orderSchema.index({ userId: 1, createdAt: -1 });
+orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ paymentStatus: 1, createdAt: -1 });
+orderSchema.index({ refundStatus: 1, createdAt: -1 });
+orderSchema.index({ "products.productId": 1 });
+orderSchema.index({ createdAt: -1 });
+
+const OrderModel = mongoose.model("Order", orderSchema);
 
 export default OrderModel;

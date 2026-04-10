@@ -15,11 +15,14 @@ const OrderManagementPage = () => {
     setCurrentPage,
     orders,
     paymentColor,
-    statusColor,
     thumbnailColors,
     isLoading,
     pageSize,
     setCustomerIdFilter,
+    handleStatusChange,
+    isStatusUpdatingId,
+    handleRefundStatusChange,
+    isRefundUpdatingId,
   } = useOrder();
   const [searchParams] = useSearchParams();
 
@@ -43,8 +46,11 @@ const OrderManagementPage = () => {
           currentPage={currentPage}
           pageSize={pageSize}
           paymentColor={paymentColor}
-          statusColor={statusColor}
           thumbnailColors={thumbnailColors}
+          onOrderStatusChange={handleStatusChange}
+          isStatusUpdatingId={isStatusUpdatingId}
+          onOrderRefundStatusChange={handleRefundStatusChange}
+          isRefundUpdatingId={isRefundUpdatingId}
         />
         <OrderPagination currentPage={currentPage} onPageChange={setCurrentPage} />
       </div>

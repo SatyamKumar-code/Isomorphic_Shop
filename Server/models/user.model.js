@@ -58,6 +58,11 @@ const userSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ role: 1, mobile: 1 });
+userSchema.index({ name: 1 });
+userSchema.index({ mobile: 1 });
+
 const UserModel = mongoose.model('User', userSchema);
 
 export default UserModel;

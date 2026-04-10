@@ -17,7 +17,7 @@ const ProductThumb = ({ product, index, thumbnailColors, image }) => {
 
     return (
         <div
-            className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 text-[10px] font-bold shadow-sm"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 text-[10px] font-bold shadow-sm"
             style={{ backgroundColor: palette.background, color: palette.color }}
             aria-hidden="true"
         >
@@ -41,6 +41,81 @@ const PaymentBadge = ({ status, paymentColor, children }) => {
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: paymentColor[status] }} />
             {children}
         </span>
+    );
+};
+
+const deliveryFlowStages = ['pending', 'confirmed', 'packed', 'shipped', 'out_for_delivery', 'delivered'];
+const refundFlowStages = ['requested', 'approved', 'pickup_completed', 'initiated', 'processed'];
+
+const formatStatusLabel = (value) => String(value || '')
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const OrderFlowTimeline = ({ rawStatus }) => {
+    const normalizedStatus = String(rawStatus || '').toLowerCase();
+
+    if (normalizedStatus === 'cancelled') {
+        return (
+            <div className="w-32">
+                <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-600 dark:bg-red-900/30 dark:text-red-300">
+                    Cancelled
+                </span>
+            </div>
+        );
+    }
+
+    const currentIndex = deliveryFlowStages.indexOf(normalizedStatus);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+
+    return (
+        <div className="w-32">
+            <div className="mb-1 flex items-center gap-1">
+                {deliveryFlowStages.map((stage, index) => (
+                    <span
+                        key={stage}
+                        className={`h-1.5 flex-1 rounded ${index <= safeIndex ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+                    />
+                ))}
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {formatStatusLabel(deliveryFlowStages[safeIndex])}
+            </p>
+        </div>
+    );
+};
+
+const RefundFlowTimeline = ({ rawRefundStatus }) => {
+    const normalizedStatus = String(rawRefundStatus || 'none').toLowerCase();
+
+    if (normalizedStatus === 'none') {
+        return <span className="text-[11px] text-slate-400">Not requested</span>;
+    }
+
+    if (normalizedStatus === 'rejected') {
+        return (
+            <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-600 dark:bg-red-900/30 dark:text-red-300">
+                Rejected
+            </span>
+        );
+    }
+
+    const currentIndex = refundFlowStages.indexOf(normalizedStatus);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const visibleStages = refundFlowStages.slice(0, safeIndex + 1);
+
+    return (
+        <div className="w-24">
+            <div className="mb-1 flex items-center gap-1">
+                {visibleStages.map((stage) => (
+                    <span
+                        key={stage}
+                        className="h-1.5 flex-1 rounded bg-cyan-500"
+                    />
+                ))}
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">{formatStatusLabel(refundFlowStages[safeIndex])}</p>
+        </div>
     );
 };
 
@@ -73,14 +148,14 @@ const CancelledIcon = ({ color }) => (
 
 const StatusIcon = ({ status, color }) => {
     if (status === 'Delivered') return <DeliveredIcon color={color} />;
-    if (status === 'Pending') return <PendingIcon color={color} />;
-    if (status === 'Shipped') return <ShippedIcon color={color} />;
+    if (status === 'Pending' || status === 'Confirmed' || status === 'Packed') return <PendingIcon color={color} />;
+    if (status === 'Shipped' || status === 'Out For Delivery') return <ShippedIcon color={color} />;
     return <CancelledIcon color={color} />;
 };
 
-const EmptyTable = () => (
+const EmptyTable = ({ colSpan }) => (
     <tr>
-        <td className="px-4 py-8 text-center text-sm text-slate-500" colSpan={7}>
+        <td className="px-4 py-8 text-center text-sm text-slate-500" colSpan={colSpan}>
             No records found.
         </td>
     </tr>
@@ -93,8 +168,11 @@ const OrdersTable = ({
     currentPage = 1,
     pageSize = 10,
     paymentColor = {},
-    statusColor = {},
     thumbnailColors = [],
+    onOrderStatusChange,
+    isStatusUpdatingId = '',
+    onOrderRefundStatusChange,
+    isRefundUpdatingId = '',
 }) => {
     if (isLoading) {
         return <div className="mt-6 text-sm text-slate-500">Loading records...</div>;
@@ -109,9 +187,39 @@ const OrdersTable = ({
             { background: '#F5F3FF', color: '#7C3AED' },
         ];
 
+    const allowedStatusTransitions = {
+        pending: ['pending', 'confirmed', 'cancelled'],
+        confirmed: ['confirmed', 'packed', 'cancelled'],
+        packed: ['packed', 'shipped', 'cancelled'],
+        shipped: ['shipped', 'out_for_delivery'],
+        out_for_delivery: ['out_for_delivery', 'delivered'],
+        delivered: ['delivered'],
+        cancelled: ['cancelled'],
+    };
+
+    const allowedRefundTransitions = {
+        delivered: {
+            none: ['none', 'requested'],
+            requested: ['requested', 'approved', 'rejected'],
+            approved: ['approved', 'pickup_completed', 'rejected'],
+            pickup_completed: ['pickup_completed', 'initiated'],
+            initiated: ['initiated', 'processed'],
+            processed: ['processed'],
+            rejected: ['rejected'],
+        },
+        cancelled: {
+            none: ['none', 'initiated'],
+            initiated: ['initiated', 'processed'],
+            processed: ['processed'],
+            rejected: ['rejected'],
+        },
+    };
+
+    const emptyColSpan = variant === 'orders' ? 10 : 5;
+
     return (
         <div className="mt-6 overflow-x-auto scrollbarNone">
-            <table className="min-w-full border-collapse whitespace-nowrap text-left">
+            <table className="min-w-full table-fixed border-collapse text-left">
                 <thead>
                     {variant === 'orders' ? (
 
@@ -123,10 +231,11 @@ const OrdersTable = ({
                             <th className="px-4 py-3">Date</th>
                             <th className="px-4 py-3">Price</th>
                             <th className="px-4 py-3">Payment</th>
-                            <th className="rounded-r-lg px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Delivery Flow</th>
+                            <th className="px-4 py-3">Refund Flow</th>
+                            <th className="rounded-r-lg px-4 py-3">Action</th>
                         </tr>
                     ) : (
-
                         // Products Table Header
                         <tr className="rounded-lg bg-[#EAF8E7] text-[12px] font-semibold text-slate-600">
                             <th className="rounded-l-lg px-4 py-3">No.</th>
@@ -139,39 +248,85 @@ const OrdersTable = ({
                 </thead>
 
                 <tbody>
-                    {!rows.length && <EmptyTable />}
+                    {!rows.length && <EmptyTable colSpan={emptyColSpan} />}
 
                     {variant === 'orders'
                         ? rows.map((order, index) => (
 
                             // Order Table Row
                             <tr key={`${order.id}-${index}`} className="border-b border-slate-200 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                                <td className="px-4 py-4">
-                                    <span>{(currentPage - 1) * pageSize + index + 1}</span>
-                                </td>
-                                <td className="px-4 py-4 font-medium text-slate-500">{order.id}</td>
-                                <td className="px-4 py-4">
-                                    <div className="flex max-w-60 items-center gap-3">
-                                        <ProductThumb
-                                            product={order.product}
-                                            index={index}
-                                            thumbnailColors={colors}
-                                            image={order.image || order.thumbnail || order.productImage}
-                                        />
-                                        <span className="whitespace-normal leading-5 text-slate-700 dark:text-slate-200">{order.product}</span>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4">{order.date}</td>
-                                <td className="px-4 py-4">{order.price}</td>
-                                <td className="px-4 py-4">
-                                    <PaymentBadge status={order.payment} paymentColor={paymentColor}>{order.payment}</PaymentBadge>
-                                </td>
-                                <td className="px-4 py-4">
-                                    <span className="inline-flex items-center gap-2 font-medium" style={{ color: statusColor[order.status] }}>
-                                        <StatusIcon status={order.status} color={statusColor[order.status]} />
-                                        {order.status}
-                                    </span>
-                                </td>
+                                {(() => {
+                                    const currentRawStatus = String(order.rawStatus || order.status || '').toLowerCase();
+                                    const currentRawRefundStatus = String(order.rawRefundStatus || 'none').toLowerCase();
+                                    const statusOptions = allowedStatusTransitions[currentRawStatus]
+                                        || allowedStatusTransitions.pending;
+                                    const statusRefundFlow = allowedRefundTransitions[currentRawStatus] || null;
+                                    const refundOptions = statusRefundFlow
+                                        ? (statusRefundFlow[currentRawRefundStatus] || [currentRawRefundStatus])
+                                        : ['none'];
+                                    const refundDisabled = !statusRefundFlow || order.payment !== 'Paid';
+                                    const shortOrderId = order.orderId || (order.id ? `#${String(order.id).slice(-8).toUpperCase()}` : '-');
+
+                                    return (
+                                        <>
+                                            <td className="px-4 py-4">
+                                                <span>{(currentPage - 1) * pageSize + index + 1}</span>
+                                            </td>
+                                            <td className="px-4 py-4 font-medium text-slate-500">{shortOrderId}</td>
+                                            <td className="px-4 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <ProductThumb
+                                                        product={order.product}
+                                                        index={index}
+                                                        thumbnailColors={colors}
+                                                        image={order.image || order.thumbnail || order.productImage}
+                                                    />
+                                                    <span className="wrap-break-word whitespace-normal leading-5 text-slate-700 dark:text-slate-200">{order.product}</span>
+                                                </div>
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-4">{order.date}</td>
+                                            <td className="whitespace-nowrap px-4 py-4">{order.price}</td>
+                                            <td className="px-4 py-4">
+                                                <PaymentBadge status={order.payment} paymentColor={paymentColor}>{order.payment}</PaymentBadge>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <OrderFlowTimeline rawStatus={currentRawStatus} />
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <RefundFlowTimeline rawRefundStatus={currentRawRefundStatus} />
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <select
+                                                        className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
+                                                        value={currentRawStatus}
+                                                        onChange={(event) => onOrderStatusChange?.(order.id, event.target.value)}
+                                                        disabled={isStatusUpdatingId === order.id || statusOptions.length <= 1}
+                                                    >
+                                                        {statusOptions.map((statusValue) => (
+                                                            <option key={statusValue} value={statusValue}>
+                                                                {formatStatusLabel(statusValue)}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+
+                                                    <select
+                                                        className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
+                                                        value={currentRawRefundStatus}
+                                                        onChange={(event) => onOrderRefundStatusChange?.(order.id, event.target.value)}
+                                                        disabled={refundDisabled || isRefundUpdatingId === order.id || refundOptions.length <= 1}
+                                                    >
+                                                        {refundOptions.map((refundValue) => (
+                                                            <option key={refundValue} value={refundValue}>
+                                                                {formatStatusLabel(refundValue)}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </td>
+                                        </>
+                                    );
+                                })()}
                             </tr>
                         ))
                         : rows.map((item, index) => (
@@ -184,7 +339,7 @@ const OrdersTable = ({
                                     </div>
                                 </td>
                                 <td className="px-4 py-4">
-                                    <div className="flex max-w-60 items-center gap-3">
+                                    <div className="flex min-w-55 items-center gap-3">
                                         <ProductThumb
                                             product={item.product}
                                             index={index}
