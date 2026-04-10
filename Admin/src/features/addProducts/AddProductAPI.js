@@ -18,6 +18,6 @@ export const removeAddProductImage = (imgUrl) => api.delete('/api/product/remove
 
 export const createAddProduct = (payload) => api.post('/api/product', payload);
 
-export const getAddProductById = (productId) => api.get(`/api/product/${productId}`);
+export const getAddProductById = (productId) => api.get(`/api/product/admin/${productId}`);
 
 export const updateAddProduct = (productId, payload) => api.put(`/api/product/${productId}`, payload);

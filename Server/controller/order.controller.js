@@ -72,6 +72,19 @@ const formatRefundStatus = (status) => {
     return labelMap[status] || "Not Requested";
 };
 
+const getAdminOwnedProductIds = async (adminId) => {
+    if (!adminId) {
+        return [];
+    }
+
+    const products = await ProductModel.find({ createdBy: adminId }).select("_id").lean();
+    return products.map((product) => product._id);
+};
+
+const getAdminOwnedProductIdSet = (productIds) => {
+    return new Set((Array.isArray(productIds) ? productIds : []).map((id) => String(id)));
+};
+
 const formatOrderForAdmin = (orderDoc) => {
     const firstProduct = orderDoc?.products?.[0]?.productId;
     const productName = firstProduct?.productName || "Product unavailable";
@@ -135,8 +148,23 @@ const formatChange = (current, previous, options = {}) => {
 
 export const getAdminOrderCustomerLookup = async (req, res) => {
     try {
+        const adminId = req.userId;
+        const ownedProductIds = await getAdminOwnedProductIds(adminId);
+        if (!ownedProductIds.length) {
+            return res.status(200).json({
+                message: "Customers fetched successfully",
+                error: false,
+                success: true,
+                data: [],
+            });
+        }
+
+        const relatedCustomerIds = await OrderModel.distinct("userId", {
+            "products.productId": { $in: ownedProductIds },
+        });
+
         const q = String(req.query?.q || "").trim();
-        const query = { role: "user" };
+        const query = { role: "user", _id: { $in: relatedCustomerIds } };
 
         if (q) {
             const regex = toRegex(q);
@@ -180,15 +208,17 @@ export const getAdminOrderCustomerLookup = async (req, res) => {
 
 export const getAdminOrderProductLookup = async (req, res) => {
     try {
+        const adminId = req.userId;
         const q = String(req.query?.q || "").trim();
         const query = q
             ? {
+                createdBy: adminId,
                 $or: [
                     { productName: toRegex(q) },
                     mongoose.Types.ObjectId.isValid(q) ? { _id: new mongoose.Types.ObjectId(q) } : null,
                 ].filter(Boolean),
             }
-            : {};
+            : { createdBy: adminId };
 
         const products = await ProductModel.find(query)
             .select("productName price stock images")
@@ -220,11 +250,35 @@ export const getAdminOrderProductLookup = async (req, res) => {
 
 export const getAdminOrderAddressLookup = async (req, res) => {
     try {
+        const adminId = req.userId;
+        const ownedProductIds = await getAdminOwnedProductIds(adminId);
         const userId = String(req.query?.userId || "").trim();
 
         if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
             return res.status(400).json({
                 message: "Valid userId is required",
+                error: true,
+                success: false,
+            });
+        }
+
+        if (!ownedProductIds.length) {
+            return res.status(200).json({
+                message: "Addresses fetched successfully",
+                error: false,
+                success: true,
+                data: [],
+            });
+        }
+
+        const relatedOrderCount = await OrderModel.countDocuments({
+            userId,
+            "products.productId": { $in: ownedProductIds },
+        });
+
+        if (!relatedOrderCount) {
+            return res.status(403).json({
+                message: "You can only access addresses of customers related to your products",
                 error: true,
                 success: false,
             });
@@ -260,6 +314,7 @@ export const createOrderByAdmin = async (req, res) => {
     const session = await mongoose.startSession();
 
     try {
+        const adminId = req.userId;
         const {
             userId,
             delivery_address,
@@ -365,11 +420,11 @@ export const createOrderByAdmin = async (req, res) => {
         let createdOrderDoc = null;
 
         await session.withTransaction(async () => {
-            const productDocs = await ProductModel.find({ _id: { $in: productIds } }).session(session);
+            const productDocs = await ProductModel.find({ _id: { $in: productIds }, createdBy: adminId }).session(session);
             const productMap = new Map(productDocs.map((product) => [String(product._id), product]));
 
             if (productDocs.length !== productIds.length) {
-                throw new Error("One or more products were not found");
+                throw new Error("One or more products were not found or do not belong to this admin");
             }
 
             const orderProducts = [];
@@ -624,6 +679,9 @@ export const getUserOrders = async (req, res) => {
 
 export const getAllOrders = async (req, res) => {
     try {
+        const adminId = req.userId;
+        const ownedProductIds = await getAdminOwnedProductIds(adminId);
+        const ownedProductIdSet = getAdminOwnedProductIdSet(ownedProductIds);
         let { page = 1, limit = 20 } = req.query;
         const search = String(req.query?.search || "").trim();
         const status = String(req.query?.status || "").trim().toLowerCase();
@@ -637,7 +695,21 @@ export const getAllOrders = async (req, res) => {
         if (limit > MAX_LIMIT) limit = MAX_LIMIT;
         const skip = (page - 1) * limit;
 
+        if (!ownedProductIds.length) {
+            return res.status(200).json({
+                message: "No orders found",
+                error: false,
+                success: true,
+                orders: [],
+                total: 0,
+                totalPages: 1,
+                page,
+                limit,
+            });
+        }
+
         const andFilters = [];
+        andFilters.push({ "products.productId": { $in: ownedProductIds } });
 
         if (customerId) {
             andFilters.push({ userId: customerId });
@@ -684,7 +756,7 @@ export const getAllOrders = async (req, res) => {
                         { email: searchRegex },
                     ],
                 }).select("_id"),
-                ProductModel.find({ productName: searchRegex }).select("_id"),
+                ProductModel.find({ productName: searchRegex, createdBy: adminId }).select("_id"),
             ]);
 
             const numericMobile = Number(search);
@@ -745,7 +817,23 @@ export const getAllOrders = async (req, res) => {
             });
         }
 
-        const formattedOrders = orders.map(formatOrderForAdmin);
+        const formattedOrders = orders.map((order) => {
+            const ownItems = Array.isArray(order.products)
+                ? order.products.filter((item) => ownedProductIdSet.has(String(item?.productId?._id || item?.productId)))
+                : [];
+
+            const ownTotalAmount = ownItems.reduce((accumulator, item) => {
+                return accumulator + (Number(item?.productId?.price || 0) * Number(item?.quantity || 0));
+            }, 0);
+
+            const displayOrder = {
+                ...order.toObject(),
+                products: ownItems,
+                totalAmount: ownTotalAmount,
+            };
+
+            return formatOrderForAdmin(displayOrder);
+        });
         const totalPages = Math.max(1, Math.ceil(total / limit));
 
         return res.status(200).json({
@@ -771,6 +859,41 @@ export const getAllOrders = async (req, res) => {
 
 export const getOrderSummary = async (req, res) => {
     try {
+        const adminId = req.userId;
+        const ownedProductIds = await getAdminOwnedProductIds(adminId);
+        if (!ownedProductIds.length) {
+            return res.status(200).json({
+                message: "Order summary fetched successfully",
+                error: false,
+                success: true,
+                data: {
+                    summaryCards: [
+                        { title: "Total Orders", value: "0", change: "0.0%", changeDirection: "up", changeColor: "#4EA674" },
+                        { title: "New Orders", value: "0", change: "0.0%", changeDirection: "up", changeColor: "#4EA674" },
+                        { title: "Completed Orders", value: "0", change: "0.0%", changeDirection: "up", changeColor: "#4EA674" },
+                        { title: "Canceled Orders", value: "0", change: "0.0%", changeDirection: "up", changeColor: "#EF4444" },
+                    ],
+                    tabs: [
+                        { label: "All order", count: 0 },
+                        { label: "Pending", count: 0 },
+                        { label: "Confirmed", count: 0 },
+                        { label: "Packed", count: 0 },
+                        { label: "Shipped", count: 0 },
+                        { label: "Out For Delivery", count: 0 },
+                        { label: "Delivered", count: 0 },
+                        { label: "Cancelled", count: 0 },
+                    ],
+                    period: "7days",
+                    periodLabel: "Last 7 days",
+                    selectedYear: new Date().getFullYear(),
+                    selectedMonth: new Date().getMonth() + 1,
+                    availableYears: [new Date().getFullYear()],
+                    availableMonths: [new Date().getMonth() + 1],
+                },
+            });
+        }
+
+        const orderScope = { "products.productId": { $in: ownedProductIds } };
         const period = ["7days", "daywise", "month"].includes(String(req.query?.period || "").trim())
             ? String(req.query.period).trim()
             : "7days";
@@ -833,6 +956,9 @@ export const getOrderSummary = async (req, res) => {
         ] = await Promise.all([
             OrderModel.aggregate([
                 {
+                    $match: orderScope,
+                },
+                {
                     $group: {
                         _id: { $year: "$createdAt" },
                     },
@@ -844,6 +970,7 @@ export const getOrderSummary = async (req, res) => {
             OrderModel.aggregate([
                 {
                     $match: {
+                        ...orderScope,
                         createdAt: {
                             $gte: new Date(selectedYear, 0, 1),
                             $lt: new Date(selectedYear + 1, 0, 1),
@@ -859,20 +986,20 @@ export const getOrderSummary = async (req, res) => {
                     $sort: { _id: 1 },
                 },
             ]),
-            OrderModel.countDocuments(),
-            OrderModel.countDocuments({ status: "confirmed" }),
-            OrderModel.countDocuments({ status: "packed" }),
-            OrderModel.countDocuments({ status: "shipped" }),
-            OrderModel.countDocuments({ status: "out_for_delivery" }),
-            OrderModel.countDocuments({ status: "delivered" }),
-            OrderModel.countDocuments({ status: "pending" }),
-            OrderModel.countDocuments({ status: "cancelled" }),
-            OrderModel.countDocuments({ createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
-            OrderModel.countDocuments({ createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
-            OrderModel.countDocuments({ status: "delivered", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
-            OrderModel.countDocuments({ status: "delivered", createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
-            OrderModel.countDocuments({ status: "cancelled", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
-            OrderModel.countDocuments({ status: "cancelled", createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
+            OrderModel.countDocuments(orderScope),
+            OrderModel.countDocuments({ ...orderScope, status: "confirmed" }),
+            OrderModel.countDocuments({ ...orderScope, status: "packed" }),
+            OrderModel.countDocuments({ ...orderScope, status: "shipped" }),
+            OrderModel.countDocuments({ ...orderScope, status: "out_for_delivery" }),
+            OrderModel.countDocuments({ ...orderScope, status: "delivered" }),
+            OrderModel.countDocuments({ ...orderScope, status: "pending" }),
+            OrderModel.countDocuments({ ...orderScope, status: "cancelled" }),
+            OrderModel.countDocuments({ ...orderScope, createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "delivered", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "delivered", createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "cancelled", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "cancelled", createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
         ]);
 
         const availableYears = availableYearsAgg
@@ -943,6 +1070,9 @@ export const getOrderSummary = async (req, res) => {
 
 export const updateOrderStatus = async (req, res) => {
     try {
+        const adminId = req.userId;
+        const ownedProductIds = await getAdminOwnedProductIds(adminId);
+        const ownedProductIdSet = getAdminOwnedProductIdSet(ownedProductIds);
         const { orderId } = req.params;
         const { status } = req.body;
         if (!orderId || !status) {
@@ -969,6 +1099,18 @@ export const updateOrderStatus = async (req, res) => {
                 message: "Order not found",
                 error: true,
                 success: false
+            });
+        }
+
+        const hasOwnedProductInOrder = Array.isArray(existingOrder.products)
+            ? existingOrder.products.some((item) => ownedProductIdSet.has(String(item?.productId)))
+            : false;
+
+        if (!hasOwnedProductInOrder) {
+            return res.status(403).json({
+                message: "You can only update orders related to your products",
+                error: true,
+                success: false,
             });
         }
         const previousStatus = existingOrder.status;
@@ -1007,6 +1149,10 @@ export const updateOrderStatus = async (req, res) => {
         // Only apply side-effects if status is changing to cancelled or delivered
         if (status === "cancelled" && previousStatus !== "cancelled") {
             for (const item of updatedStatus.products) {
+                if (!ownedProductIdSet.has(String(item.productId))) {
+                    continue;
+                }
+
                 const product = await ProductModel.findById(item.productId);
                 if (product) {
                     product.stock += item.quantity;
@@ -1017,6 +1163,10 @@ export const updateOrderStatus = async (req, res) => {
 
         if (status === "delivered" && previousStatus !== "delivered") {
             for (const item of updatedStatus.products) {
+                if (!ownedProductIdSet.has(String(item.productId))) {
+                    continue;
+                }
+
                 const product = await ProductModel.findById(item.productId);
                 if (product) {
                     product.sales += item.quantity;
@@ -1045,6 +1195,9 @@ export const updateOrderStatus = async (req, res) => {
 
 export const updateOrderRefundStatus = async (req, res) => {
     try {
+        const adminId = req.userId;
+        const ownedProductIds = await getAdminOwnedProductIds(adminId);
+        const ownedProductIdSet = getAdminOwnedProductIdSet(ownedProductIds);
         const { orderId } = req.params;
         const { refundStatus, refundReason = "" } = req.body;
 
@@ -1069,6 +1222,18 @@ export const updateOrderRefundStatus = async (req, res) => {
         if (!order) {
             return res.status(404).json({
                 message: "Order not found",
+                error: true,
+                success: false,
+            });
+        }
+
+        const hasOwnedProductInOrder = Array.isArray(order.products)
+            ? order.products.some((item) => ownedProductIdSet.has(String(item?.productId)))
+            : false;
+
+        if (!hasOwnedProductInOrder) {
+            return res.status(403).json({
+                message: "You can only update refunds for orders related to your products",
                 error: true,
                 success: false,
             });
@@ -1126,6 +1291,10 @@ export const updateOrderRefundStatus = async (req, res) => {
 
         if (shouldRestockOnPickup) {
             for (const item of order.products) {
+                if (!ownedProductIdSet.has(String(item.productId))) {
+                    continue;
+                }
+
                 const product = await ProductModel.findById(item.productId);
                 if (product) {
                     product.stock += item.quantity;

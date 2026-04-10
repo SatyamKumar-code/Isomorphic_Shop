@@ -82,10 +82,16 @@ const productSchema = new mongoose.Schema({
         min: 0,
         max: 5
     },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+    },
 }, { timestamps: true })
 
 productSchema.index({ productName: "text", description: "text", size: "text", weight: "text", RAM: "text", color: "text" });
 productSchema.index({ productName: 1, createdAt: -1 });
+productSchema.index({ createdBy: 1, createdAt: -1 });
 
 const ProductModel = mongoose.model("product", productSchema)
 export default ProductModel;

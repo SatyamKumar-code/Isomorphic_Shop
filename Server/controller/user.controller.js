@@ -1,6 +1,7 @@
 import express from 'express';
 import UserModel from '../models/user.model.js';
 import OrderModel from '../models/order.model.js';
+import ProductModel from '../models/product.model.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import generateAccessToken from '../utils/generateAccessToken.js';
@@ -395,8 +396,32 @@ const formatChangePercentage = (currentValue, previousValue) => {
     return `${rounded}%`;
 };
 
+const getAdminOwnedProductIds = async (adminId) => {
+    if (!adminId) {
+        return [];
+    }
+
+    const products = await ProductModel.find({ createdBy: adminId }).select("_id").lean();
+    return products.map((product) => product._id);
+};
+
+const isCustomerRelatedToAdmin = async (adminId, customerId) => {
+    const ownedProductIds = await getAdminOwnedProductIds(adminId);
+    if (!ownedProductIds.length) {
+        return false;
+    }
+
+    const relatedOrderCount = await OrderModel.countDocuments({
+        userId: customerId,
+        "products.productId": { $in: ownedProductIds },
+    });
+
+    return relatedOrderCount > 0;
+};
+
 export const getCustomersController = async (req, res) => {
     try {
+        const adminId = req.userId;
         const requestedYear = Number.parseInt(req.query?.year, 10);
         const requestedMonth = Number.parseInt(req.query?.month, 10);
         const requestedPage = Number.parseInt(req.query?.page, 10);
@@ -407,14 +432,61 @@ export const getCustomersController = async (req, res) => {
         const orderSort = String(req.query?.orderSort || "none").trim().toLowerCase();
         const spendSort = String(req.query?.spendSort || "none").trim().toLowerCase();
 
-        const users = await UserModel.find({ role: "user" })
+        const ownedProductIds = await getAdminOwnedProductIds(adminId);
+        if (!ownedProductIds.length) {
+            return res.status(200).json({
+                message: "Customers analytics fetched successfully",
+                error: false,
+                success: true,
+                data: {
+                    summaryCards: [],
+                    overviewStats: [],
+                    weekSeries: {
+                        "This week": {
+                            activeCustomers: [],
+                            repeatCustomers: [],
+                            shopVisitor: [],
+                            conversionRate: [],
+                        },
+                        "Last week": {
+                            activeCustomers: [],
+                            repeatCustomers: [],
+                            shopVisitor: [],
+                            conversionRate: [],
+                        },
+                    },
+                    ranges: [{ label: "This week", value: "This week" }, { label: "Last week", value: "Last week" }],
+                    periodLabel: "Last 7 days",
+                    xLabelsByRange: {},
+                    period: "7days",
+                    selectedYear: new Date().getFullYear(),
+                    selectedMonth: new Date().getMonth() + 1,
+                    availableYears: [new Date().getFullYear()],
+                    availableMonths: [new Date().getMonth() + 1],
+                    customers: [],
+                    allCustomers: [],
+                    pagination: {
+                        page: 1,
+                        limit: Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 10,
+                        totalCount: 0,
+                        totalPages: 1,
+                    },
+                },
+            });
+        }
+
+        const relatedUserIds = await OrderModel.distinct("userId", {
+            "products.productId": { $in: ownedProductIds },
+        });
+
+        const users = await UserModel.find({ role: "user", _id: { $in: relatedUserIds } })
             .select("-password -refresh_token -otp -otp_expiry")
             .sort({ createdAt: -1 })
             .lean();
 
         const userIds = users.map((user) => user._id);
         const orders = userIds.length
-            ? await OrderModel.find({ userId: { $in: userIds } })
+            ? await OrderModel.find({ userId: { $in: userIds }, "products.productId": { $in: ownedProductIds } })
                 .select("userId totalAmount status createdAt")
                 .sort({ createdAt: -1 })
                 .lean()
@@ -1418,8 +1490,18 @@ export const updateUserDetails = async (req, res) => {
 
 export async function updateUserStatus(req, res) {
     try {
+        const adminId = req.userId;
         const { id } = req.params;
         const { status } = req.body;
+
+        const isRelated = await isCustomerRelatedToAdmin(adminId, id);
+        if (!isRelated) {
+            return res.status(403).json({
+                message: "You can only update customers related to your products",
+                error: true,
+                success: false
+            })
+        }
 
         const normalizedStatus = status === "Inactive" ? "Blocked" : status;
         const allowedStatuses = ["Active", "Blocked", "VIP"];
@@ -1457,7 +1539,17 @@ export async function updateUserStatus(req, res) {
 
 export async function adminSendResetPasswordLinkController(req, res) {
     try {
+        const adminId = req.userId;
         const { id } = req.params;
+
+        const isRelated = await isCustomerRelatedToAdmin(adminId, id);
+        if (!isRelated) {
+            return res.status(403).json({
+                message: "You can only access customers related to your products",
+                error: true,
+                success: false
+            })
+        }
 
         const user = await UserModel.findById(id);
         if (!user) {
@@ -1496,7 +1588,17 @@ export async function adminSendResetPasswordLinkController(req, res) {
 
 export async function adminForceLogoutUserController(req, res) {
     try {
+        const adminId = req.userId;
         const { id } = req.params;
+
+        const isRelated = await isCustomerRelatedToAdmin(adminId, id);
+        if (!isRelated) {
+            return res.status(403).json({
+                message: "You can only access customers related to your products",
+                error: true,
+                success: false
+            })
+        }
 
         const user = await UserModel.findByIdAndUpdate(
             { _id: id },
@@ -1531,6 +1633,15 @@ export async function adminUpdateCustomerNoteController(req, res) {
         const { id } = req.params;
         const { note } = req.body;
         const { userId } = req;
+
+        const isRelated = await isCustomerRelatedToAdmin(userId, id);
+        if (!isRelated) {
+            return res.status(403).json({
+                message: "You can only access customers related to your products",
+                error: true,
+                success: false
+            })
+        }
 
         const nextNote = String(note || "").trim();
         if (nextNote.length > 500) {

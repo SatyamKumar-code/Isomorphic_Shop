@@ -119,6 +119,7 @@ export async function removeImageFromCloudinary(request, response) {
 
 export const createProductController = async (req, res) => {
     try {
+        const adminId = req.userId;
         const {
             productName,
             price,
@@ -176,6 +177,7 @@ export const createProductController = async (req, res) => {
             stock,
             expirationStart: parsedExpirationStart,
             expirationEnd: parsedExpirationEnd,
+            createdBy: adminId || null,
         });
 
         if (!newProduct) {
@@ -206,9 +208,34 @@ export const createProductController = async (req, res) => {
     }
 }
 
+export const getAdminProductsController = async (req, res) => {
+    try {
+        const adminId = req.userId;
+        if (!adminId) {
+            return res.status(401).json({
+                message: "Unauthorized access",
+                success: false,
+                error: true,
+            });
+        }
+
+        const previousCreatedBy = req.query.createdBy;
+        req.query.createdBy = String(adminId);
+        await getAllProductsController(req, res);
+        req.query.createdBy = previousCreatedBy;
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error in fetching admin products: " + error.message,
+            success: false,
+            error: true,
+        });
+    }
+};
+
 export const getAllProductsController = async (req, res) => {
     try {
         const sortBy = req.query.sortBy;
+        const createdBy = String(req.query.createdBy || "").trim();
         const rawPage = Number(req.query.page || 1);
         const rawLimit = Number(req.query.limit || 10);
         const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
@@ -242,6 +269,14 @@ export const getAllProductsController = async (req, res) => {
         }
 
         const basePipeline = [];
+
+        if (createdBy && mongoose.Types.ObjectId.isValid(createdBy)) {
+            basePipeline.push({
+                $match: {
+                    createdBy: new mongoose.Types.ObjectId(createdBy),
+                },
+            });
+        }
 
         basePipeline.push(
             {
@@ -349,6 +384,46 @@ export const getAllProductsController = async (req, res) => {
     }
 }
 
+export const getAdminProductByIdController = async (req, res) => {
+    try {
+        const productId = req.params.id;
+        const adminId = req.userId;
+
+        if (!productId) {
+            return res.status(400).json({
+                message: "Product ID is required",
+                success: false,
+                error: true,
+            });
+        }
+
+        const product = await ProductModel.findOne({ _id: productId, createdBy: adminId })
+            .populate("category", "catName")
+            .populate("subCategory", "subCatName");
+
+        if (!product) {
+            return res.status(404).json({
+                message: "Product not found for this admin",
+                success: false,
+                error: true,
+            });
+        }
+
+        return res.status(200).json({
+            message: "Product fetched successfully",
+            success: true,
+            error: false,
+            product,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error in fetching admin product: " + error.message,
+            success: false,
+            error: true,
+        });
+    }
+};
+
 export const getProductByIdController = async (req, res) => {
     try {
         const productId = req.params.id;
@@ -392,6 +467,7 @@ export const getProductByIdController = async (req, res) => {
 export const updateProductController = async (req, res) => {
     try {
         const productId = req.params.id;
+        const adminId = req.userId;
         const {
             productName,
             price,
@@ -451,8 +527,8 @@ export const updateProductController = async (req, res) => {
             usedImagesArr = true;
         }
 
-        const updatedProduct = await ProductModel.findByIdAndUpdate(
-            productId,
+        const updatedProduct = await ProductModel.findOneAndUpdate(
+            { _id: productId, createdBy: adminId },
             { $set: updateObj },
             { new: true }
         );
@@ -486,6 +562,7 @@ export const updateProductController = async (req, res) => {
 export const deleteProductController = async (req, res) => {
     try {
         const productId = req.params.id;
+        const adminId = req.userId;
         if (!productId) {
             return res.status(400).json({
                 message: "Product ID is required",
@@ -494,7 +571,7 @@ export const deleteProductController = async (req, res) => {
             });
         }
 
-        const deletedProduct = await ProductModel.findByIdAndDelete(productId);
+        const deletedProduct = await ProductModel.findOneAndDelete({ _id: productId, createdBy: adminId });
 
         if (!deletedProduct) {
             return res.status(404).json({

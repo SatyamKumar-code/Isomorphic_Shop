@@ -4,6 +4,8 @@ import {
 	removeImageFromCloudinary,
 	createProductController,
 	getAllProductsController,
+	getAdminProductsController,
+	getAdminProductByIdController,
 	getProductByIdController,
 	updateProductController,
 	deleteProductController,
@@ -25,7 +27,7 @@ import adminAuth from "../middlewares/adminMiddleware.js";
 const productRouter = express.Router();
 
 // Image upload & remove
-productRouter.post("/upload-images",adminAuth, upload.single("image"), uploadImages);
+productRouter.post("/upload-images", adminAuth, upload.single("image"), uploadImages);
 productRouter.delete("/remove-image", adminAuth, removeImageFromCloudinary);
 
 // Top/Latest (static paths first)
@@ -49,6 +51,8 @@ productRouter.get("/:id/reviews", getProductReviewsController);
 
 // CRUD (parameterized /:id routes last)
 productRouter.post("/", adminAuth, createProductController);
+productRouter.get("/admin/mine", adminAuth, getAdminProductsController);
+productRouter.get("/admin/:id", adminAuth, getAdminProductByIdController);
 productRouter.get("/", getAllProductsController);
 productRouter.get("/:id", getProductByIdController);
 productRouter.put("/:id", adminAuth, updateProductController);
