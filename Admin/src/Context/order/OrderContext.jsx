@@ -46,6 +46,7 @@ const formatStatusLabel = (value) => normalizeStatusValue(value)
 
 export const OrderProvider = ({ children }) => {
     const [summaryCards, setSummaryCards] = useState([]);
+    const [dashboardSalesCard, setDashboardSalesCard] = useState(null);
     const [tabs, setTabs] = useState(initialTabs);
     const [summaryPeriod, setSummaryPeriod] = useState("7days");
     const [summaryYear, setSummaryYear] = useState("");
@@ -153,6 +154,9 @@ export const OrderProvider = ({ children }) => {
 
             if (Array.isArray(res?.data?.data?.summaryCards)) {
                 setSummaryCards(res.data.data.summaryCards);
+            }
+            if (res?.data?.data?.dashboardSalesCard && typeof res.data.data.dashboardSalesCard === "object") {
+                setDashboardSalesCard(res.data.data.dashboardSalesCard);
             }
             if (Array.isArray(res?.data?.data?.tabs)) {
                 setTabs(res.data.data.tabs);
@@ -451,6 +455,7 @@ export const OrderProvider = ({ children }) => {
 
     const value = useMemo(() => ({
         summaryCards,
+        dashboardSalesCard,
         tabs,
         summaryPeriod,
         setSummaryPeriod,
@@ -488,7 +493,7 @@ export const OrderProvider = ({ children }) => {
         handleStatusChange,
         handleRefundStatusChange,
         reloadOrders: loadOrders,
-    }), [summaryCards, tabs, summaryPeriod, summaryYear, summaryMonth, availableSummaryYears, availableSummaryMonths, orders, pagination, totalPages, pageSize, activeTab, currentPage, searchText, paymentFilter, customerIdFilter, isLoading, isCreateOrderLoading, isStatusUpdatingId, isRefundUpdatingId, loadOrders, setPageSize, setActiveTab, setCurrentPage, setSearchText, setPaymentFilter, setCustomerIdFilter, resetFilters, exportCurrentOrdersCsv, fetchAllOrdersForExport, createOrderFromPayload, handleStatusChange, handleRefundStatusChange]);
+    }), [summaryCards, dashboardSalesCard, tabs, summaryPeriod, summaryYear, summaryMonth, availableSummaryYears, availableSummaryMonths, orders, pagination, totalPages, pageSize, activeTab, currentPage, searchText, paymentFilter, customerIdFilter, isLoading, isCreateOrderLoading, isStatusUpdatingId, isRefundUpdatingId, loadOrders, setPageSize, setActiveTab, setCurrentPage, setSearchText, setPaymentFilter, setCustomerIdFilter, resetFilters, exportCurrentOrdersCsv, fetchAllOrdersForExport, createOrderFromPayload, handleStatusChange, handleRefundStatusChange]);
 
     return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;
 };

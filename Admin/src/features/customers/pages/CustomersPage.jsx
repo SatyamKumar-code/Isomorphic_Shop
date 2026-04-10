@@ -4,28 +4,37 @@ import OverviewChart from "../components/OverviewChart";
 import CustomersTable from "../components/CustomersTable";
 import CustomerDetailsCard from "../components/CustomerDetailsCard";
 import CustomersPagination from "../components/CustomersPagination";
+import SellerLeaderboardCard from "../components/SellerLeaderboardCard";
 import { useCustomers } from "../../../Context/customers/useCustomers";
 
 const CustomersPage = () => {
-    const { overviewStats, weekSeries, rangeOptions, activeRange, setActiveRange, activeStat, setActiveStat, selectedCustomer } = useCustomers();
+    const { overviewStats, weekSeries, rangeOptions, activeRange, setActiveRange, activeStat, setActiveStat, selectedCustomer, isSellerView } = useCustomers();
 
-    const overviewChartProps = {
-        title: "Customer Overview",
-        stats: overviewStats,
-        ranges: rangeOptions,
-        activeRange,
-        onRangeChange: setActiveRange,
-        activeStat,
-        onStatChange: setActiveStat,
-        chartSeries: weekSeries,
-    };
+    const overviewChartProps = !isSellerView
+        ? {
+            title: "Customer Overview",
+            stats: overviewStats,
+            ranges: rangeOptions,
+            activeRange,
+            onRangeChange: setActiveRange,
+            activeStat,
+            onStatChange: setActiveStat,
+            chartSeries: weekSeries,
+        }
+        : null;
 
     return (
         <div className="w-full overflow-x-auto px-5 pb-6 pt-4 scrollbarNone">
             <div className="flex flex-col gap-4 xl:flex-row">
                 <SummaryCards />
-                <OverviewChart {...overviewChartProps} />
+                {!isSellerView ? <OverviewChart {...overviewChartProps} /> : null}
             </div>
+
+            {isSellerView ? (
+                <div className="mt-5">
+                    <SellerLeaderboardCard />
+                </div>
+            ) : null}
 
             <div className="mt-5 flex flex-col gap-5 xl:flex-row">
                 <div className={selectedCustomer ? "xl:w-[75%]" : "xl:w-full"}>

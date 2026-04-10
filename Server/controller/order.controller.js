@@ -72,12 +72,53 @@ const formatRefundStatus = (status) => {
     return labelMap[status] || "Not Requested";
 };
 
+const normalizeToken = (value) => String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+const normalizeOrderStatus = (value) => {
+    const normalized = normalizeToken(value);
+    const aliasMap = {
+        outfordelivery: "out_for_delivery",
+        out_for_delivery: "out_for_delivery",
+        dispatch: "shipped",
+        dispatched: "shipped",
+    };
+
+    return aliasMap[normalized] || normalized;
+};
+
+const normalizeRefundStatus = (value) => {
+    const normalized = normalizeToken(value);
+    const aliasMap = {
+        not_requested: "none",
+        no_refund: "none",
+        refund_requested: "requested",
+        refund_approved: "approved",
+        refund_initiated: "initiated",
+        refund_processed: "processed",
+    };
+
+    return aliasMap[normalized] || normalized;
+};
+
+const hasGlobalAdminAccess = async (adminId) => {
+    if (!adminId) {
+        return false;
+    }
+
+    const admin = await UserModel.findById(adminId).select("role").lean();
+    return Boolean(admin?.role === "admin");
+};
+
 const getAdminOwnedProductIds = async (adminId) => {
     if (!adminId) {
         return [];
     }
 
-    const products = await ProductModel.find({ createdBy: adminId }).select("_id").lean();
+    const globalAccess = await hasGlobalAdminAccess(adminId);
+    const products = await ProductModel.find(globalAccess ? {} : { createdBy: adminId }).select("_id").lean();
     return products.map((product) => product._id);
 };
 
@@ -85,8 +126,57 @@ const getAdminOwnedProductIdSet = (productIds) => {
     return new Set((Array.isArray(productIds) ? productIds : []).map((id) => String(id)));
 };
 
+const toSearchValue = (value) => String(value || "").trim().toLowerCase();
+
+const getMatchWeight = (value, term, exact = 100, startsWith = 70, includes = 40) => {
+    const source = toSearchValue(value);
+    if (!source || !term) {
+        return 0;
+    }
+
+    if (source === term) {
+        return exact;
+    }
+
+    if (source.startsWith(term)) {
+        return startsWith;
+    }
+
+    if (source.includes(term)) {
+        return includes;
+    }
+
+    return 0;
+};
+
+const getOrderSearchScore = (order, term) => {
+    if (!term) {
+        return 0;
+    }
+
+    const orderId = String(order?.orderId || order?.id || "").replace(/^#/, "");
+    const customerName = order?.customer?.name || "";
+    const customerEmail = order?.customer?.email || "";
+    const customerMobile = String(order?.customer?.mobile || "");
+    const productLabel = order?.product || "";
+    const sellerName = order?.sellerName || "";
+
+    let score = 0;
+    score += getMatchWeight(sellerName, term, 220, 180, 130);
+    score += getMatchWeight(productLabel, term, 190, 150, 110);
+    score += getMatchWeight(orderId, term, 140, 120, 90);
+    score += getMatchWeight(customerName, term, 95, 75, 55);
+    score += getMatchWeight(customerEmail, term, 90, 70, 50);
+    score += getMatchWeight(customerMobile, term, 90, 70, 50);
+
+    return score;
+};
+
 const formatOrderForAdmin = (orderDoc) => {
     const firstProduct = orderDoc?.products?.[0]?.productId;
+    const sellerName = typeof firstProduct?.createdBy === "object"
+        ? firstProduct?.createdBy?.name
+        : "";
     const productName = firstProduct?.productName || "Product unavailable";
     const hasMultipleProducts = (orderDoc?.products?.length || 0) > 1;
     const displayProduct = hasMultipleProducts
@@ -97,6 +187,7 @@ const formatOrderForAdmin = (orderDoc) => {
         id: orderDoc?._id,
         orderId: `#${String(orderDoc?._id || "").slice(-8).toUpperCase()}`,
         product: displayProduct,
+        sellerName: sellerName || "Unknown Seller",
         date: new Date(orderDoc.createdAt).toLocaleDateString("en-GB", {
             day: "2-digit",
             month: "short",
@@ -209,16 +300,17 @@ export const getAdminOrderCustomerLookup = async (req, res) => {
 export const getAdminOrderProductLookup = async (req, res) => {
     try {
         const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
         const q = String(req.query?.q || "").trim();
         const query = q
             ? {
-                createdBy: adminId,
+                ...(globalAccess ? {} : { createdBy: adminId }),
                 $or: [
                     { productName: toRegex(q) },
                     mongoose.Types.ObjectId.isValid(q) ? { _id: new mongoose.Types.ObjectId(q) } : null,
                 ].filter(Boolean),
             }
-            : { createdBy: adminId };
+            : (globalAccess ? {} : { createdBy: adminId });
 
         const products = await ProductModel.find(query)
             .select("productName price stock images")
@@ -315,6 +407,7 @@ export const createOrderByAdmin = async (req, res) => {
 
     try {
         const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
         const {
             userId,
             delivery_address,
@@ -420,11 +513,11 @@ export const createOrderByAdmin = async (req, res) => {
         let createdOrderDoc = null;
 
         await session.withTransaction(async () => {
-            const productDocs = await ProductModel.find({ _id: { $in: productIds }, createdBy: adminId }).session(session);
+            const productDocs = await ProductModel.find(globalAccess ? { _id: { $in: productIds } } : { _id: { $in: productIds }, createdBy: adminId }).session(session);
             const productMap = new Map(productDocs.map((product) => [String(product._id), product]));
 
             if (productDocs.length !== productIds.length) {
-                throw new Error("One or more products were not found or do not belong to this admin");
+                throw new Error(globalAccess ? "One or more products were not found" : "One or more products were not found or do not belong to this admin");
             }
 
             const orderProducts = [];
@@ -680,6 +773,7 @@ export const getUserOrders = async (req, res) => {
 export const getAllOrders = async (req, res) => {
     try {
         const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
         const ownedProductIds = await getAdminOwnedProductIds(adminId);
         const ownedProductIdSet = getAdminOwnedProductIdSet(ownedProductIds);
         let { page = 1, limit = 20 } = req.query;
@@ -749,14 +843,18 @@ export const getAllOrders = async (req, res) => {
                 searchOr.push({ _id: new mongoose.Types.ObjectId(normalizedOrderIdSearch) });
             }
 
-            const [matchedUsers, matchedProducts] = await Promise.all([
+            const [matchedUsers, matchedProducts, matchedSellers] = await Promise.all([
                 UserModel.find({
                     $or: [
                         { name: searchRegex },
                         { email: searchRegex },
                     ],
                 }).select("_id"),
-                ProductModel.find({ productName: searchRegex, createdBy: adminId }).select("_id"),
+                ProductModel.find(globalAccess ? { productName: searchRegex } : { productName: searchRegex, createdBy: adminId }).select("_id"),
+                UserModel.find({
+                    name: searchRegex,
+                    role: { $in: ["seller", "admin"] },
+                }).select("_id"),
             ]);
 
             const numericMobile = Number(search);
@@ -767,6 +865,18 @@ export const getAllOrders = async (req, res) => {
 
             const userIds = [...new Set([...matchedUsers, ...mobileMatchedUsers].map((user) => String(user._id)))];
             const productIds = [...new Set(matchedProducts.map((product) => String(product._id)))];
+            const sellerIds = [...new Set(matchedSellers.map((seller) => String(seller._id)))];
+
+            let sellerProductIds = [];
+            if (sellerIds.length) {
+                if (globalAccess) {
+                    const sellerProducts = await ProductModel.find({ createdBy: { $in: sellerIds } }).select("_id");
+                    sellerProductIds = sellerProducts.map((product) => String(product._id));
+                } else if (sellerIds.includes(String(adminId))) {
+                    const sellerProducts = await ProductModel.find({ createdBy: adminId }).select("_id");
+                    sellerProductIds = sellerProducts.map((product) => String(product._id));
+                }
+            }
 
             if (userIds.length) {
                 searchOr.push({ userId: { $in: userIds } });
@@ -774,6 +884,10 @@ export const getAllOrders = async (req, res) => {
 
             if (productIds.length) {
                 searchOr.push({ "products.productId": { $in: productIds } });
+            }
+
+            if (sellerProductIds.length) {
+                searchOr.push({ "products.productId": { $in: sellerProductIds } });
             }
 
             if (!searchOr.length) {
@@ -796,7 +910,13 @@ export const getAllOrders = async (req, res) => {
 
         const orders = await OrderModel.find(query)
             .populate("userId")
-            .populate("products.productId")
+            .populate({
+                path: "products.productId",
+                populate: {
+                    path: "createdBy",
+                    select: "name",
+                },
+            })
             .populate("delivery_address")
             .sort({ createdAt: -1, _id: -1 })
             .skip(skip)
@@ -834,6 +954,19 @@ export const getAllOrders = async (req, res) => {
 
             return formatOrderForAdmin(displayOrder);
         });
+
+        const searchTerm = toSearchValue(search);
+        if (searchTerm) {
+            formattedOrders.sort((a, b) => {
+                const scoreDiff = getOrderSearchScore(b, searchTerm) - getOrderSearchScore(a, searchTerm);
+                if (scoreDiff !== 0) {
+                    return scoreDiff;
+                }
+
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            });
+        }
+
         const totalPages = Math.max(1, Math.ceil(total / limit));
 
         return res.status(200).json({
@@ -873,6 +1006,7 @@ export const getOrderSummary = async (req, res) => {
                         { title: "Completed Orders", value: "0", change: "0.0%", changeDirection: "up", changeColor: "#4EA674" },
                         { title: "Canceled Orders", value: "0", change: "0.0%", changeDirection: "up", changeColor: "#EF4444" },
                     ],
+                    dashboardSalesCard: { title: "Total Sales", value: "0", change: "0.0%", changeDirection: "up", changeColor: "#4EA674" },
                     tabs: [
                         { label: "All order", count: 0 },
                         { label: "Pending", count: 0 },
@@ -940,6 +1074,7 @@ export const getOrderSummary = async (req, res) => {
             availableYearsAgg,
             availableMonthsAgg,
             totalOrders,
+            totalSales,
             confirmedTotal,
             packedTotal,
             shippedTotal,
@@ -949,6 +1084,8 @@ export const getOrderSummary = async (req, res) => {
             cancelledTotal,
             currentPeriodTotal,
             previousPeriodTotal,
+            currentPeriodSales,
+            previousPeriodSales,
             currentPeriodCompleted,
             previousPeriodCompleted,
             currentPeriodCancelled,
@@ -987,6 +1124,15 @@ export const getOrderSummary = async (req, res) => {
                 },
             ]),
             OrderModel.countDocuments(orderScope),
+            OrderModel.aggregate([
+                { $match: orderScope },
+                {
+                    $group: {
+                        _id: null,
+                        total: { $sum: { $ifNull: ["$totalAmount", 0] } },
+                    },
+                },
+            ]),
             OrderModel.countDocuments({ ...orderScope, status: "confirmed" }),
             OrderModel.countDocuments({ ...orderScope, status: "packed" }),
             OrderModel.countDocuments({ ...orderScope, status: "shipped" }),
@@ -996,6 +1142,34 @@ export const getOrderSummary = async (req, res) => {
             OrderModel.countDocuments({ ...orderScope, status: "cancelled" }),
             OrderModel.countDocuments({ ...orderScope, createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
             OrderModel.countDocuments({ ...orderScope, createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
+            OrderModel.aggregate([
+                {
+                    $match: {
+                        ...orderScope,
+                        createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd },
+                    },
+                },
+                {
+                    $group: {
+                        _id: null,
+                        total: { $sum: { $ifNull: ["$totalAmount", 0] } },
+                    },
+                },
+            ]),
+            OrderModel.aggregate([
+                {
+                    $match: {
+                        ...orderScope,
+                        createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd },
+                    },
+                },
+                {
+                    $group: {
+                        _id: null,
+                        total: { $sum: { $ifNull: ["$totalAmount", 0] } },
+                    },
+                },
+            ]),
             OrderModel.countDocuments({ ...orderScope, status: "delivered", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
             OrderModel.countDocuments({ ...orderScope, status: "delivered", createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
             OrderModel.countDocuments({ ...orderScope, status: "cancelled", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
@@ -1009,6 +1183,16 @@ export const getOrderSummary = async (req, res) => {
         const availableMonths = availableMonthsAgg
             .map((item) => Number(item?._id))
             .filter((month) => Number.isInteger(month) && month >= 1 && month <= 12);
+
+        const totalSalesValue = Number(totalSales?.[0]?.total || 0);
+        const currentPeriodSalesValue = Number(currentPeriodSales?.[0]?.total || 0);
+        const previousPeriodSalesValue = Number(previousPeriodSales?.[0]?.total || 0);
+
+        const dashboardSalesCard = {
+            title: "Total Sales",
+            value: Number(totalSalesValue || 0).toLocaleString("en-IN"),
+            ...formatChange(currentPeriodSalesValue, previousPeriodSalesValue),
+        };
 
         const summaryCards = [
             {
@@ -1050,6 +1234,7 @@ export const getOrderSummary = async (req, res) => {
             success: true,
             data: {
                 summaryCards,
+                dashboardSalesCard,
                 tabs,
                 period,
                 periodLabel,
@@ -1074,8 +1259,8 @@ export const updateOrderStatus = async (req, res) => {
         const ownedProductIds = await getAdminOwnedProductIds(adminId);
         const ownedProductIdSet = getAdminOwnedProductIdSet(ownedProductIds);
         const { orderId } = req.params;
-        const { status } = req.body;
-        if (!orderId || !status) {
+        const normalizedIncomingStatus = normalizeOrderStatus(req.body?.status);
+        if (!orderId || !normalizedIncomingStatus) {
             return res.status(400).json({
                 message: "Order ID and status are required",
                 error: true,
@@ -1084,7 +1269,7 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         const statusOptions = ["pending", "confirmed", "packed", "shipped", "out_for_delivery", "delivered", "cancelled"];
-        if (!statusOptions.includes(status)) {
+        if (!statusOptions.includes(normalizedIncomingStatus)) {
             return res.status(400).json({
                 message: "Invalid status value",
                 error: true,
@@ -1103,7 +1288,7 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         const hasOwnedProductInOrder = Array.isArray(existingOrder.products)
-            ? existingOrder.products.some((item) => ownedProductIdSet.has(String(item?.productId)))
+            ? existingOrder.products.some((item) => ownedProductIdSet.has(String(item?.productId?._id || item?.productId)))
             : false;
 
         if (!hasOwnedProductInOrder) {
@@ -1113,7 +1298,15 @@ export const updateOrderStatus = async (req, res) => {
                 success: false,
             });
         }
-        const previousStatus = existingOrder.status;
+        const previousStatus = normalizeOrderStatus(existingOrder.status);
+
+        if (!statusOptions.includes(previousStatus)) {
+            return res.status(400).json({
+                message: "Current order status is invalid for update flow",
+                error: true,
+                success: false,
+            });
+        }
 
         const allowedTransitions = {
             pending: ["pending", "confirmed", "cancelled"],
@@ -1126,7 +1319,7 @@ export const updateOrderStatus = async (req, res) => {
         };
 
         // Only update if status is actually changing
-        if (previousStatus === status) {
+        if (previousStatus === normalizedIncomingStatus) {
             return res.status(200).json({
                 message: "Order status is already set to the requested value.",
                 error: false,
@@ -1135,25 +1328,26 @@ export const updateOrderStatus = async (req, res) => {
             });
         }
 
-        if (!allowedTransitions[previousStatus]?.includes(status)) {
+        if (!allowedTransitions[previousStatus]?.includes(normalizedIncomingStatus)) {
             return res.status(400).json({
-                message: `Invalid status transition from ${previousStatus} to ${status}`,
+                message: `Invalid status transition from ${previousStatus} to ${normalizedIncomingStatus}`,
                 error: true,
                 success: false
             });
         }
 
         // Update the order status
-        const updatedStatus = await OrderModel.findByIdAndUpdate(orderId, { status }, { new: true });
+        const updatedStatus = await OrderModel.findByIdAndUpdate(orderId, { status: normalizedIncomingStatus }, { new: true });
 
         // Only apply side-effects if status is changing to cancelled or delivered
-        if (status === "cancelled" && previousStatus !== "cancelled") {
+        if (normalizedIncomingStatus === "cancelled" && previousStatus !== "cancelled") {
             for (const item of updatedStatus.products) {
-                if (!ownedProductIdSet.has(String(item.productId))) {
+                const productRef = item?.productId?._id || item?.productId;
+                if (!ownedProductIdSet.has(String(productRef))) {
                     continue;
                 }
 
-                const product = await ProductModel.findById(item.productId);
+                const product = await ProductModel.findById(productRef);
                 if (product) {
                     product.stock += item.quantity;
                     await product.save();
@@ -1161,13 +1355,14 @@ export const updateOrderStatus = async (req, res) => {
             }
         }
 
-        if (status === "delivered" && previousStatus !== "delivered") {
+        if (normalizedIncomingStatus === "delivered" && previousStatus !== "delivered") {
             for (const item of updatedStatus.products) {
-                if (!ownedProductIdSet.has(String(item.productId))) {
+                const productRef = item?.productId?._id || item?.productId;
+                if (!ownedProductIdSet.has(String(productRef))) {
                     continue;
                 }
 
-                const product = await ProductModel.findById(item.productId);
+                const product = await ProductModel.findById(productRef);
                 if (product) {
                     product.sales += item.quantity;
                     await product.save();
@@ -1199,9 +1394,10 @@ export const updateOrderRefundStatus = async (req, res) => {
         const ownedProductIds = await getAdminOwnedProductIds(adminId);
         const ownedProductIdSet = getAdminOwnedProductIdSet(ownedProductIds);
         const { orderId } = req.params;
-        const { refundStatus, refundReason = "" } = req.body;
+        const normalizedIncomingRefundStatus = normalizeRefundStatus(req.body?.refundStatus);
+        const { refundReason = "" } = req.body;
 
-        if (!orderId || !refundStatus) {
+        if (!orderId || !normalizedIncomingRefundStatus) {
             return res.status(400).json({
                 message: "Order ID and refundStatus are required",
                 error: true,
@@ -1210,7 +1406,7 @@ export const updateOrderRefundStatus = async (req, res) => {
         }
 
         const allowedRefundStatuses = ["none", "requested", "approved", "pickup_completed", "initiated", "processed", "rejected"];
-        if (!allowedRefundStatuses.includes(refundStatus)) {
+        if (!allowedRefundStatuses.includes(normalizedIncomingRefundStatus)) {
             return res.status(400).json({
                 message: "Invalid refund status value",
                 error: true,
@@ -1228,7 +1424,7 @@ export const updateOrderRefundStatus = async (req, res) => {
         }
 
         const hasOwnedProductInOrder = Array.isArray(order.products)
-            ? order.products.some((item) => ownedProductIdSet.has(String(item?.productId)))
+            ? order.products.some((item) => ownedProductIdSet.has(String(item?.productId?._id || item?.productId)))
             : false;
 
         if (!hasOwnedProductInOrder) {
@@ -1247,7 +1443,16 @@ export const updateOrderRefundStatus = async (req, res) => {
             });
         }
 
-        const previousRefundStatus = order.refundStatus || "none";
+        const previousRefundStatus = normalizeRefundStatus(order.refundStatus || "none");
+        const normalizedOrderStatus = normalizeOrderStatus(order.status);
+
+        if (!allowedRefundStatuses.includes(previousRefundStatus)) {
+            return res.status(400).json({
+                message: "Current refund status is invalid for update flow",
+                error: true,
+                success: false,
+            });
+        }
 
         const refundFlowByOrderStatus = {
             delivered: {
@@ -1267,7 +1472,7 @@ export const updateOrderRefundStatus = async (req, res) => {
             },
         };
 
-        const statusFlow = refundFlowByOrderStatus[order.status];
+        const statusFlow = refundFlowByOrderStatus[normalizedOrderStatus];
         if (!statusFlow) {
             return res.status(400).json({
                 message: "Refund flow is allowed only for delivered/cancelled orders",
@@ -1277,25 +1482,26 @@ export const updateOrderRefundStatus = async (req, res) => {
         }
 
         const allowedNextRefundStatuses = statusFlow[previousRefundStatus] || [];
-        if (previousRefundStatus !== refundStatus && !allowedNextRefundStatuses.includes(refundStatus)) {
+        if (previousRefundStatus !== normalizedIncomingRefundStatus && !allowedNextRefundStatuses.includes(normalizedIncomingRefundStatus)) {
             return res.status(400).json({
-                message: `Invalid refund transition from ${previousRefundStatus} to ${refundStatus}`,
+                message: `Invalid refund transition from ${previousRefundStatus} to ${normalizedIncomingRefundStatus}`,
                 error: true,
                 success: false,
             });
         }
 
-        const shouldRestockOnPickup = order.status === "delivered"
+        const shouldRestockOnPickup = normalizedOrderStatus === "delivered"
             && previousRefundStatus !== "pickup_completed"
-            && refundStatus === "pickup_completed";
+            && normalizedIncomingRefundStatus === "pickup_completed";
 
         if (shouldRestockOnPickup) {
             for (const item of order.products) {
-                if (!ownedProductIdSet.has(String(item.productId))) {
+                const productRef = item?.productId?._id || item?.productId;
+                if (!ownedProductIdSet.has(String(productRef))) {
                     continue;
                 }
 
-                const product = await ProductModel.findById(item.productId);
+                const product = await ProductModel.findById(productRef);
                 if (product) {
                     product.stock += item.quantity;
                     product.sales = Math.max(0, Number(product.sales || 0) - item.quantity);
@@ -1304,7 +1510,7 @@ export const updateOrderRefundStatus = async (req, res) => {
             }
         }
 
-        if (previousRefundStatus === refundStatus) {
+        if (previousRefundStatus === normalizedIncomingRefundStatus) {
             return res.status(200).json({
                 message: "Refund status is already set to the requested value.",
                 error: false,
@@ -1313,12 +1519,12 @@ export const updateOrderRefundStatus = async (req, res) => {
             });
         }
 
-        order.refundStatus = refundStatus;
+        order.refundStatus = normalizedIncomingRefundStatus;
         order.refundReason = String(refundReason || "").trim();
-        if (refundStatus === "requested" && !order.refundRequestedAt) {
+        if (normalizedIncomingRefundStatus === "requested" && !order.refundRequestedAt) {
             order.refundRequestedAt = new Date();
         }
-        if (refundStatus === "processed") {
+        if (normalizedIncomingRefundStatus === "processed") {
             order.refundProcessedAt = new Date();
             order.refundAmount = Number(order.totalAmount || 0);
         }

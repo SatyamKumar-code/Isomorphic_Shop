@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useAuth } from '../auth/useAuth';
 import { deleteProductById, getProductList } from '../../features/productList/ProductListAPI';
 
 export const ProductListContext = createContext();
@@ -34,16 +35,20 @@ const normalizeProducts = (items = []) => {
         image: item?.images?.[0] || '',
         date: formatDate(item?.createdAt),
         createdAt: item?.createdAt || null,
+        createdBy: String(item?.createdBy?._id || item?.createdBy || ''),
+        sellerName: item?.createdBy?.name || '-',
         stock: Number(item?.stock || 0),
         outOfStock: Number(item?.stock || 0) <= 0,
         sale: Number(item?.discountPercentage || 0),
         totalSales: Number(item?.sales || 0),
+        brand: item?.brand || '-',
         category: item?.category?.catName || '-',
         subCategory: item?.subCategory?.subCatName || '-',
     }));
 };
 
 export const ProductListProvider = ({ children }) => {
+    const { userData } = useAuth();
     const [products, setProducts] = useState([]);
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
@@ -68,9 +73,16 @@ export const ProductListProvider = ({ children }) => {
 
             const items = response?.data?.products;
             const pagination = response?.data?.pagination;
-            setProducts(Array.isArray(items) ? normalizeProducts(items) : []);
-            setTotalCount(Number(pagination?.totalCount || 0));
-            setTotalPages(Math.max(1, Number(pagination?.totalPages || 1)));
+            const normalizedItems = Array.isArray(items) ? normalizeProducts(items) : [];
+            const isSeller = userData?.role === 'seller';
+            const currentUserId = String(userData?._id || userData?.id || '');
+            const visibleItems = isSeller && currentUserId
+                ? normalizedItems.filter((item) => String(item.createdBy || '') === currentUserId)
+                : normalizedItems;
+
+            setProducts(visibleItems);
+            setTotalCount(isSeller ? visibleItems.length : Number(pagination?.totalCount || 0));
+            setTotalPages(isSeller ? Math.max(1, Math.ceil(visibleItems.length / pageSize)) : Math.max(1, Number(pagination?.totalPages || 1)));
         } catch (error) {
             setProducts([]);
             setTotalCount(0);
@@ -79,7 +91,7 @@ export const ProductListProvider = ({ children }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [currentPage, debouncedSearchText, sortBy, pageSize]);
+    }, [currentPage, debouncedSearchText, sortBy, pageSize, userData]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -105,6 +117,11 @@ export const ProductListProvider = ({ children }) => {
 
     const handleDeleteProduct = useCallback(
         async (productId) => {
+            if (userData?.role !== 'seller') {
+                toast.error('Only seller can delete products');
+                return;
+            }
+
             const selected = products.find((item) => item.id === productId);
             if (!selected) {
                 return;
@@ -131,7 +148,7 @@ export const ProductListProvider = ({ children }) => {
                 setIsDeletingId('');
             }
         },
-        [currentPage, loadProducts, rows.length, debouncedSearchText, sortBy],
+        [currentPage, loadProducts, rows.length, debouncedSearchText, sortBy, userData],
     );
 
     const value = useMemo(
@@ -168,6 +185,7 @@ export const ProductListProvider = ({ children }) => {
             debouncedSearchText,
             loadProducts,
             handleDeleteProduct,
+            userData,
         ],
     );
 

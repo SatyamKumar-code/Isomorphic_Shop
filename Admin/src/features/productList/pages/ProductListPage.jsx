@@ -5,9 +5,11 @@ import ProductListFilters from '../components/ProductListFilters';
 import ProductListHeader from '../components/ProductListHeader';
 import ProductListPagination from '../components/ProductListPagination';
 import ProductListTable from '../components/ProductListTable';
+import { useAuth } from '../../../Context/auth/useAuth';
 
 const ProductListPage = () => {
     const navigate = useNavigate();
+    const { userData } = useAuth();
     const {
         rows,
         totalCount,
@@ -18,6 +20,8 @@ const ProductListPage = () => {
         deleteProduct,
         thumbnailColors,
     } = useProductList();
+    const canManageProductActions = userData?.role === 'seller';
+    const showSellerColumn = userData?.role === 'admin';
 
     return (
         <div className="w-full overflow-x-auto scrollbarNone px-5 pb-6 pt-4">
@@ -32,8 +36,14 @@ const ProductListPage = () => {
                     pageSize={pageSize}
                     isLoading={isLoading || Boolean(isDeletingId)}
                     thumbnailColors={thumbnailColors}
+                    showSellerColumn={showSellerColumn}
+                    showActions={canManageProductActions}
                     onDelete={deleteProduct}
-                    onEdit={(id) => navigate(`/add-products?edit=${id}`)}
+                    onEdit={(id) => {
+                        if (canManageProductActions) {
+                            navigate(`/add-products?edit=${id}`);
+                        }
+                    }}
                 />
 
                 {totalCount > 0 ? <ProductListPagination /> : null}

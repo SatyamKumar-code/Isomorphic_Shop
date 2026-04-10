@@ -68,15 +68,33 @@ const formatServerDate = (value) => {
     return `${day}.${month}.${date.getFullYear()}`;
 };
 
-const normalizeCustomer = (customer, index) => ({
+const normalizeCustomer = (customer, index, isSellerView = false) => ({
     ...customer,
     uid: customer.uid || customer._id || String(index + 1),
-    id: customer.id || `#CUST${String(index + 1).padStart(4, "0")}`,
+    id: customer.id || `${isSellerView ? "#SELL" : "#CUST"}${String(index + 1).padStart(4, "0")}`,
     phone: customer.phone || (customer.mobile ? `+${customer.mobile}` : "-"),
     address: customer.address || "-",
     registrationDate: customer.registrationDate || formatServerDate(customer.createdAt),
     lastPurchaseDate: customer.lastPurchaseDate || formatServerDate(customer.lastPurchaseDateRaw || customer.updatedAt || customer.createdAt),
 });
+
+const normalizeTopSeller = (seller, index) => {
+    const totalSales = Number(
+        seller?.totalSales
+        ?? seller?.totalSpend
+        ?? seller?.sales
+        ?? 0,
+    );
+
+    return {
+        ...seller,
+        uid: seller?.uid || seller?._id || String(index + 1),
+        rank: Number(seller?.rank || index + 1),
+        orderCount: Number(seller?.orderCount || 0),
+        productsCount: Number(seller?.productsCount || 0),
+        totalSales,
+    };
+};
 
 const getPaginationItems = (currentPage, totalPages) => {
     if (totalPages <= 7) {
@@ -103,6 +121,49 @@ const statusColors = {
 };
 
 export const CustomersProvider = ({ children }) => {
+    const getCurrentPathname = () => {
+        if (typeof window === "undefined") {
+            return "";
+        }
+
+        return window.location.pathname;
+    };
+
+    const [currentPathname, setCurrentPathname] = useState(getCurrentPathname);
+    const isSellerView = currentPathname === "/seller";
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return undefined;
+        }
+
+        const handlePathnameChange = () => {
+            setCurrentPathname(window.location.pathname);
+        };
+
+        const originalPushState = window.history.pushState;
+        const originalReplaceState = window.history.replaceState;
+
+        window.history.pushState = function pushStatePatched(...args) {
+            const result = originalPushState.apply(this, args);
+            handlePathnameChange();
+            return result;
+        };
+
+        window.history.replaceState = function replaceStatePatched(...args) {
+            const result = originalReplaceState.apply(this, args);
+            handlePathnameChange();
+            return result;
+        };
+
+        window.addEventListener("popstate", handlePathnameChange);
+
+        return () => {
+            window.history.pushState = originalPushState;
+            window.history.replaceState = originalReplaceState;
+            window.removeEventListener("popstate", handlePathnameChange);
+        };
+    }, []);
     const [activeRange, setActiveRange] = useState("This week");
     const [analyticsPeriod, setAnalyticsPeriod] = useState("7days");
     const [periodLabel, setPeriodLabel] = useState("Last 7 days");
@@ -119,11 +180,20 @@ export const CustomersProvider = ({ children }) => {
     const [customerStatusFilter, setCustomerStatusFilter] = useState("all");
     const [customerOrderSort, setCustomerOrderSort] = useState("none");
     const [customerSpendSort, setCustomerSpendSort] = useState("none");
+    const [joinDateFrom, setJoinDateFrom] = useState("");
+    const [joinDateTo, setJoinDateTo] = useState("");
+    const [productsCountMin, setProductsCountMin] = useState("");
+    const [productsCountMax, setProductsCountMax] = useState("");
+    const [totalSalesMin, setTotalSalesMin] = useState("");
+    const [totalSalesMax, setTotalSalesMax] = useState("");
     const [pageSize, setPageSize] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
     const [customerRecords, setCustomerRecords] = useState([]);
     const [allCustomerRecords, setAllCustomerRecords] = useState([]);
+    const [topSellers, setTopSellers] = useState([]);
     const [totalPages, setTotalPages] = useState(1);
+    const [isLoading, setIsLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState("");
     const [customersReloadKey, setCustomersReloadKey] = useState(0);
     const [summaryCardData, setSummaryCardData] = useState(summaryCards);
     const [overviewStatData, setOverviewStatData] = useState(overviewStats);
@@ -131,7 +201,7 @@ export const CustomersProvider = ({ children }) => {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [customerSearch, customerStatusFilter, customerOrderSort, customerSpendSort, pageSize]);
+    }, [customerSearch, customerStatusFilter, customerOrderSort, customerSpendSort, joinDateFrom, joinDateTo, productsCountMin, productsCountMax, totalSalesMin, totalSalesMax, pageSize]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -148,15 +218,17 @@ export const CustomersProvider = ({ children }) => {
 
         const fetchCustomers = async () => {
             try {
-                const requestParams = {
-                    period: analyticsPeriod,
-                };
+                setIsLoading(true);
+                setErrorMessage("");
+                const requestParams = isSellerView
+                    ? { role: "seller" }
+                    : { period: analyticsPeriod };
 
-                if (selectedYear) {
+                if (!isSellerView && selectedYear) {
                     requestParams.year = Number(selectedYear);
                 }
 
-                if (selectedMonth) {
+                if (!isSellerView && selectedMonth) {
                     requestParams.month = Number(selectedMonth);
                 }
 
@@ -179,6 +251,30 @@ export const CustomersProvider = ({ children }) => {
                     requestParams.spendSort = customerSpendSort;
                 }
 
+                if (joinDateFrom) {
+                    requestParams.fromDate = joinDateFrom;
+                }
+
+                if (joinDateTo) {
+                    requestParams.toDate = joinDateTo;
+                }
+
+                if (productsCountMin !== "") {
+                    requestParams.productsCountMin = Number(productsCountMin);
+                }
+
+                if (productsCountMax !== "") {
+                    requestParams.productsCountMax = Number(productsCountMax);
+                }
+
+                if (totalSalesMin !== "") {
+                    requestParams.totalSalesMin = Number(totalSalesMin);
+                }
+
+                if (totalSalesMax !== "") {
+                    requestParams.totalSalesMax = Number(totalSalesMax);
+                }
+
                 const response = await getCustomersAnalytics(requestParams);
                 const payload = response.data?.data || response.data || {};
 
@@ -186,53 +282,68 @@ export const CustomersProvider = ({ children }) => {
                     return;
                 }
 
-                const nextCustomers = Array.isArray(payload.customers) ? payload.customers.map(normalizeCustomer) : [];
+                const nextCustomers = Array.isArray(payload.customers) ? payload.customers.map((item, index) => normalizeCustomer(item, index, isSellerView)) : [];
                 setCustomerRecords(nextCustomers);
-                const nextAllCustomers = Array.isArray(payload.allCustomers) ? payload.allCustomers.map(normalizeCustomer) : nextCustomers;
+                const nextAllCustomers = Array.isArray(payload.allCustomers) ? payload.allCustomers.map((item, index) => normalizeCustomer(item, index, isSellerView)) : nextCustomers;
                 setAllCustomerRecords(nextAllCustomers);
                 setSummaryCardData(Array.isArray(payload.summaryCards) ? payload.summaryCards : summaryCards);
-                setOverviewStatData(Array.isArray(payload.overviewStats) ? payload.overviewStats : overviewStats);
-                setWeekSeriesData(payload.weekSeries && typeof payload.weekSeries === "object" ? payload.weekSeries : weekSeries);
                 const paginationPayload = payload.pagination && typeof payload.pagination === "object" ? payload.pagination : {};
                 const nextPage = Number.isInteger(paginationPayload.page) ? paginationPayload.page : currentPage;
                 const nextTotalPages = Number.isInteger(paginationPayload.totalPages) ? paginationPayload.totalPages : 1;
                 setCurrentPage(Math.max(1, nextPage));
                 setTotalPages(Math.max(1, nextTotalPages));
-                const nextPeriodLabel = payload.periodLabel
-                    || (analyticsPeriod === "month"
-                        ? "Month-wise"
-                        : analyticsPeriod === "year"
-                            ? "Year-wise"
-                            : analyticsPeriod === "daywise"
-                                ? "Day-wise"
-                                : "Last 7 days");
-                setPeriodLabel(nextPeriodLabel);
-                setXLabelsByRange(payload.xLabelsByRange && typeof payload.xLabelsByRange === "object" ? payload.xLabelsByRange : {});
-                const nextAvailableYears = Array.isArray(payload.availableYears) ? payload.availableYears : [];
-                setAvailableYears(nextAvailableYears);
-                const nextAvailableMonths = Array.isArray(payload.availableMonths)
-                    ? payload.availableMonths.filter((value) => Number.isInteger(value) && value >= 1 && value <= 12)
-                    : [];
-                setAvailableMonthValues(nextAvailableMonths.length ? nextAvailableMonths : monthOptions.map((option) => option.value));
+                setTopSellers(Array.isArray(payload.topSellers) ? payload.topSellers.map((seller, index) => normalizeTopSeller(seller, index)) : []);
+                if (!isSellerView) {
+                    setOverviewStatData(Array.isArray(payload.overviewStats) ? payload.overviewStats : overviewStats);
+                    setWeekSeriesData(payload.weekSeries && typeof payload.weekSeries === "object" ? payload.weekSeries : weekSeries);
+                    const nextPeriodLabel = payload.periodLabel
+                        || (analyticsPeriod === "month"
+                            ? "Month-wise"
+                            : analyticsPeriod === "year"
+                                ? "Year-wise"
+                                : analyticsPeriod === "daywise"
+                                    ? "Day-wise"
+                                    : "Last 7 days");
+                    setPeriodLabel(nextPeriodLabel);
+                    setXLabelsByRange(payload.xLabelsByRange && typeof payload.xLabelsByRange === "object" ? payload.xLabelsByRange : {});
+                    const nextAvailableYears = Array.isArray(payload.availableYears) ? payload.availableYears : [];
+                    setAvailableYears(nextAvailableYears);
+                    const nextAvailableMonths = Array.isArray(payload.availableMonths)
+                        ? payload.availableMonths.filter((value) => Number.isInteger(value) && value >= 1 && value <= 12)
+                        : [];
+                    setAvailableMonthValues(nextAvailableMonths.length ? nextAvailableMonths : monthOptions.map((option) => option.value));
 
-                if (payload.selectedYear) {
-                    setSelectedYear(String(payload.selectedYear));
-                } else if (!selectedYear && nextAvailableYears.length) {
-                    setSelectedYear(String(nextAvailableYears[nextAvailableYears.length - 1]));
+                    if (payload.selectedYear) {
+                        setSelectedYear(String(payload.selectedYear));
+                    } else if (!selectedYear && nextAvailableYears.length) {
+                        setSelectedYear(String(nextAvailableYears[nextAvailableYears.length - 1]));
+                    }
+
+                    if (payload.selectedMonth) {
+                        setSelectedMonth(String(payload.selectedMonth));
+                    }
+
+                    const nextRangeOptions = Array.isArray(payload.ranges) && payload.ranges.length
+                        ? payload.ranges
+                        : defaultRangeOptions;
+                    setRangeOptions(nextRangeOptions);
+
+                    const rangeValues = nextRangeOptions.map((item) => item.value);
+                    setActiveRange((current) => (rangeValues.includes(current) ? current : nextRangeOptions[0].value));
+                    setActiveStat((current) => current || getSafeStat(Array.isArray(payload.overviewStats) ? payload.overviewStats : overviewStats));
+                } else {
+                    setOverviewStatData(overviewStats);
+                    setWeekSeriesData(weekSeries);
+                    setPeriodLabel("Last 7 days");
+                    setXLabelsByRange({});
+                    setAvailableYears([]);
+                    setAvailableMonthValues(monthOptions.map((option) => option.value));
+                    setSelectedYear("");
+                    setSelectedMonth("");
+                    setRangeOptions(defaultRangeOptions);
+                    setActiveRange(defaultRangeOptions[0].value);
+                    setActiveStat(getSafeStat(overviewStats));
                 }
-
-                if (payload.selectedMonth) {
-                    setSelectedMonth(String(payload.selectedMonth));
-                }
-
-                const nextRangeOptions = Array.isArray(payload.ranges) && payload.ranges.length
-                    ? payload.ranges
-                    : defaultRangeOptions;
-                setRangeOptions(nextRangeOptions);
-
-                const rangeValues = nextRangeOptions.map((item) => item.value);
-                setActiveRange((current) => (rangeValues.includes(current) ? current : nextRangeOptions[0].value));
-                setActiveStat((current) => current || getSafeStat(Array.isArray(payload.overviewStats) ? payload.overviewStats : overviewStats));
             } catch {
                 if (!isMounted) {
                     return;
@@ -240,23 +351,27 @@ export const CustomersProvider = ({ children }) => {
 
                 setCustomerRecords([]);
                 setAllCustomerRecords([]);
+                setTopSellers([]);
                 setSummaryCardData(summaryCards);
                 setOverviewStatData(overviewStats);
                 setWeekSeriesData(weekSeries);
                 setTotalPages(1);
-                setPeriodLabel(
-                    analyticsPeriod === "month"
-                        ? "Month-wise"
-                        : analyticsPeriod === "year"
-                            ? "Year-wise"
-                            : analyticsPeriod === "daywise"
-                                ? "Day-wise"
-                                : "Last 7 days",
-                );
+                setErrorMessage("Data unavailable");
+                setPeriodLabel(isSellerView ? "Last 7 days" : (analyticsPeriod === "month"
+                    ? "Month-wise"
+                    : analyticsPeriod === "year"
+                        ? "Year-wise"
+                        : analyticsPeriod === "daywise"
+                            ? "Day-wise"
+                            : "Last 7 days"));
                 setRangeOptions(defaultRangeOptions);
                 setXLabelsByRange({});
                 setAvailableYears([]);
                 setAvailableMonthValues(monthOptions.map((option) => option.value));
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false);
+                }
             }
         };
 
@@ -265,7 +380,7 @@ export const CustomersProvider = ({ children }) => {
         return () => {
             isMounted = false;
         };
-    }, [analyticsPeriod, selectedYear, selectedMonth, currentPage, pageSize, debouncedCustomerSearch, customerStatusFilter, customerOrderSort, customerSpendSort, customersReloadKey]);
+    }, [analyticsPeriod, selectedYear, selectedMonth, currentPage, pageSize, debouncedCustomerSearch, customerStatusFilter, customerOrderSort, customerSpendSort, joinDateFrom, joinDateTo, productsCountMin, productsCountMax, totalSalesMin, totalSalesMax, customersReloadKey, isSellerView]);
 
     const reloadCustomers = () => {
         setCustomersReloadKey((current) => current + 1);
@@ -332,6 +447,18 @@ export const CustomersProvider = ({ children }) => {
         setCustomerOrderSort,
         customerSpendSort,
         setCustomerSpendSort,
+        joinDateFrom,
+        setJoinDateFrom,
+        joinDateTo,
+        setJoinDateTo,
+        productsCountMin,
+        setProductsCountMin,
+        productsCountMax,
+        setProductsCountMax,
+        totalSalesMin,
+        setTotalSalesMin,
+        totalSalesMax,
+        setTotalSalesMax,
         pageSize,
         setPageSize,
         currentPage,
@@ -340,7 +467,11 @@ export const CustomersProvider = ({ children }) => {
         pagination,
         totalPages,
         statusColors,
-    }), [activeRange, activeStat, visibleCustomers, customerRecords, allCustomerRecords, selectedCustomer, selectedCustomerId, customerSearch, customerStatusFilter, customerOrderSort, customerSpendSort, pageSize, currentPage, pagination, totalPages, summaryCardData, overviewStatData, weekSeriesData, analyticsPeriod, periodLabel, selectedYear, selectedMonth, availableYears, availableMonthValues, rangeOptions, xLabelsByRange, customersReloadKey]);
+        isSellerView,
+        topSellers,
+        isLoading,
+        errorMessage,
+    }), [activeRange, activeStat, visibleCustomers, customerRecords, allCustomerRecords, selectedCustomer, selectedCustomerId, customerSearch, customerStatusFilter, customerOrderSort, customerSpendSort, joinDateFrom, joinDateTo, productsCountMin, productsCountMax, totalSalesMin, totalSalesMax, pageSize, currentPage, pagination, totalPages, summaryCardData, overviewStatData, weekSeriesData, analyticsPeriod, periodLabel, selectedYear, selectedMonth, availableYears, availableMonthValues, rangeOptions, xLabelsByRange, customersReloadKey, isSellerView, topSellers, isLoading, errorMessage]);
 
     return <CustomersContext.Provider value={value}>{children}</CustomersContext.Provider>;
 };

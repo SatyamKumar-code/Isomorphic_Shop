@@ -32,8 +32,31 @@ const recalculateProductRating = async (productId) => {
     await ProductModel.findByIdAndUpdate(productId, { rating: Number(averageRating.toFixed(1)) });
 };
 
+const hasGlobalAdminAccess = async (adminId) => {
+    if (!adminId) {
+        return false;
+    }
+
+    const admin = await UserModel.findById(adminId).select("role").lean();
+    return Boolean(admin?.role === "admin");
+};
+
+const getAdminOwnedProductIds = async (adminId) => {
+    if (!adminId) {
+        return [];
+    }
+
+    const globalAccess = await hasGlobalAdminAccess(adminId);
+    const products = await ProductModel.find(globalAccess ? {} : { createdBy: adminId }).select("_id").lean();
+    return products.map((product) => product._id);
+};
+
 export const getAllReviews = async (req, res) => {
     try {
+        const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
+        const ownedProductIds = globalAccess ? [] : await getAdminOwnedProductIds(adminId);
+
         let { page = 1, limit = 10, search = "", status = "All reviews", sortBy = "latest", minRating = "all" } = req.query;
 
         page = Number(page);
@@ -43,7 +66,7 @@ export const getAllReviews = async (req, res) => {
         if (!Number.isFinite(limit) || limit < 1) limit = 10;
         if (limit > 100) limit = 100;
 
-        const query = {};
+        const query = globalAccess ? {} : { productId: { $in: ownedProductIds } };
         if (status && String(status).toLowerCase() !== "all reviews") {
             Object.assign(query, buildStatusQuery(status));
         }
@@ -59,7 +82,7 @@ export const getAllReviews = async (req, res) => {
         if (safeSearch) {
             const regex = new RegExp(safeSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
             const [matchedProducts, matchedUsers] = await Promise.all([
-                ProductModel.find({ productName: regex }).select("_id"),
+                ProductModel.find(globalAccess ? { productName: regex } : { productName: regex, _id: { $in: ownedProductIds } }).select("_id"),
                 UserModel.find({ name: regex }).select("_id"),
             ]);
 
@@ -132,7 +155,13 @@ export const getAllReviews = async (req, res) => {
 
 export const getReviewSummary = async (req, res) => {
     try {
+        const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
+        const ownedProductIds = globalAccess ? [] : await getAdminOwnedProductIds(adminId);
+        const matchStage = globalAccess ? {} : { productId: { $in: ownedProductIds } };
+
         const [summary] = await ReviewModel.aggregate([
+            Object.keys(matchStage).length ? { $match: matchStage } : { $match: {} },
             {
                 $project: {
                     status: { $ifNull: ["$status", "Pending"] },
@@ -196,6 +225,9 @@ export const getReviewSummary = async (req, res) => {
 
 export const updateReviewStatus = async (req, res) => {
     try {
+        const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
+        const ownedProductIds = globalAccess ? [] : await getAdminOwnedProductIds(adminId);
         const { reviewId } = req.params;
         const { status } = req.body;
 
@@ -216,8 +248,9 @@ export const updateReviewStatus = async (req, res) => {
             });
         }
 
-        const review = await ReviewModel.findByIdAndUpdate(
-            reviewId,
+        const reviewFilter = globalAccess ? { _id: reviewId } : { _id: reviewId, productId: { $in: ownedProductIds } };
+        const review = await ReviewModel.findOneAndUpdate(
+            reviewFilter,
             { status: normalized },
             { new: true }
         );

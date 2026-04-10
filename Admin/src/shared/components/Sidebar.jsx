@@ -1,13 +1,17 @@
 import React from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../Context/auth/useAuth';
 
 const Sidebar = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
+  const { userData } = useAuth();
+  const isSeller = userData?.role === 'seller';
   const getActiveMenu = (pathname) => {
     if (pathname === '/order-management') return 'order';
     if (pathname === '/customers') return 'customers';
+    if (pathname === '/seller') return 'seller';
     if (pathname === '/categories') return 'categories';
     if (pathname === '/add-products') return 'addProducts';
     if (pathname === '/product-list') return 'productList';
@@ -85,7 +89,34 @@ const Sidebar = () => {
             <span className={`text-[15px] text-[#6A717F] ${active === "customers" && "text-white font-bold"}`}>Customers</span>
           </li>
 
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "coupon" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("coupon")}>
+          <li style={isSeller ? { display: 'none' } : undefined} className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "seller" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("seller"); navigate('/seller'); }}>
+            {
+              active === "seller" ?
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M8.18176 17.5001V16.0228C8.18176 14.391 9.50456 13.0682 11.1363 13.0682H14.0909C15.7226 13.0682 17.0454 14.391 17.0454 16.0228V17.5001" fill="white" />
+                  <path d="M8.18176 17.5001V16.0228C8.18176 14.391 9.50456 13.0682 11.1363 13.0682H14.0909C15.7226 13.0682 17.0454 14.391 17.0454 16.0228V17.5001H8.18176Z" stroke="white" stroke-width="1.4625" stroke-linecap="round" stroke-linejoin="round" />
+                  <circle cx="12.7273" cy="6.36363" r="2.72727" fill="white" stroke="white" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <ellipse cx="7.4974" cy="5.83333" rx="3.33333" ry="3.33333" fill="white" stroke="white" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M2.5 17.5V15.8333C2.5 13.9924 3.99238 12.5 5.83333 12.5H9.16667C11.0076 12.5 12.5 13.9924 12.5 15.8333V17.5" fill="white" />
+                  <path d="M2.5 17.5V15.8333C2.5 13.9924 3.99238 12.5 5.83333 12.5H9.16667C11.0076 12.5 12.5 13.9924 12.5 15.8333V17.5H2.5Z" stroke="white" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+
+                :
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <ellipse cx="7.4974" cy="5.83333" rx="3.33333" ry="3.33333" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <ellipse cx="7.4974" cy="5.83333" rx="3.33333" ry="3.33333" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M2.5 17.5V15.8333C2.5 13.9924 3.99238 12.5 5.83333 12.5H9.16667C11.0076 12.5 12.5 13.9924 12.5 15.8333V17.5" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M2.5 17.5V15.8333C2.5 13.9924 3.99238 12.5 5.83333 12.5H9.16667C11.0076 12.5 12.5 13.9924 12.5 15.8333V17.5" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M13.3359 2.60742C14.8109 2.98506 15.8425 4.31408 15.8425 5.83659C15.8425 7.3591 14.8109 8.68811 13.3359 9.06576" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M13.3359 2.60742C14.8109 2.98506 15.8425 4.31408 15.8425 5.83659C15.8425 7.3591 14.8109 8.68811 13.3359 9.06576" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M17.5 17.5V15.8333C17.4913 14.3205 16.4648 13.0032 15 12.625" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M17.5 17.5V15.8333C17.4913 14.3205 16.4648 13.0032 15 12.625" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            }
+            <span className={`text-[15px] text-[#6A717F] ${active === "seller" && "text-white font-bold"}`}>Seller</span>
+          </li>
+
+          <li style={isSeller ? { display: 'none' } : undefined} className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "coupon" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("coupon")}>
             {
               active === "coupon" ?
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -107,7 +138,7 @@ const Sidebar = () => {
             <span className={`text-[15px] text-[#6A717F] ${active === "coupon" && "text-white font-bold"}`}>Coupon Code</span>
           </li>
 
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "categories" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("categories"); navigate('/categories'); }}>
+          <li style={isSeller ? { display: 'none' } : undefined} className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "categories" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("categories"); navigate('/categories'); }}>
             {
               active === "categories" ?
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -125,7 +156,7 @@ const Sidebar = () => {
             <span className={`text-[15px] text-[#6A717F] ${active === "categories" && "text-white font-bold"}`}>Categories</span>
           </li>
 
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "transaction" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("transaction")}>
+          <li style={isSeller ? { display: 'none' } : undefined} className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "transaction" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("transaction")}>
             {
               active === "transaction" ?
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -143,7 +174,7 @@ const Sidebar = () => {
 
 
 
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "brand" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("brand")}>
+          <li style={isSeller ? { display: 'none' } : undefined} className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "brand" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("brand")}>
             {
               active === "brand" ?
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -165,7 +196,7 @@ const Sidebar = () => {
       <div className='menu px-3.5 w-full gap-2'>
         <span className='text-[15px] text-[#6A717F]'>Product</span>
         <ul className='menuList my-3'>
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "addProducts" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("addProducts"); navigate('/add-products'); }}>
+          <li style={isSeller ? undefined : { display: 'none' }} className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "addProducts" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("addProducts"); navigate('/add-products'); }}>
             {
               active === "addProducts" ?
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -185,7 +216,7 @@ const Sidebar = () => {
             <span className={`text-[15px] text-[#6A717F] ${active === "addProducts" && "text-white font-bold"}`}>Add Products</span>
           </li>
 
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "productMedia" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("productMedia")}>
+          <li style={isSeller ? { display: 'none' } : undefined} className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "productMedia" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("productMedia")}>
             {
               active === "productMedia" ?
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -218,7 +249,7 @@ const Sidebar = () => {
             <span className={`text-[15px] text-[#6A717F] ${active === "productList" && "text-white font-bold"}`}>Product List</span>
           </li>
 
-          <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "productReviews" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("productReviews"); navigate('/product-reviews'); }}>
+          <li style={isSeller ? undefined : { display: 'none' }} className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "productReviews" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("productReviews"); navigate('/product-reviews'); }}>
             {
               active === "productReviews" ?
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -236,7 +267,7 @@ const Sidebar = () => {
 
       </div>
 
-      <div className='menu px-3.5 w-full gap-2'>
+      <div style={isSeller ? { display: 'none' } : undefined} className='menu px-3.5 w-full gap-2'>
         <span className='text-[15px] text-[#6A717F]'>Admin</span>
         <ul className='menuList my-3'>
           <li className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "adminRole" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => setActive("adminRole")}>

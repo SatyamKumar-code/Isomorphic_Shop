@@ -73,11 +73,14 @@ const downloadCsv = (rows, fileName) => {
 };
 
 const SummaryCards = () => {
-    const { summaryCards, monthOptions, availableYears } = useCustomers();
+    const { summaryCards, monthOptions, availableYears, isSellerView } = useCustomers();
     const [openCardTitle, setOpenCardTitle] = React.useState(null);
     const [cardSettings, setCardSettings] = React.useState({});
     const [cardDataMap, setCardDataMap] = React.useState({});
     const [baseCardMap, setBaseCardMap] = React.useState({});
+    const containerClassName = isSellerView
+        ? "grid grid-cols-2 gap-4 md:grid-cols-4 xl:w-full"
+        : "space-y-4 xl:w-[28%]";
 
     React.useEffect(() => {
         if (!openCardTitle) {
@@ -108,7 +111,7 @@ const SummaryCards = () => {
             }
 
             try {
-                const response = await getCustomersAnalytics({ period: "7days" });
+                const response = await getCustomersAnalytics({ period: "7days", ...(isSellerView ? { role: "seller" } : {}) });
                 const payload = response.data?.data || response.data || {};
                 const cards = Array.isArray(payload.summaryCards) ? payload.summaryCards : [];
 
@@ -149,7 +152,7 @@ const SummaryCards = () => {
             params.month = Number(resolved.month);
         }
 
-        const response = await getCustomersAnalytics(params);
+        const response = await getCustomersAnalytics({ ...params, ...(isSellerView ? { role: "seller" } : {}) });
         const payload = response.data?.data || response.data || {};
         const nextCard = Array.isArray(payload.summaryCards)
             ? payload.summaryCards.find((item) => item?.title === cardTitle)
@@ -161,7 +164,7 @@ const SummaryCards = () => {
                 [cardTitle]: nextCard,
             }));
         }
-    }, [availableYears]);
+    }, [availableYears, isSellerView]);
 
     const updateCardSettings = React.useCallback(async (cardTitle, patch) => {
         const nextSettings = {
@@ -193,7 +196,7 @@ const SummaryCards = () => {
     }, []);
 
     return (
-        <div className="space-y-4 xl:w-[28%]">
+        <div className={containerClassName}>
             {summaryCards.map((card) => {
                 const settings = getSettingsForCard(card.title);
                 const baseCard = baseCardMap[card.title] || card;

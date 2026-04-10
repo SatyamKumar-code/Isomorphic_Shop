@@ -6,8 +6,10 @@ import OrderPagination from '../components/OrderPagination';
 import SummaryCards from '../components/SummaryCards';
 import { useOrder } from '../../../Context/order/useOrder';
 import OrdersTable from '../../../shared/components/OrdersTable';
+import { useAuth } from '../../../Context/auth/useAuth';
 
 const OrderManagementPage = () => {
+  const { userData } = useAuth();
   const {
     activeTab,
     setActiveTab,
@@ -25,6 +27,8 @@ const OrderManagementPage = () => {
     isRefundUpdatingId,
   } = useOrder();
   const [searchParams] = useSearchParams();
+  const canManageOrderActions = userData?.role === 'seller';
+  const canViewSellerName = userData?.role === 'admin';
 
   React.useEffect(() => {
     const customerId = searchParams.get("customerId") || "";
@@ -47,6 +51,8 @@ const OrderManagementPage = () => {
           pageSize={pageSize}
           paymentColor={paymentColor}
           thumbnailColors={thumbnailColors}
+          showSellerColumn={canViewSellerName}
+          showOrderActions={canManageOrderActions}
           onOrderStatusChange={handleStatusChange}
           isStatusUpdatingId={isStatusUpdatingId}
           onOrderRefundStatusChange={handleRefundStatusChange}

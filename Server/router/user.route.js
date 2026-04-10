@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginUserController, registerUserController, verifyEmailController, refreshTokenController, userAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController, adminSendResetPasswordLinkController, adminForceLogoutUserController, adminUpdateCustomerNoteController } from "../controller/user.controller.js";
+import { loginUserController, registerUserController, verifyEmailController, refreshTokenController, userAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController, adminSendResetPasswordLinkController, adminForceLogoutUserController, adminUpdateCustomerNoteController, getAdminAccessModeController } from "../controller/user.controller.js";
 import upload from "../middlewares/multer.js";
 import userMiddleware from "../middlewares/userMiddleware.js";
 import adminMiddleware from "../middlewares/adminMiddleware.js";
@@ -13,6 +13,7 @@ userRouter.post("/login", loginUserController);
 userRouter.get("/logout", userMiddleware, logoutController);
 userRouter.get("/userData", userMiddleware, getUserController);
 userRouter.get("/admin/userData", adminMiddleware, getUserController);
+userRouter.get("/admin/access-mode", adminMiddleware, getAdminAccessModeController);
 userRouter.get("/admin/customers", adminMiddleware, getCustomersController);
 userRouter.post("/refresh-token", refreshTokenController);
 userRouter.put("/user-avatar", userMiddleware, upload.array('avatar'), userAvatarController);

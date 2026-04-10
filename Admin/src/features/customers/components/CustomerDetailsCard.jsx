@@ -12,7 +12,7 @@ const getInitials = (name) => name
     .toUpperCase();
 
 const CustomerDetailsCard = () => {
-    const { selectedCustomer } = useCustomers();
+    const { selectedCustomer, isSellerView } = useCustomers();
     const [copyMessage, setCopyMessage] = useState("");
 
     if (!selectedCustomer) {
@@ -79,7 +79,7 @@ const CustomerDetailsCard = () => {
 
                 <div className="mt-4 space-y-4">
                     <div>
-                        <p className="mb-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">Customer Info</p>
+                        <p className="mb-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">{isSellerView ? "Seller Info" : "Customer Info"}</p>
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-slate-700 dark:border-slate-800 dark:text-slate-200"><FiPhone className="text-slate-500" />{selectedCustomer.phone}</div>
                             <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-slate-700 dark:border-slate-800 dark:text-slate-200"><FiMapPin className="text-slate-500" />{selectedCustomer.address}</div>
@@ -101,17 +101,23 @@ const CustomerDetailsCard = () => {
                         <p className="mb-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">Activity</p>
                         <div className="space-y-1 text-[12px] text-slate-600 dark:text-slate-300">
                             <p>Registration: {selectedCustomer.registrationDate}</p>
-                            <p>Last purchase: {selectedCustomer.lastPurchaseDate}</p>
+                            <p>{isSellerView ? "Last order" : "Last purchase"}: {selectedCustomer.lastPurchaseDate}</p>
                         </div>
                     </div>
 
                     <div>
-                        <p className="mb-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">Order Overview</p>
+                        <p className="mb-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">{isSellerView ? "Seller Performance" : "Order Overview"}</p>
                         <div className="grid grid-cols-3 gap-2">
                             {[
-                                { label: "Total order", value: selectedCustomer.totalOrders, color: "#2563EB" },
-                                { label: "Completed", value: selectedCustomer.completedOrders, color: "#16A34A" },
-                                { label: "Canceled", value: selectedCustomer.canceledOrders, color: "#EF4444" },
+                                isSellerView
+                                    ? { label: "Total Sales", value: selectedCustomer.totalSales || 0, color: "#2563EB" }
+                                    : { label: "Total order", value: selectedCustomer.totalOrders, color: "#2563EB" },
+                                isSellerView
+                                    ? { label: "Products", value: selectedCustomer.productsCount || 0, color: "#16A34A" }
+                                    : { label: "Completed", value: selectedCustomer.completedOrders, color: "#16A34A" },
+                                isSellerView
+                                    ? { label: "Orders", value: selectedCustomer.orderCount || 0, color: "#EF4444" }
+                                    : { label: "Canceled", value: selectedCustomer.canceledOrders, color: "#EF4444" },
                             ].map((item) => (
                                 <div key={item.label} className="rounded-lg border border-slate-200 p-2 text-center dark:border-slate-800">
                                     <div className="text-[18px] font-semibold text-slate-900 dark:text-slate-50">{item.value}</div>

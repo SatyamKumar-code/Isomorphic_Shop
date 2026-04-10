@@ -21,6 +21,10 @@ const productSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    brand: {
+        type: String,
+        default: ""
+    },
     category: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "category",
@@ -89,7 +93,7 @@ const productSchema = new mongoose.Schema({
     },
 }, { timestamps: true })
 
-productSchema.index({ productName: "text", description: "text", size: "text", weight: "text", RAM: "text", color: "text" });
+productSchema.index({ productName: "text", description: "text", brand: "text", size: "text", weight: "text", RAM: "text", color: "text" });
 productSchema.index({ productName: 1, createdAt: -1 });
 productSchema.index({ createdBy: 1, createdAt: -1 });
 

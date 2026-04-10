@@ -134,14 +134,6 @@ const resolveSeriesData = (chartSeries, activeRange, activeStat) => {
     return [];
 };
 
-const hasRenderableSeriesData = (series) => {
-    if (!Array.isArray(series) || !series.length) {
-        return false;
-    }
-
-    return series.some((point) => point !== null && point !== undefined);
-};
-
 const OverviewChart = ({
     title,
     stats,
@@ -168,39 +160,6 @@ const OverviewChart = ({
     } = useCustomers();
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
-    const visibleStats = React.useMemo(() => {
-        if (!Array.isArray(stats) || !stats.length) {
-            return [];
-        }
-
-        const rangeValues = Array.isArray(ranges) && ranges.length
-            ? ranges.map((range) => range.value)
-            : Object.keys(chartSeries || {});
-
-        return stats.filter((stat) => {
-            const statKey = stat?.key ?? stat?.valueKey ?? stat?.label;
-            if (!statKey) {
-                return false;
-            }
-
-            return rangeValues.some((rangeValue) => hasRenderableSeriesData(resolveSeriesData(chartSeries, rangeValue, statKey)));
-        });
-    }, [stats, ranges, chartSeries]);
-
-    const resolvedActiveStat = React.useMemo(() => {
-        const hasSelected = visibleStats.some((stat) => {
-            const statKey = stat?.key ?? stat?.valueKey ?? stat?.label;
-            return statKey === activeStat;
-        });
-
-        if (hasSelected) {
-            return activeStat;
-        }
-
-        const fallback = visibleStats[0];
-        return fallback ? (fallback.key ?? fallback.valueKey ?? fallback.label) : activeStat;
-    }, [visibleStats, activeStat]);
-
     React.useEffect(() => {
         if (!isMenuOpen) {
             return undefined;
@@ -221,7 +180,7 @@ const OverviewChart = ({
         };
     }, [isMenuOpen]);
 
-    const selectedChartData = resolveSeriesData(chartSeries, activeRange, resolvedActiveStat);
+    const selectedChartData = resolveSeriesData(chartSeries, activeRange, activeStat);
     const axisYMeta = createYAxisMeta(selectedChartData);
     const axisXLabels = Array.isArray(xLabelsByRange?.[activeRange])
         ? xLabelsByRange[activeRange]
@@ -317,12 +276,12 @@ const OverviewChart = ({
             <LineAreaChartCard
                 variant="customersOverview"
                 title={title}
-                stats={visibleStats}
+                stats={stats}
                 ranges={ranges}
                 activeRange={activeRange}
                 onRangeChange={onRangeChange}
-                activeStat={resolvedActiveStat}
-                onStatChange={onStatChange ? (nextStat) => onStatChange(nextStat) : undefined}
+                activeStat={activeStat}
+                onStatChange={onStatChange}
                 rangeWrapperClassName="flex items-center gap-2"
                 rangeGroupClassName="flex -mt-1 min-w-37 min-h-6 p-1 gap-1 items-center justify-center bg-[#EAF8E7] rounded-md"
                 rangeButtonBaseClassName="py-1 px-2 rounded-md font-medium text-[12px]"

@@ -173,6 +173,8 @@ const OrdersTable = ({
     isStatusUpdatingId = '',
     onOrderRefundStatusChange,
     isRefundUpdatingId = '',
+    showOrderActions = true,
+    showSellerColumn = true,
 }) => {
     if (isLoading) {
         return <div className="mt-6 text-sm text-slate-500">Loading records...</div>;
@@ -215,7 +217,9 @@ const OrdersTable = ({
         },
     };
 
-    const emptyColSpan = variant === 'orders' ? 10 : 5;
+    const emptyColSpan = variant === 'orders'
+        ? (8 + (showSellerColumn ? 1 : 0) + (showOrderActions ? 1 : 0))
+        : 5;
 
     return (
         <div className="mt-6 overflow-x-auto scrollbarNone">
@@ -228,12 +232,13 @@ const OrdersTable = ({
                             <th className="rounded-l-lg px-4 py-3">No.</th>
                             <th className="px-4 py-3">Order Id</th>
                             <th className="px-4 py-3">Product</th>
+                            {showSellerColumn && <th className="px-4 py-3">Seller</th>}
                             <th className="px-4 py-3">Date</th>
                             <th className="px-4 py-3">Price</th>
                             <th className="px-4 py-3">Payment</th>
                             <th className="px-4 py-3">Delivery Flow</th>
                             <th className="px-4 py-3">Refund Flow</th>
-                            <th className="rounded-r-lg px-4 py-3">Action</th>
+                            {showOrderActions && <th className="rounded-r-lg px-4 py-3">Action</th>}
                         </tr>
                     ) : (
                         // Products Table Header
@@ -284,6 +289,9 @@ const OrdersTable = ({
                                                     <span className="wrap-break-word whitespace-normal leading-5 text-slate-700 dark:text-slate-200">{order.product}</span>
                                                 </div>
                                             </td>
+                                            {showSellerColumn && (
+                                                <td className="whitespace-nowrap px-4 py-4">{order.sellerName || 'Unknown Seller'}</td>
+                                            )}
                                             <td className="whitespace-nowrap px-4 py-4">{order.date}</td>
                                             <td className="whitespace-nowrap px-4 py-4">{order.price}</td>
                                             <td className="px-4 py-4">
@@ -295,35 +303,37 @@ const OrdersTable = ({
                                             <td className="px-4 py-4">
                                                 <RefundFlowTimeline rawRefundStatus={currentRawRefundStatus} />
                                             </td>
-                                            <td className="px-4 py-4">
-                                                <div className="flex flex-col gap-1">
-                                                    <select
-                                                        className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
-                                                        value={currentRawStatus}
-                                                        onChange={(event) => onOrderStatusChange?.(order.id, event.target.value)}
-                                                        disabled={isStatusUpdatingId === order.id || statusOptions.length <= 1}
-                                                    >
-                                                        {statusOptions.map((statusValue) => (
-                                                            <option key={statusValue} value={statusValue}>
-                                                                {formatStatusLabel(statusValue)}
-                                                            </option>
-                                                        ))}
-                                                    </select>
+                                            {showOrderActions && (
+                                                <td className="px-4 py-4">
+                                                    <div className="flex flex-col gap-1">
+                                                        <select
+                                                            className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
+                                                            value={currentRawStatus}
+                                                            onChange={(event) => onOrderStatusChange?.(order.id, event.target.value)}
+                                                            disabled={isStatusUpdatingId === order.id || statusOptions.length <= 1}
+                                                        >
+                                                            {statusOptions.map((statusValue) => (
+                                                                <option key={statusValue} value={statusValue}>
+                                                                    {formatStatusLabel(statusValue)}
+                                                                </option>
+                                                            ))}
+                                                        </select>
 
-                                                    <select
-                                                        className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
-                                                        value={currentRawRefundStatus}
-                                                        onChange={(event) => onOrderRefundStatusChange?.(order.id, event.target.value)}
-                                                        disabled={refundDisabled || isRefundUpdatingId === order.id || refundOptions.length <= 1}
-                                                    >
-                                                        {refundOptions.map((refundValue) => (
-                                                            <option key={refundValue} value={refundValue}>
-                                                                {formatStatusLabel(refundValue)}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            </td>
+                                                        <select
+                                                            className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
+                                                            value={currentRawRefundStatus}
+                                                            onChange={(event) => onOrderRefundStatusChange?.(order.id, event.target.value)}
+                                                            disabled={refundDisabled || isRefundUpdatingId === order.id || refundOptions.length <= 1}
+                                                        >
+                                                            {refundOptions.map((refundValue) => (
+                                                                <option key={refundValue} value={refundValue}>
+                                                                    {formatStatusLabel(refundValue)}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                </td>
+                                            )}
                                         </>
                                     );
                                 })()}

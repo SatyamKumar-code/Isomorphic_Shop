@@ -4,6 +4,7 @@ import fs from 'fs';
 import ProductModel from "../models/product.model.js";
 import mongoose from "mongoose";
 import ReviewModel from "../models/review.model.js";
+import UserModel from "../models/user.model.js";
 
 cloudinary.config({
     cloud_name: process.env.cloudinary_Config_Cloud_Name,
@@ -14,6 +15,15 @@ cloudinary.config({
 
 // image upload
 var imagesArr = [];
+
+const hasGlobalAdminAccess = async (adminId) => {
+    if (!adminId) {
+        return false;
+    }
+
+    const admin = await UserModel.findById(adminId).select("role").lean();
+    return Boolean(admin?.role === "admin");
+};
 
 export async function uploadImages(req, res) {
     try {
@@ -128,6 +138,7 @@ export const createProductController = async (req, res) => {
             discountPercentage,
             discount,
             description,
+            brand,
             category,
             subCategory,
             size,
@@ -165,6 +176,7 @@ export const createProductController = async (req, res) => {
             oldPrice: parsedOldPrice,
             discountPercentage: parsedDiscountPercentage,
             description,
+            brand,
             category,
             subCategory,
             images: requestImages.length ? requestImages : imagesArr,
@@ -219,8 +231,9 @@ export const getAdminProductsController = async (req, res) => {
             });
         }
 
+        const globalAccess = await hasGlobalAdminAccess(adminId);
         const previousCreatedBy = req.query.createdBy;
-        req.query.createdBy = String(adminId);
+        req.query.createdBy = globalAccess ? "" : String(adminId);
         await getAllProductsController(req, res);
         req.query.createdBy = previousCreatedBy;
     } catch (error) {
@@ -297,8 +310,18 @@ export const getAllProductsController = async (req, res) => {
                     pipeline: [{ $project: { subCatName: 1 } }]
                 }
             },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "createdBy",
+                    foreignField: "_id",
+                    as: "createdBy",
+                    pipeline: [{ $project: { name: 1, email: 1 } }],
+                }
+            },
             { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
-            { $unwind: { path: "$subCategory", preserveNullAndEmptyArrays: true } }
+            { $unwind: { path: "$subCategory", preserveNullAndEmptyArrays: true } },
+            { $unwind: { path: "$createdBy", preserveNullAndEmptyArrays: true } }
         );
 
         if (search) {
@@ -388,6 +411,7 @@ export const getAdminProductByIdController = async (req, res) => {
     try {
         const productId = req.params.id;
         const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
 
         if (!productId) {
             return res.status(400).json({
@@ -397,13 +421,14 @@ export const getAdminProductByIdController = async (req, res) => {
             });
         }
 
-        const product = await ProductModel.findOne({ _id: productId, createdBy: adminId })
+        const query = globalAccess ? { _id: productId } : { _id: productId, createdBy: adminId };
+        const product = await ProductModel.findOne(query)
             .populate("category", "catName")
             .populate("subCategory", "subCatName");
 
         if (!product) {
             return res.status(404).json({
-                message: "Product not found for this admin",
+                message: "Product not found",
                 success: false,
                 error: true,
             });
@@ -468,6 +493,7 @@ export const updateProductController = async (req, res) => {
     try {
         const productId = req.params.id;
         const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
         const {
             productName,
             price,
@@ -476,6 +502,7 @@ export const updateProductController = async (req, res) => {
             discountPercentage,
             discount,
             description,
+            brand,
             category,
             subCategory,
             size,
@@ -503,7 +530,7 @@ export const updateProductController = async (req, res) => {
         }
 
         // Build update object
-        const updateObj = { productName, price, description, category, subCategory, size, weight, color, stock };
+        const updateObj = { productName, price, description, brand, category, subCategory, size, weight, color, stock };
         if (featured !== undefined) {
             updateObj.featured = Boolean(featured);
         }
@@ -528,7 +555,7 @@ export const updateProductController = async (req, res) => {
         }
 
         const updatedProduct = await ProductModel.findOneAndUpdate(
-            { _id: productId, createdBy: adminId },
+            globalAccess ? { _id: productId } : { _id: productId, createdBy: adminId },
             { $set: updateObj },
             { new: true }
         );
@@ -563,6 +590,7 @@ export const deleteProductController = async (req, res) => {
     try {
         const productId = req.params.id;
         const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
         if (!productId) {
             return res.status(400).json({
                 message: "Product ID is required",
@@ -571,7 +599,7 @@ export const deleteProductController = async (req, res) => {
             });
         }
 
-        const deletedProduct = await ProductModel.findOneAndDelete({ _id: productId, createdBy: adminId });
+        const deletedProduct = await ProductModel.findOneAndDelete(globalAccess ? { _id: productId } : { _id: productId, createdBy: adminId });
 
         if (!deletedProduct) {
             return res.status(404).json({

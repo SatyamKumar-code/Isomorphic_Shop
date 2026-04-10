@@ -3,15 +3,23 @@ import { useAuth } from "../Context/auth/useAuth";
 
 
 
-const ProtectedRoute = ({ children }) => {
-    const { isLoggedIn, isLoading } = useAuth();
+const ProtectedRoute = ({ children, allowedRoles = ["admin", "seller"] }) => {
+    const { isLoggedIn, isLoading, userData } = useAuth();
 
     if (isLoading) {
         // You can return a loader/spinner here if you want
         return null;
     }
 
-    return isLoggedIn ? children : <Navigate to="/login" />;
+    if (!isLoggedIn) {
+        return <Navigate to="/login" replace />;
+    }
+
+    if (allowedRoles.length && !allowedRoles.includes(userData?.role)) {
+        return <Navigate to="/" replace />;
+    }
+
+    return children;
 }
 
 export default ProtectedRoute;

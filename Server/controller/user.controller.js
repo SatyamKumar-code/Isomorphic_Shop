@@ -2,6 +2,7 @@ import express from 'express';
 import UserModel from '../models/user.model.js';
 import OrderModel from '../models/order.model.js';
 import ProductModel from '../models/product.model.js';
+import SellerPayoutModel from '../models/sellerPayout.model.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import generateAccessToken from '../utils/generateAccessToken.js';
@@ -42,6 +43,15 @@ const formatCompactNumber = (value) => {
     }
 
     return String(Math.round(value));
+};
+
+const getSellerCommissionRate = () => {
+    const rawRate = Number.parseFloat(process.env.SELLER_COMMISSION_RATE || "10");
+    if (!Number.isFinite(rawRate)) {
+        return 10;
+    }
+
+    return Math.max(0, Math.min(100, rawRate));
 };
 
 const getAvailableYears = (users, orders) => {
@@ -396,16 +406,43 @@ const formatChangePercentage = (currentValue, previousValue) => {
     return `${rounded}%`;
 };
 
+const getAccessModeFromRole = (role) => {
+    if (role === "admin") {
+        return "admin-global";
+    }
+
+    if (role === "seller") {
+        return "seller-scoped";
+    }
+
+    return "user";
+};
+
+const hasGlobalAdminAccess = async (adminId) => {
+    if (!adminId) {
+        return false;
+    }
+
+    const admin = await UserModel.findById(adminId).select("role").lean();
+    return Boolean(admin?.role === "admin");
+};
+
 const getAdminOwnedProductIds = async (adminId) => {
     if (!adminId) {
         return [];
     }
 
-    const products = await ProductModel.find({ createdBy: adminId }).select("_id").lean();
+    const globalAccess = await hasGlobalAdminAccess(adminId);
+    const products = await ProductModel.find(globalAccess ? {} : { createdBy: adminId }).select("_id").lean();
     return products.map((product) => product._id);
 };
 
 const isCustomerRelatedToAdmin = async (adminId, customerId) => {
+    const globalAccess = await hasGlobalAdminAccess(adminId);
+    if (globalAccess) {
+        return true;
+    }
+
     const ownedProductIds = await getAdminOwnedProductIds(adminId);
     if (!ownedProductIds.length) {
         return false;
@@ -422,20 +459,45 @@ const isCustomerRelatedToAdmin = async (adminId, customerId) => {
 export const getCustomersController = async (req, res) => {
     try {
         const adminId = req.userId;
+        const roleFilter = String(req.query?.role || "user").trim().toLowerCase() === "seller" ? "seller" : "user";
+        const isSellerMode = roleFilter === "seller";
+        const entityPlural = isSellerMode ? "Sellers" : "Customers";
+        const idPrefix = isSellerMode ? "#SELL" : "#CUST";
         const requestedYear = Number.parseInt(req.query?.year, 10);
         const requestedMonth = Number.parseInt(req.query?.month, 10);
         const requestedPage = Number.parseInt(req.query?.page, 10);
         const requestedLimit = Number.parseInt(req.query?.limit, 10);
         const searchText = String(req.query?.search || "").trim().toLowerCase();
+        const fromDate = String(req.query?.fromDate || "").trim();
+        const toDate = String(req.query?.toDate || "").trim();
+        const productsCountMin = Number.parseFloat(req.query?.productsCountMin);
+        const productsCountMax = Number.parseFloat(req.query?.productsCountMax);
+        const totalSalesMin = Number.parseFloat(req.query?.totalSalesMin);
+        const totalSalesMax = Number.parseFloat(req.query?.totalSalesMax);
         const rawStatusFilter = String(req.query?.status || "all").trim().toLowerCase();
         const statusFilter = rawStatusFilter === "inactive" ? "blocked" : rawStatusFilter;
         const orderSort = String(req.query?.orderSort || "none").trim().toLowerCase();
         const spendSort = String(req.query?.spendSort || "none").trim().toLowerCase();
 
+        const parseDateFilter = (value, useEndOfDay = false) => {
+            if (!value) return null;
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return null;
+            if (useEndOfDay) {
+                date.setHours(23, 59, 59, 999);
+            } else {
+                date.setHours(0, 0, 0, 0);
+            }
+            return date;
+        };
+
+        const filterFromDate = parseDateFilter(fromDate, false);
+        const filterToDate = parseDateFilter(toDate, true);
+
         const ownedProductIds = await getAdminOwnedProductIds(adminId);
-        if (!ownedProductIds.length) {
+        if (!isSellerMode && !ownedProductIds.length) {
             return res.status(200).json({
-                message: "Customers analytics fetched successfully",
+                message: `${entityPlural} analytics fetched successfully`,
                 error: false,
                 success: true,
                 data: {
@@ -475,22 +537,175 @@ export const getCustomersController = async (req, res) => {
             });
         }
 
-        const relatedUserIds = await OrderModel.distinct("userId", {
-            "products.productId": { $in: ownedProductIds },
-        });
+        let users = [];
+        let orders = [];
+        let sellerProductCountById = new Map();
+        let sellerTotalSalesById = new Map();
+        let sellerRevenueById = new Map();
+        let sellerPayoutSnapshotById = new Map();
+        let sellerOrderStatsById = new Map();
 
-        const users = await UserModel.find({ role: "user", _id: { $in: relatedUserIds } })
-            .select("-password -refresh_token -otp -otp_expiry")
-            .sort({ createdAt: -1 })
-            .lean();
-
-        const userIds = users.map((user) => user._id);
-        const orders = userIds.length
-            ? await OrderModel.find({ userId: { $in: userIds }, "products.productId": { $in: ownedProductIds } })
-                .select("userId totalAmount status createdAt")
+        if (isSellerMode) {
+            users = await UserModel.find({ role: "seller" })
+                .select("-password -refresh_token -otp -otp_expiry")
                 .sort({ createdAt: -1 })
-                .lean()
-            : [];
+                .lean();
+
+            const sellerIds = users.map((user) => user._id);
+            if (sellerIds.length) {
+                const sellerCommissionRate = getSellerCommissionRate();
+                const existingPayoutDocs = await SellerPayoutModel.find({ sellerId: { $in: sellerIds } })
+                    .select("sellerId paidAmount")
+                    .lean();
+                const existingPayoutBySellerId = new Map(
+                    existingPayoutDocs.map((item) => [String(item.sellerId), Number(item.paidAmount || 0)]),
+                );
+
+                const sellerProducts = await ProductModel.find({ createdBy: { $in: sellerIds } })
+                    .select("_id createdBy sales price")
+                    .lean();
+
+                const productOwnerById = new Map();
+                const productPriceById = new Map();
+                const sellerProductIds = [];
+
+                sellerProducts.forEach((product) => {
+                    const sellerId = String(product.createdBy || "");
+                    if (!sellerId) return;
+
+                    const productId = String(product._id || "");
+                    if (!productId) return;
+
+                    productOwnerById.set(productId, sellerId);
+                    productPriceById.set(productId, Number(product.price || 0));
+                    sellerProductIds.push(product._id);
+
+                    const currentCount = sellerProductCountById.get(sellerId) || 0;
+                    sellerProductCountById.set(sellerId, currentCount + 1);
+
+                    const currentSales = sellerTotalSalesById.get(sellerId) || 0;
+                    sellerTotalSalesById.set(sellerId, currentSales + Number(product.sales || 0));
+                });
+
+                if (sellerProductIds.length) {
+                    orders = await OrderModel.find({ "products.productId": { $in: sellerProductIds } })
+                        .select("products status createdAt")
+                        .sort({ createdAt: -1 })
+                        .lean();
+
+                    orders.forEach((order) => {
+                        const orderId = String(order._id || "");
+                        const createdAt = new Date(order.createdAt);
+                        const status = String(order.status || "").toLowerCase();
+                        const uniqueSellerIdsForOrder = new Set();
+                        const revenueBySellerForOrder = new Map();
+
+                        (Array.isArray(order.products) ? order.products : []).forEach((item) => {
+                            const productId = String(item?.productId || "");
+                            const sellerId = productOwnerById.get(productId);
+                            if (sellerId) {
+                                uniqueSellerIdsForOrder.add(sellerId);
+
+                                if (status !== "cancelled") {
+                                    const quantity = Number(item?.quantity || 0);
+                                    const price = Number(productPriceById.get(productId) || 0);
+                                    const lineAmount = quantity * price;
+                                    const currentLineAmount = revenueBySellerForOrder.get(sellerId) || 0;
+                                    revenueBySellerForOrder.set(sellerId, currentLineAmount + lineAmount);
+                                }
+                            }
+                        });
+
+                        revenueBySellerForOrder.forEach((amount, sellerId) => {
+                            const currentRevenue = sellerRevenueById.get(sellerId) || 0;
+                            sellerRevenueById.set(sellerId, currentRevenue + Number(amount || 0));
+                        });
+
+                        uniqueSellerIdsForOrder.forEach((sellerId) => {
+                            const current = sellerOrderStatsById.get(sellerId) || {
+                                orderIds: new Set(),
+                                completedOrderIds: new Set(),
+                                canceledOrderIds: new Set(),
+                                lastPurchaseDate: null,
+                            };
+
+                            current.orderIds.add(orderId);
+                            if (status === "delivered") {
+                                current.completedOrderIds.add(orderId);
+                            }
+                            if (status === "cancelled") {
+                                current.canceledOrderIds.add(orderId);
+                            }
+                            if (!Number.isNaN(createdAt.getTime()) && (!current.lastPurchaseDate || createdAt > current.lastPurchaseDate)) {
+                                current.lastPurchaseDate = createdAt;
+                            }
+
+                            sellerOrderStatsById.set(sellerId, current);
+                        });
+                    });
+                }
+
+                const payoutWrites = users.map((seller) => {
+                    const sellerId = String(seller._id || "");
+                    const grossSales = Number(sellerRevenueById.get(sellerId) || sellerTotalSalesById.get(sellerId) || 0);
+                    const commissionAmount = Number(((grossSales * sellerCommissionRate) / 100).toFixed(2));
+                    const netPayout = Number(Math.max(0, grossSales - commissionAmount).toFixed(2));
+                    const paidAmount = Number(existingPayoutBySellerId.get(sellerId) || 0);
+                    const payoutDue = Number(Math.max(0, netPayout - paidAmount).toFixed(2));
+
+                    sellerPayoutSnapshotById.set(sellerId, {
+                        grossSales,
+                        commissionRate: sellerCommissionRate,
+                        commissionAmount,
+                        netPayout,
+                        paidAmount,
+                        payoutDue,
+                    });
+
+                    return {
+                        updateOne: {
+                            filter: { sellerId: seller._id },
+                            update: {
+                                $set: {
+                                    grossSales,
+                                    commissionRate: sellerCommissionRate,
+                                    commissionAmount,
+                                    netPayout,
+                                    payoutDue,
+                                    lastCalculatedAt: new Date(),
+                                },
+                                $setOnInsert: {
+                                    paidAmount: 0,
+                                    currency: "INR",
+                                },
+                            },
+                            upsert: true,
+                        },
+                    };
+                });
+
+                if (payoutWrites.length) {
+                    await SellerPayoutModel.bulkWrite(payoutWrites);
+                }
+            }
+        } else {
+            const relatedUserIds = await OrderModel.distinct("userId", {
+                "products.productId": { $in: ownedProductIds },
+            });
+
+            users = await UserModel.find({ role: "user", _id: { $in: relatedUserIds } })
+                .select("-password -refresh_token -otp -otp_expiry")
+                .sort({ createdAt: -1 })
+                .lean();
+
+            const userIds = users.map((user) => user._id);
+            orders = userIds.length
+                ? await OrderModel.find({ userId: { $in: userIds }, "products.productId": { $in: ownedProductIds } })
+                    .select("userId totalAmount status createdAt")
+                    .sort({ createdAt: -1 })
+                    .lean()
+                : [];
+        }
 
         const availableYears = getAvailableYears(users, orders);
         const availableMonthsByYear = getAvailableMonthsByYear(users, orders);
@@ -553,24 +768,61 @@ export const getCustomersController = async (req, res) => {
         });
 
         const customers = users.map((user, index) => {
+            const userId = String(user._id || "");
             const stats = orderStatsByUser.get(String(user._id)) || {};
+
+            let sellerOrderCount = 0;
+            let sellerCompletedOrderCount = 0;
+            let sellerCanceledOrderCount = 0;
+            let sellerLastOrderDate = null;
+
+            if (isSellerMode && Array.isArray(orders) && orders.length) {
+                const sellerStats = sellerOrderStatsById.get(userId);
+                if (sellerStats) {
+                    sellerOrderCount = sellerStats.orderIds?.size || 0;
+                    sellerCompletedOrderCount = sellerStats.completedOrderIds?.size || 0;
+                    sellerCanceledOrderCount = sellerStats.canceledOrderIds?.size || 0;
+                    sellerLastOrderDate = sellerStats.lastPurchaseDate || null;
+                }
+            }
+
+            const resolvedOrderCount = isSellerMode ? sellerOrderCount : (stats.orderCount || 0);
+            const resolvedTotalSales = isSellerMode
+                ? Number(sellerRevenueById.get(userId) || sellerTotalSalesById.get(userId) || 0)
+                : (stats.totalSpend || 0);
+            const payoutSnapshot = sellerPayoutSnapshotById.get(userId) || null;
+            const resolvedPaidAmount = isSellerMode ? Number(payoutSnapshot?.paidAmount || 0) : 0;
+            const resolvedPayoutAmount = isSellerMode ? Number(payoutSnapshot?.payoutDue || 0) : 0;
+            const resolvedCommissionRate = isSellerMode ? Number(payoutSnapshot?.commissionRate || 0) : 0;
+            const resolvedCommissionAmount = isSellerMode ? Number(payoutSnapshot?.commissionAmount || 0) : 0;
+            const resolvedNetPayout = isSellerMode ? Number(payoutSnapshot?.netPayout || 0) : 0;
+            const resolvedCompletedOrders = isSellerMode ? sellerCompletedOrderCount : (stats.completedOrders || 0);
+            const resolvedCanceledOrders = isSellerMode ? sellerCanceledOrderCount : (stats.canceledOrders || 0);
+            const resolvedLastDate = isSellerMode ? (sellerLastOrderDate || user.createdAt) : (stats.lastPurchaseDate || user.createdAt);
 
             return {
                 uid: String(user._id),
-                id: `#CUST${String(index + 1).padStart(4, "0")}`,
+                id: `${idPrefix}${String(index + 1).padStart(4, "0")}`,
                 name: user.name || "",
                 email: user.email || "",
                 phone: user.mobile ? `+${user.mobile}` : "-",
-                orderCount: stats.orderCount || 0,
-                totalSpend: stats.totalSpend || 0,
+                orderCount: resolvedOrderCount,
+                totalSpend: resolvedTotalSales,
                 status: user.status === "Inactive" ? "Blocked" : (user.status || "Blocked"),
                 address: user.address || "-",
-                totalOrders: stats.orderCount || 0,
-                completedOrders: stats.completedOrders || 0,
-                canceledOrders: stats.canceledOrders || 0,
+                totalOrders: resolvedOrderCount,
+                completedOrders: resolvedCompletedOrders,
+                canceledOrders: resolvedCanceledOrders,
                 registrationDate: formatDateDisplay(user.createdAt),
-                lastPurchaseDate: formatDateDisplay(stats.lastPurchaseDate || user.createdAt),
+                lastPurchaseDate: formatDateDisplay(resolvedLastDate),
                 lastLoginDate: formatDateDisplay(user.last_login_date),
+                productsCount: Number(sellerProductCountById.get(userId) || 0),
+                totalSales: resolvedTotalSales,
+                paidAmount: resolvedPaidAmount,
+                payoutAmount: resolvedPayoutAmount,
+                commissionRate: resolvedCommissionRate,
+                commissionAmount: resolvedCommissionAmount,
+                netPayout: resolvedNetPayout,
                 supportNote: user.support_note || "",
                 supportNoteUpdatedAt: user.support_note_updated_at || null,
                 supportNoteUpdatedBy: user.support_note_updated_by
@@ -594,11 +846,40 @@ export const getCustomersController = async (req, res) => {
                     }))
                     : [],
                 createdAt: user.createdAt,
-                firstOrderDate: stats.firstOrderDate,
+                firstOrderDate: isSellerMode ? user.createdAt : stats.firstOrderDate,
             };
         });
 
         const filteredCustomers = customers.filter((customer) => {
+            const createdAt = new Date(customer.createdAt);
+            const isBeforeFromDate = filterFromDate && createdAt < filterFromDate;
+            const isAfterToDate = filterToDate && createdAt > filterToDate;
+
+            if (isBeforeFromDate || isAfterToDate) {
+                return false;
+            }
+
+            if (isSellerMode) {
+                const currentProductsCount = Number(customer.productsCount || 0);
+                const currentTotalSales = Number(customer.totalSales || customer.totalSpend || 0);
+
+                if (Number.isFinite(productsCountMin) && currentProductsCount < productsCountMin) {
+                    return false;
+                }
+
+                if (Number.isFinite(productsCountMax) && currentProductsCount > productsCountMax) {
+                    return false;
+                }
+
+                if (Number.isFinite(totalSalesMin) && currentTotalSales < totalSalesMin) {
+                    return false;
+                }
+
+                if (Number.isFinite(totalSalesMax) && currentTotalSales > totalSalesMax) {
+                    return false;
+                }
+            }
+
             const matchesStatus = statusFilter === "all"
                 ? true
                 : String(customer.status || "").toLowerCase() === statusFilter;
@@ -700,71 +981,148 @@ export const getCustomersController = async (req, res) => {
         }).length;
 
         const conversionRate = thisPeriodUsers ? Number(((thisPeriodOrders / thisPeriodUsers) * 100).toFixed(1)) : 0;
+        let summaryCards = [];
+        let overviewStats = [];
+        let weekSeries = {};
+        let xLabelsByRange = {};
 
-        const summaryCards = [
-            {
-                title: "Total Customers",
-                value: formatCompactNumber(totalCustomersCurrent),
-                change: formatChangePercentage(totalCustomersCurrent, totalCustomersPrevious),
-                changeColor: totalCustomersCurrent >= totalCustomersPrevious ? "#22C55E" : "#EF4444",
-            },
-            {
-                title: "New Customers",
-                value: formatCompactNumber(thisPeriodUsers),
-                change: formatChangePercentage(thisPeriodUsers, previousPeriodUsers),
-                changeColor: thisPeriodUsers >= previousPeriodUsers ? "#22C55E" : "#EF4444",
-            },
-            {
-                title: "Visitor",
-                value: formatCompactNumber(thisPeriodOrders),
-                change: formatChangePercentage(thisPeriodOrders, previousPeriodOrders),
-                changeColor: thisPeriodOrders >= previousPeriodOrders ? "#22C55E" : "#EF4444",
-            },
-        ];
+        if (isSellerMode) {
+            const activeSellersCurrent = users.filter((user) => {
+                const createdAt = new Date(user.createdAt);
+                return String(user.status || "").toLowerCase() === "active" && createdAt <= comparisonWindow.currentEnd;
+            }).length;
 
-        const overviewStats = [
-            { key: "activeCustomers", label: "Active Customers", value: formatCompactNumber(activeCustomersCount) },
-            { key: "repeatCustomers", label: "Repeat Customers", value: formatCompactNumber(repeatCustomersCount) },
-            { key: "shopVisitor", label: "Shop Visitor", value: formatCompactNumber(thisPeriodOrders) },
-            { key: "conversionRate", label: "Conversion Rate", value: `${conversionRate}%` },
-        ];
+            const activeSellersPrevious = users.filter((user) => {
+                const createdAt = new Date(user.createdAt);
+                return String(user.status || "").toLowerCase() === "active" && createdAt <= comparisonWindow.previousEnd;
+            }).length;
 
-        const currentBuckets = buildBucketsForPeriod({
-            periodConfig,
-            comparisonWindow,
-            users,
-            orders,
-        });
+            const blockedSellersCurrent = users.filter((user) => {
+                const createdAt = new Date(user.createdAt);
+                return String(user.status || "").toLowerCase() === "blocked" && createdAt <= comparisonWindow.currentEnd;
+            }).length;
 
-        const currentRangeValue = periodConfig.ranges[0].value;
-        const weekSeries = {
-            [currentRangeValue]: buildSeries({
-                users: customers,
+            const blockedSellersPrevious = users.filter((user) => {
+                const createdAt = new Date(user.createdAt);
+                return String(user.status || "").toLowerCase() === "blocked" && createdAt <= comparisonWindow.previousEnd;
+            }).length;
+
+            summaryCards = [
+                {
+                    title: "Total Sellers",
+                    value: formatCompactNumber(totalCustomersCurrent),
+                    change: formatChangePercentage(totalCustomersCurrent, totalCustomersPrevious),
+                    changeColor: totalCustomersCurrent >= totalCustomersPrevious ? "#22C55E" : "#EF4444",
+                },
+                {
+                    title: "New Sellers",
+                    value: formatCompactNumber(thisPeriodUsers),
+                    change: formatChangePercentage(thisPeriodUsers, previousPeriodUsers),
+                    changeColor: thisPeriodUsers >= previousPeriodUsers ? "#22C55E" : "#EF4444",
+                },
+                {
+                    title: "Active Sellers",
+                    value: formatCompactNumber(activeSellersCurrent),
+                    change: formatChangePercentage(activeSellersCurrent, activeSellersPrevious),
+                    changeColor: activeSellersCurrent >= activeSellersPrevious ? "#22C55E" : "#EF4444",
+                },
+                {
+                    title: "Blocked Sellers",
+                    value: formatCompactNumber(blockedSellersCurrent),
+                    change: "",
+                    changeColor: "#22C55E",
+                },
+            ];
+
+            overviewStats = [];
+            weekSeries = {};
+            xLabelsByRange = {};
+        } else {
+            summaryCards = [
+                {
+                    title: `Total ${entityPlural}`,
+                    value: formatCompactNumber(totalCustomersCurrent),
+                    change: formatChangePercentage(totalCustomersCurrent, totalCustomersPrevious),
+                    changeColor: totalCustomersCurrent >= totalCustomersPrevious ? "#22C55E" : "#EF4444",
+                },
+                {
+                    title: `New ${entityPlural}`,
+                    value: formatCompactNumber(thisPeriodUsers),
+                    change: formatChangePercentage(thisPeriodUsers, previousPeriodUsers),
+                    changeColor: thisPeriodUsers >= previousPeriodUsers ? "#22C55E" : "#EF4444",
+                },
+                {
+                    title: "Visitor",
+                    value: formatCompactNumber(thisPeriodOrders),
+                    change: formatChangePercentage(thisPeriodOrders, previousPeriodOrders),
+                    changeColor: thisPeriodOrders >= previousPeriodOrders ? "#22C55E" : "#EF4444",
+                },
+            ];
+
+            overviewStats = [
+                { key: "activeCustomers", label: `Active ${entityPlural}`, value: formatCompactNumber(activeCustomersCount) },
+                { key: "repeatCustomers", label: `Repeat ${entityPlural}`, value: formatCompactNumber(repeatCustomersCount) },
+                { key: "shopVisitor", label: "Shop Visitor", value: formatCompactNumber(thisPeriodOrders) },
+                { key: "conversionRate", label: "Conversion Rate", value: `${conversionRate}%` },
+            ];
+
+            const currentBuckets = buildBucketsForPeriod({
+                periodConfig,
+                comparisonWindow,
+                users,
                 orders,
-                secondOrderDateByUser,
-                buckets: currentBuckets,
-            }),
-        };
-
-        if (periodConfig.period === "7days" && periodConfig.ranges[1]) {
-            weekSeries[periodConfig.ranges[1].value] = buildSeries({
-                users: customers,
-                orders,
-                secondOrderDateByUser,
-                buckets: buildLastWeekBuckets(comparisonWindow),
             });
+
+            const currentRangeValue = periodConfig.ranges[0].value;
+            weekSeries = {
+                [currentRangeValue]: buildSeries({
+                    users: customers,
+                    orders,
+                    secondOrderDateByUser,
+                    buckets: currentBuckets,
+                }),
+            };
+
+            if (periodConfig.period === "7days" && periodConfig.ranges[1]) {
+                weekSeries[periodConfig.ranges[1].value] = buildSeries({
+                    users: customers,
+                    orders,
+                    secondOrderDateByUser,
+                    buckets: buildLastWeekBuckets(comparisonWindow),
+                });
+            }
+
+            xLabelsByRange = {
+                [currentRangeValue]: currentBuckets.map((bucket) => bucket.label),
+            };
+
+            if (periodConfig.period === "7days" && periodConfig.ranges[1]) {
+                xLabelsByRange[periodConfig.ranges[1].value] = buildLastWeekBuckets(comparisonWindow).map((bucket) => bucket.label);
+            }
         }
 
-        const xLabelsByRange = {
-            [currentRangeValue]: currentBuckets.map((bucket) => bucket.label),
-        };
-
-        if (periodConfig.period === "7days" && periodConfig.ranges[1]) {
-            xLabelsByRange[periodConfig.ranges[1].value] = buildLastWeekBuckets(comparisonWindow).map((bucket) => bucket.label);
-        }
+        const topSellers = isSellerMode
+            ? [...customers]
+                .sort((a, b) => {
+                    const salesDiff = Number(b.totalSales || 0) - Number(a.totalSales || 0);
+                    if (salesDiff !== 0) return salesDiff;
+                    return Number(b.orderCount || 0) - Number(a.orderCount || 0);
+                })
+                .slice(0, 10)
+                .map((seller, index) => ({
+                    rank: index + 1,
+                    uid: seller.uid,
+                    id: seller.id,
+                    name: seller.name,
+                    status: seller.status,
+                    productsCount: seller.productsCount || 0,
+                    totalSales: Number(seller.totalSales || 0),
+                    orderCount: Number(seller.orderCount || 0),
+                }))
+            : [];
 
         return res.status(200).json({
-            message: "Customers fetched successfully",
+            message: `${entityPlural} fetched successfully`,
             error: false,
             success: true,
             data: {
@@ -787,6 +1145,7 @@ export const getCustomersController = async (req, res) => {
                 availableYears,
                 availableMonths,
                 xLabelsByRange,
+                topSellers,
             },
         });
     } catch (error) {
@@ -1025,7 +1384,10 @@ export const getUserController = async (req, res) => {
             message: "User found",
             error: false,
             success: true,
-            data: user
+            data: {
+                ...user.toObject(),
+                accessMode: getAccessModeFromRole(user.role),
+            }
         });
 
     } catch (error) {
@@ -1036,6 +1398,39 @@ export const getUserController = async (req, res) => {
         });
     }
 }
+
+export const getAdminAccessModeController = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const user = await UserModel.findById({ _id: userId }).select("role name email").lean();
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false,
+            });
+        }
+
+        return res.status(200).json({
+            message: "Access mode fetched successfully",
+            error: false,
+            success: true,
+            data: {
+                role: user.role,
+                accessMode: getAccessModeFromRole(user.role),
+                name: user.name || "",
+                email: user.email || "",
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal Server Error" + error.message,
+            error: true,
+            success: false,
+        });
+    }
+};
 
 
 export async function logoutController(req, res) {

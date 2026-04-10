@@ -21,9 +21,9 @@ const adminMiddleware = async (req, res, next) => {
                 message: err.name === "TokenExpiredError" ? "access token expired" : "unauthorized access",
                 error: true,
                 success: false,
-                
+
             });
-            
+
         }
 
         if (!decoded) {
@@ -34,9 +34,9 @@ const adminMiddleware = async (req, res, next) => {
             })
         }
 
-        if (decoded.role !== "admin") {
+        if (!["admin", "seller"].includes(decoded.role)) {
             return res.status(403).json({
-                message: "admin access only",
+                message: "admin or seller access only",
                 error: true,
                 success: false
             })

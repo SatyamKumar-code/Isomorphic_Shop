@@ -24,7 +24,7 @@ const AppRoutes = () => {
             path: '/',
             exact: true,
             element: (
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={["admin", "seller"]}>
                     <MainLayout title="Dashboard">
                         <Dashbord />
                     </MainLayout>
@@ -36,7 +36,7 @@ const AppRoutes = () => {
             path: '/order-management',
             exact: true,
             element: (
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={["admin", "seller"]}>
                     <MainLayout title="Order Management">
                         <OrderManagementPage />
                     </MainLayout>
@@ -48,8 +48,20 @@ const AppRoutes = () => {
             path: '/customers',
             exact: true,
             element: (
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={["admin", "seller"]}>
                     <MainLayout title="Customers">
+                        <CustomersPage />
+                    </MainLayout>
+                </ProtectedRoute>
+            )
+        },
+
+        {
+            path: '/seller',
+            exact: true,
+            element: (
+                <ProtectedRoute allowedRoles={["admin"]}>
+                    <MainLayout title="Seller">
                         <CustomersPage />
                     </MainLayout>
                 </ProtectedRoute>
@@ -60,7 +72,7 @@ const AppRoutes = () => {
             path: '/categories',
             exact: true,
             element: (
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={["admin"]}>
                     <MainLayout title="Categories">
                         <CategoriesPage />
                     </MainLayout>
@@ -72,7 +84,7 @@ const AppRoutes = () => {
             path: '/add-products',
             exact: true,
             element: (
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={["seller"]}>
                     <MainLayout title="Add Product">
                         <AddProductPage />
                     </MainLayout>
@@ -84,7 +96,7 @@ const AppRoutes = () => {
             path: '/product-list',
             exact: true,
             element: (
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={["admin", "seller"]}>
                     <MainLayout title="Product List">
                         <ProductListPage />
                     </MainLayout>
@@ -96,7 +108,7 @@ const AppRoutes = () => {
             path: '/product-reviews',
             exact: true,
             element: (
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={["seller"]}>
                     <MainLayout title="Product Reviews">
                         <ProductReviewsPage />
                     </MainLayout>

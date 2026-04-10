@@ -1,14 +1,23 @@
 import React from 'react'
 import Badge from '@mui/material/Badge';
 import DarkModeToggle from './DarkModeToggelButton';
+import { useAuth } from '../../Context/auth/useAuth';
 
 const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, or reports' }) => {
+  const { userData } = useAuth();
+  const accessMode = userData?.accessMode || (userData?.role === 'admin' ? 'admin-global' : userData?.role === 'seller' ? 'seller-scoped' : 'user');
+  const isGlobalAdmin = accessMode === 'admin-global';
+
   return (
     <div>
       <header className='header h-24 ml-65 w-[calc(100%-217px)] flex items-center justify-between pl-5 pr-11 py-3 bg-white dark:bg-gray-950 dark:shadow-md  shadow-md shadow-gray-300 dark:shadow-gray-700' >
         <h2 className='font-bold text-black dark:text-white'>{title}</h2>
 
         <div className='flex items-center md:gap-4 lg:gap-8'>
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${isGlobalAdmin ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+            {isGlobalAdmin ? 'Admin Global' : 'Seller Scoped'}
+          </span>
+
           <div className='p-1.5 flex items-center justify-between pr-4 pl-6 lg:w-101.75  h-12 rounded-full bg-[#e7e8e8] dark:bg-[#f7fafa52] focus:outline-none focus:ring-2 focus:ring-blue-500'>
             <input type='text' placeholder={searchPlaceholder} className='bg-transparent w-full text-[#4B5563] dark:text-white border-none focus:outline-none' />
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

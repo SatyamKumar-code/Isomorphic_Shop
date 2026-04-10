@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
                 try {
                     setIsLoading(true);
                     const res = await getProfile();
-                    if (res?.data?.data && res?.data?.data?.role === "admin") {
+                    if (res?.data?.data && ["admin", "seller"].includes(res?.data?.data?.role)) {
                         setUserData(res?.data?.data);
                         setIsLoggedIn(true);
                     } else {
@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }) => {
             const res = await loginUser(data);
 
             if (res?.data?.error === false) {
-                if (res?.data?.data?.role !== "admin") {
+                if (!["admin", "seller"].includes(res?.data?.data?.role)) {
                     alertBox("error", "You are not authorized to access this page");
                     return false;
                 }

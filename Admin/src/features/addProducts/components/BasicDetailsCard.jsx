@@ -270,17 +270,14 @@ const BasicDetailsCard = () => {
                 </div>
 
                 <div className="mb-3 md:mb-0">
-                    <label className={labelClass} htmlFor="stockStatus">Stock Status</label>
-                    <select
-                        id="stockStatus"
+                    <label className={labelClass} htmlFor="brandName">Brand Name</label>
+                    <input
+                        id="brandName"
                         className={inputClass}
-                        value={formData.stockStatus}
-                        onChange={(event) => updateField('stockStatus', event.target.value)}
-                    >
-                        <option value="">Select status</option>
-                        <option>In Stock</option>
-                        <option>Out of Stock</option>
-                    </select>
+                        placeholder="e.g. Nike, Apple, Samsung"
+                        value={formData.brand}
+                        onChange={(event) => updateField('brand', event.target.value)}
+                    />
                 </div>
             </div>
 

@@ -11,7 +11,7 @@ const getInitials = (value) => {
         .toUpperCase();
 };
 
-const ProductListTable = ({ rows = [], isLoading = false, currentPage = 1, pageSize = 10, thumbnailColors = [], onEdit, onDelete }) => {
+const ProductListTable = ({ rows = [], isLoading = false, currentPage = 1, pageSize = 10, thumbnailColors = [], onEdit, onDelete, showActions = true, showSellerColumn = false }) => {
     if (isLoading) {
         return <div className="mt-6 text-sm text-slate-500">Loading records...</div>;
     }
@@ -31,19 +31,21 @@ const ProductListTable = ({ rows = [], isLoading = false, currentPage = 1, pageS
                     <tr className="rounded-lg bg-[#EAF8E7] text-[12px] font-semibold text-slate-600">
                         <th className="rounded-l-lg px-4 py-3">Order</th>
                         <th className="px-4 py-3">Product</th>
+                        {showSellerColumn ? <th className="px-4 py-3">Seller</th> : null}
+                        <th className="px-4 py-3">Brand</th>
                         <th className="px-4 py-3">Cat</th>
                         <th className="px-4 py-3">Sub Cat</th>
                         <th className="px-4 py-3">Created At</th>
                         <th className="px-4 py-3">Stock</th>
                         <th className="px-4 py-3">Total Sales</th>
-                        <th className="rounded-r-lg px-4 py-3">Action</th>
+                        {showActions ? <th className="rounded-r-lg px-4 py-3">Action</th> : null}
                     </tr>
                 </thead>
 
                 <tbody>
                     {!rows.length ? (
                         <tr>
-                            <td className="px-4 py-8 text-center text-sm text-slate-500" colSpan={8}>
+                            <td className="px-4 py-8 text-center text-sm text-slate-500" colSpan={(showActions ? 9 : 8) + (showSellerColumn ? 1 : 0)}>
                                 No records found.
                             </td>
                         </tr>
@@ -83,21 +85,25 @@ const ProductListTable = ({ rows = [], isLoading = false, currentPage = 1, pageS
                                         <span className="whitespace-normal leading-5 text-slate-700 dark:text-slate-200">{item.product}</span>
                                     </div>
                                 </td>
+                                {showSellerColumn ? <td className="px-4 py-4">{item.sellerName || '-'}</td> : null}
+                                <td className="px-4 py-4">{item.brand || '-'}</td>
                                 <td className="px-4 py-4">{item.category}</td>
                                 <td className="px-4 py-4">{item.subCategory}</td>
                                 <td className="px-4 py-4">{item.date}</td>
                                 <td className={`px-4 py-4 ${stockClass}`}>{stockValue}</td>
                                 <td className="px-4 py-4">{item.totalSales}</td>
-                                <td className="px-4 py-4">
-                                    <div className="inline-flex items-center gap-3 text-slate-500">
-                                        <button className="transition hover:text-[#4EA674]" aria-label="Edit row" onClick={() => onEdit(item.id)}>
-                                            <FiEdit2 />
-                                        </button>
-                                        <button className="transition hover:text-red-500" aria-label="Delete row" onClick={() => onDelete(item.id)}>
-                                            <FiTrash2 />
-                                        </button>
-                                    </div>
-                                </td>
+                                {showActions ? (
+                                    <td className="px-4 py-4">
+                                        <div className="inline-flex items-center gap-3 text-slate-500">
+                                            <button className="transition hover:text-[#4EA674]" aria-label="Edit row" onClick={() => onEdit(item.id)}>
+                                                <FiEdit2 />
+                                            </button>
+                                            <button className="transition hover:text-red-500" aria-label="Delete row" onClick={() => onDelete(item.id)}>
+                                                <FiTrash2 />
+                                            </button>
+                                        </div>
+                                    </td>
+                                ) : null}
                             </tr>
                         );
                     })}
