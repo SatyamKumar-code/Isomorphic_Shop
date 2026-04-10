@@ -44,6 +44,55 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    support_note_updated_at: {
+        type: Date,
+        default: null
+    },
+    support_note_updated_by: {
+        adminId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+        adminName: {
+            type: String,
+            default: ""
+        },
+        adminEmail: {
+            type: String,
+            default: ""
+        }
+    },
+    support_note_history: {
+        type: [
+            {
+                note: {
+                    type: String,
+                    default: ""
+                },
+                updatedAt: {
+                    type: Date,
+                    default: Date.now
+                },
+                updatedBy: {
+                    adminId: {
+                        type: mongoose.Schema.Types.ObjectId,
+                        ref: "User",
+                        default: null
+                    },
+                    adminName: {
+                        type: String,
+                        default: ""
+                    },
+                    adminEmail: {
+                        type: String,
+                        default: ""
+                    }
+                }
+            }
+        ],
+        default: []
+    },
     last_login_date: {
         type: Date,
         default: null

@@ -47,6 +47,11 @@ const formatStatusLabel = (value) => normalizeStatusValue(value)
 export const OrderProvider = ({ children }) => {
     const [summaryCards, setSummaryCards] = useState([]);
     const [tabs, setTabs] = useState(initialTabs);
+    const [summaryPeriod, setSummaryPeriod] = useState("7days");
+    const [summaryYear, setSummaryYear] = useState("");
+    const [summaryMonth, setSummaryMonth] = useState("");
+    const [availableSummaryYears, setAvailableSummaryYears] = useState([]);
+    const [availableSummaryMonths, setAvailableSummaryMonths] = useState([]);
     const [orders, setOrders] = useState(initialOrders);
     const [activeTab, setActiveTab] = useState("All order");
     const [currentPage, setCurrentPage] = useState(1);
@@ -127,19 +132,50 @@ export const OrderProvider = ({ children }) => {
         return params;
     }, [statusQuery, debouncedSearchText, paymentFilter, customerIdFilter]);
 
-    const loadSummary = useCallback(async () => {
+    const summaryRequestParams = useMemo(() => {
+        const params = { period: summaryPeriod };
+
+        if ((summaryPeriod === "month" || summaryPeriod === "daywise") && summaryYear) {
+            params.year = Number(summaryYear);
+        }
+
+        if (summaryPeriod === "daywise" && summaryMonth) {
+            params.month = Number(summaryMonth);
+        }
+
+        return params;
+    }, [summaryPeriod, summaryYear, summaryMonth]);
+
+    const loadSummary = useCallback(async (params = summaryRequestParams) => {
         try {
-            const res = await getOrderSummary();
+            const res = await getOrderSummary(params);
+            const payload = res?.data?.data || {};
+
             if (Array.isArray(res?.data?.data?.summaryCards)) {
                 setSummaryCards(res.data.data.summaryCards);
             }
             if (Array.isArray(res?.data?.data?.tabs)) {
                 setTabs(res.data.data.tabs);
             }
+
+            setAvailableSummaryYears(Array.isArray(payload.availableYears) ? payload.availableYears : []);
+            setAvailableSummaryMonths(Array.isArray(payload.availableMonths) ? payload.availableMonths : []);
+
+            if (typeof payload.period === 'string') {
+                setSummaryPeriod(payload.period);
+            }
+
+            if (payload.selectedYear) {
+                setSummaryYear(String(payload.selectedYear));
+            }
+
+            if (payload.selectedMonth) {
+                setSummaryMonth(String(payload.selectedMonth).padStart(2, '0'));
+            }
         } catch (error) {
             // Keep fallback local data when API is unavailable.
         }
-    }, []);
+    }, [summaryRequestParams]);
 
     const loadOrders = useCallback(async () => {
         const requestId = latestOrdersRequestRef.current + 1;
@@ -373,7 +409,7 @@ export const OrderProvider = ({ children }) => {
 
     useEffect(() => {
         loadSummary();
-    }, [loadSummary]);
+    }, [loadSummary, summaryRequestParams]);
 
     useEffect(() => {
         loadOrders();
@@ -416,6 +452,14 @@ export const OrderProvider = ({ children }) => {
     const value = useMemo(() => ({
         summaryCards,
         tabs,
+        summaryPeriod,
+        setSummaryPeriod,
+        summaryYear,
+        setSummaryYear,
+        summaryMonth,
+        setSummaryMonth,
+        availableSummaryYears,
+        availableSummaryMonths,
         orders,
         paymentColor,
         thumbnailColors,
@@ -444,7 +488,7 @@ export const OrderProvider = ({ children }) => {
         handleStatusChange,
         handleRefundStatusChange,
         reloadOrders: loadOrders,
-    }), [summaryCards, tabs, orders, pagination, totalPages, pageSize, activeTab, currentPage, searchText, paymentFilter, customerIdFilter, isLoading, isCreateOrderLoading, isStatusUpdatingId, isRefundUpdatingId, loadOrders, setPageSize, setActiveTab, setCurrentPage, setSearchText, setPaymentFilter, setCustomerIdFilter, resetFilters, exportCurrentOrdersCsv, fetchAllOrdersForExport, createOrderFromPayload, handleStatusChange, handleRefundStatusChange]);
+    }), [summaryCards, tabs, summaryPeriod, summaryYear, summaryMonth, availableSummaryYears, availableSummaryMonths, orders, pagination, totalPages, pageSize, activeTab, currentPage, searchText, paymentFilter, customerIdFilter, isLoading, isCreateOrderLoading, isStatusUpdatingId, isRefundUpdatingId, loadOrders, setPageSize, setActiveTab, setCurrentPage, setSearchText, setPaymentFilter, setCustomerIdFilter, resetFilters, exportCurrentOrdersCsv, fetchAllOrdersForExport, createOrderFromPayload, handleStatusChange, handleRefundStatusChange]);
 
     return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;
 };

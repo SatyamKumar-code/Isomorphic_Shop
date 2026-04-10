@@ -9,6 +9,38 @@ import CsvExportDialog from "../../../shared/components/CsvExportDialog";
 import { useCsvExportDialog } from "../../../shared/hooks/useCsvExportDialog";
 
 const formatAmount = (value) => value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const QUICK_NOTE_MAX_LENGTH = 500;
+
+const formatDateTime = (value) => {
+    if (!value) return "N/A";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "N/A";
+
+    return date.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+};
+
+const formatAdminMeta = (meta) => {
+    if (!meta || typeof meta !== "object") {
+        return "System";
+    }
+
+    if (meta.adminName) {
+        return meta.adminEmail ? `${meta.adminName} (${meta.adminEmail})` : meta.adminName;
+    }
+
+    if (meta.adminEmail) {
+        return meta.adminEmail;
+    }
+
+    return "System";
+};
 
 const StatusPill = ({ status, color }) => (
     <span className="inline-flex items-center gap-2 text-[12px] font-medium" style={{ color }}>
@@ -50,6 +82,10 @@ const CustomersTable = () => {
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
     const [activeRowActionId, setActiveRowActionId] = React.useState("");
     const [updatingCustomerId, setUpdatingCustomerId] = React.useState("");
+    const [activityModalCustomer, setActivityModalCustomer] = React.useState(null);
+    const [quickNoteModalCustomer, setQuickNoteModalCustomer] = React.useState(null);
+    const [quickNoteDraft, setQuickNoteDraft] = React.useState("");
+    const [isSavingQuickNote, setIsSavingQuickNote] = React.useState(false);
 
     const handleOrderSortChange = (value) => {
         setCustomerOrderSort(value);
@@ -108,6 +144,24 @@ const CustomersTable = () => {
         };
     }, [isMenuOpen, activeRowActionId]);
 
+    React.useEffect(() => {
+        if (!activityModalCustomer && !quickNoteModalCustomer) {
+            return undefined;
+        }
+
+        const handleEscapeClose = (event) => {
+            if (event.key === "Escape") {
+                setActivityModalCustomer(null);
+                setQuickNoteModalCustomer(null);
+            }
+        };
+
+        document.addEventListener("keydown", handleEscapeClose);
+        return () => {
+            document.removeEventListener("keydown", handleEscapeClose);
+        };
+    }, [activityModalCustomer, quickNoteModalCustomer]);
+
     const handleSendResetLink = async (customer) => {
         try {
             await sendCustomerResetPasswordLink(customer.uid);
@@ -140,39 +194,57 @@ const CustomersTable = () => {
         setActiveRowActionId("");
     };
 
-    const handleQuickNote = async (customer) => {
-        const currentNote = customer.supportNote || "";
-        const nextNote = window.prompt("Add quick note", currentNote);
-        if (nextNote === null) {
+    const handleQuickNote = (customer) => {
+        setQuickNoteModalCustomer(customer);
+        setQuickNoteDraft((customer?.supportNote || "").slice(0, QUICK_NOTE_MAX_LENGTH));
+        setActiveRowActionId("");
+    };
+
+    const handleQuickNoteSave = async () => {
+        if (!quickNoteModalCustomer?.uid) {
             return;
         }
 
         try {
-            await updateCustomerNote(customer.uid, nextNote);
+            setIsSavingQuickNote(true);
+            await updateCustomerNote(quickNoteModalCustomer.uid, quickNoteDraft.trim());
             toast.success("Quick note saved");
             reloadCustomers();
-            setActiveRowActionId("");
+            setQuickNoteModalCustomer(null);
         } catch {
             toast.error("Failed to save note");
+        } finally {
+            setIsSavingQuickNote(false);
         }
     };
 
     const handleLastActivityView = (customer) => {
-        const notePreview = customer.supportNote ? customer.supportNote : "No note";
-        const activityText = [
-            `Last login: ${customer.lastLoginDate || "N/A"}`,
-            `Last purchase: ${customer.lastPurchaseDate || "N/A"}`,
-            `Total orders: ${customer.orderCount || 0}`,
-            `Quick note: ${notePreview}`,
-        ].join("\n");
-
-        window.alert(activityText);
+        setActivityModalCustomer(customer);
         setActiveRowActionId("");
     };
 
     const handleOrderHistoryShortcut = (customer) => {
         navigate(`/order-management?customerId=${customer.uid}`);
         setActiveRowActionId("");
+    };
+
+    const handleOrderHistoryFromActivity = () => {
+        if (!activityModalCustomer?.uid) {
+            return;
+        }
+
+        navigate(`/order-management?customerId=${activityModalCustomer.uid}`);
+        setActivityModalCustomer(null);
+    };
+
+    const handleQuickNoteFromActivity = () => {
+        if (!activityModalCustomer?.uid) {
+            return;
+        }
+
+        const selectedCustomer = activityModalCustomer;
+        setActivityModalCustomer(null);
+        handleQuickNote(selectedCustomer);
     };
 
     const handleExportSingleCustomer = (customer) => {
@@ -438,6 +510,166 @@ const CustomersTable = () => {
                 modeLabelMap={modeLabelMap}
                 exportState={exportState}
             />
+
+            {activityModalCustomer ? (
+                <div
+                    className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-[1px]"
+                    onClick={() => setActivityModalCustomer(null)}
+                >
+                    <div
+                        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-gray-950"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="mb-4 flex items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Last Activity</h3>
+                                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                    {activityModalCustomer.name || "Customer"} activity snapshot
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setActivityModalCustomer(null)}
+                                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-gray-900"
+                            >
+                                Close
+                            </button>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-gray-900">
+                                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Last Login</p>
+                                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{activityModalCustomer.lastLoginDate || "N/A"}</p>
+                            </div>
+
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-gray-900">
+                                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Last Purchase</p>
+                                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{activityModalCustomer.lastPurchaseDate || "N/A"}</p>
+                            </div>
+
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-gray-900">
+                                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Orders</p>
+                                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{activityModalCustomer.orderCount || 0}</p>
+                            </div>
+
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-gray-900">
+                                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Spend</p>
+                                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatAmount(activityModalCustomer.totalSpend || 0)}</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-gray-900">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Quick Note</p>
+                            <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">{activityModalCustomer.supportNote || "No note available"}</p>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap justify-end gap-2">
+                            <button
+                                type="button"
+                                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-gray-900"
+                                onClick={handleQuickNoteFromActivity}
+                            >
+                                Edit Quick Note
+                            </button>
+                            <button
+                                type="button"
+                                className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-700"
+                                onClick={handleOrderHistoryFromActivity}
+                            >
+                                Open Order History
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {quickNoteModalCustomer ? (
+                <div
+                    className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-[1px]"
+                    onClick={() => {
+                        if (!isSavingQuickNote) {
+                            setQuickNoteModalCustomer(null);
+                        }
+                    }}
+                >
+                    <div
+                        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-gray-950"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="mb-4 flex items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Quick Note</h3>
+                                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                    {quickNoteModalCustomer.name || "Customer"} support note
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setQuickNoteModalCustomer(null)}
+                                disabled={isSavingQuickNote}
+                                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-gray-900"
+                            >
+                                Close
+                            </button>
+                        </div>
+
+                        <textarea
+                            value={quickNoteDraft}
+                            onChange={(event) => setQuickNoteDraft(event.target.value.slice(0, QUICK_NOTE_MAX_LENGTH))}
+                            placeholder="Add support note for this customer..."
+                            rows={5}
+                            maxLength={QUICK_NOTE_MAX_LENGTH}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200 dark:focus:border-emerald-600 dark:focus:ring-emerald-900/40"
+                        />
+
+                        <div className="mt-2 flex items-center justify-between text-xs">
+                            <div className="text-slate-500 dark:text-slate-400">
+                                <p>Last updated: {formatDateTime(quickNoteModalCustomer.supportNoteUpdatedAt || quickNoteModalCustomer.updatedAt || quickNoteModalCustomer.createdAt)}</p>
+                                <p className="mt-0.5">Edited by: {formatAdminMeta(quickNoteModalCustomer.supportNoteUpdatedBy)}</p>
+                            </div>
+                            <p className={`font-medium ${quickNoteDraft.length >= QUICK_NOTE_MAX_LENGTH ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-slate-400"}`}>
+                                {quickNoteDraft.length}/{QUICK_NOTE_MAX_LENGTH}
+                            </p>
+                        </div>
+
+                        {Array.isArray(quickNoteModalCustomer.supportNoteHistory) && quickNoteModalCustomer.supportNoteHistory.length ? (
+                            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-gray-900">
+                                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Recent Note History</p>
+                                <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                                    {quickNoteModalCustomer.supportNoteHistory.map((entry, index) => (
+                                        <div key={`${entry?.updatedAt || "note"}-${index}`} className="rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-gray-950">
+                                            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{formatDateTime(entry?.updatedAt)}</p>
+                                            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">Edited by: {formatAdminMeta(entry?.updatedBy)}</p>
+                                            <p className="mt-1 text-xs text-slate-700 dark:text-slate-200">{entry?.note || "-"}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
+
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setQuickNoteModalCustomer(null)}
+                                disabled={isSavingQuickNote}
+                                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-gray-900"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleQuickNoteSave}
+                                disabled={isSavingQuickNote}
+                                className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {isSavingQuickNote ? "Saving..." : "Save Note"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </>
     );
 };

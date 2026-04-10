@@ -116,15 +116,20 @@ const getPercentageChange = (current, previous) => {
     return ((current - previous) / previous) * 100;
 };
 
-const formatChange = (current, previous) => {
+const formatChange = (current, previous, options = {}) => {
+    const { invertPositiveColor = false } = options;
     const percentage = getPercentageChange(current, previous);
     const safePercentage = Number.isFinite(percentage) ? percentage : 0;
     const direction = safePercentage >= 0 ? "up" : "down";
+    const isPositive = direction === "up";
+    const changeColor = invertPositiveColor
+        ? (isPositive ? "#EF4444" : "#4EA674")
+        : (isPositive ? "#4EA674" : "#EF4444");
 
     return {
         change: `${safePercentage >= 0 ? "+" : ""}${safePercentage.toFixed(1)}%`,
         changeDirection: direction,
-        changeColor: direction === "up" ? "#4EA674" : "#EF4444",
+        changeColor,
     };
 };
 
@@ -504,45 +509,39 @@ export const createOrderWithCOD = async (req, res) => {
 export const createOrderWithRazorpay = async (req, res) => {
     try {
         const userId = req.userId;
-        const { delivery_address, paymentId, paymentStatus } = req.body;
+        const { paymentId, delivery_address } = req.body;
 
-        if (!delivery_address || !paymentId) {
+        if (!paymentId || !delivery_address) {
             return res.status(400).json({
-                message: "Delivery address and paymentId are required",
+                message: "paymentId and delivery_address are required",
                 error: true,
-                success: false
+                success: false,
             });
         }
 
         const poductInCart = await CartModel.findOne({ userId }).populate("products.productId");
 
-        if (!poductInCart) {
-            return res.status(404).json({
-                message: "Product not found in cart",
+        if (!poductInCart || !Array.isArray(poductInCart.products) || !poductInCart.products.length) {
+            return res.status(400).json({
+                message: "Cart is empty",
                 error: true,
-                success: false
+                success: false,
             });
         }
 
         const sutotalAmount = poductInCart.products.reduce((total, product) => {
-            return total + (product.productId.price * product.quantity);
+            return total + (Number(product?.productId?.price || 0) * Number(product?.quantity || 0));
         }, 0);
 
-        // Verify payment status with Razorpay
         let paymentVerified = false;
-        let paymentStatusFetched = null;
+        let paymentStatusFetched = "pending";
+
         try {
-            const payment = await razorpay.payments.fetch(paymentId);
-            paymentStatusFetched = payment.status;
-            if (payment.status === "captured") {
-                paymentVerified = true;
-            }
-        } catch (err) {
-            return res.status(400).json({
-                message: "Payment verification failed: " + (err.error?.description || err.message),
-                error: true,
-                success: false
-            });
+            const fetchedPayment = await razorpay.payments.fetch(paymentId);
+            paymentStatusFetched = fetchedPayment?.status || "pending";
+            paymentVerified = ["captured", "authorized"].includes(paymentStatusFetched);
+        } catch {
+            paymentVerified = false;
         }
 
         if (!paymentVerified) {
@@ -573,7 +572,7 @@ export const createOrderWithRazorpay = async (req, res) => {
             totalAmount: sutotalAmount,
             paymentMethod: "Razorpay",
             paymentId,
-            paymentStatus: paymentStatusFetched
+            paymentStatus: paymentStatusFetched === "captured" ? "completed" : "pending"
         });
         await order.save();
 
@@ -772,14 +771,51 @@ export const getAllOrders = async (req, res) => {
 
 export const getOrderSummary = async (req, res) => {
     try {
-        const now = new Date();
-        const currentWindowStart = new Date(now);
-        currentWindowStart.setDate(currentWindowStart.getDate() - 7);
+        const period = ["7days", "daywise", "month"].includes(String(req.query?.period || "").trim())
+            ? String(req.query.period).trim()
+            : "7days";
 
-        const previousWindowStart = new Date(currentWindowStart);
-        previousWindowStart.setDate(previousWindowStart.getDate() - 7);
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const queryYear = Number(req.query?.year);
+        const queryMonth = Number(req.query?.month);
+
+        const selectedYear = Number.isInteger(queryYear) ? queryYear : currentYear;
+        const selectedMonth = Number.isInteger(queryMonth) && queryMonth >= 1 && queryMonth <= 12
+            ? queryMonth
+            : (now.getMonth() + 1);
+
+        let currentWindowStart;
+        let currentWindowEnd;
+        let previousWindowStart;
+        let previousWindowEnd;
+        let periodLabel = "Last 7 days";
+
+        if (period === "month") {
+            currentWindowStart = new Date(selectedYear, 0, 1);
+            currentWindowEnd = new Date(selectedYear + 1, 0, 1);
+            previousWindowStart = new Date(selectedYear - 1, 0, 1);
+            previousWindowEnd = new Date(selectedYear, 0, 1);
+            periodLabel = `${selectedYear} (Year-wise)`;
+        } else if (period === "daywise") {
+            currentWindowStart = new Date(selectedYear, selectedMonth - 1, 1);
+            currentWindowEnd = new Date(selectedYear, selectedMonth, 1);
+            previousWindowStart = new Date(selectedYear, selectedMonth - 2, 1);
+            previousWindowEnd = new Date(selectedYear, selectedMonth - 1, 1);
+            const monthLabel = currentWindowStart.toLocaleString("en-IN", { month: "short" });
+            periodLabel = `${monthLabel} ${selectedYear} (Month-wise)`;
+        } else {
+            currentWindowEnd = now;
+            currentWindowStart = new Date(now);
+            currentWindowStart.setDate(currentWindowStart.getDate() - 7);
+            previousWindowEnd = new Date(currentWindowStart);
+            previousWindowStart = new Date(currentWindowStart);
+            previousWindowStart.setDate(previousWindowStart.getDate() - 7);
+        }
 
         const [
+            availableYearsAgg,
+            availableMonthsAgg,
             totalOrders,
             confirmedTotal,
             packedTotal,
@@ -795,6 +831,34 @@ export const getOrderSummary = async (req, res) => {
             currentPeriodCancelled,
             previousPeriodCancelled,
         ] = await Promise.all([
+            OrderModel.aggregate([
+                {
+                    $group: {
+                        _id: { $year: "$createdAt" },
+                    },
+                },
+                {
+                    $sort: { _id: 1 },
+                },
+            ]),
+            OrderModel.aggregate([
+                {
+                    $match: {
+                        createdAt: {
+                            $gte: new Date(selectedYear, 0, 1),
+                            $lt: new Date(selectedYear + 1, 0, 1),
+                        },
+                    },
+                },
+                {
+                    $group: {
+                        _id: { $month: "$createdAt" },
+                    },
+                },
+                {
+                    $sort: { _id: 1 },
+                },
+            ]),
             OrderModel.countDocuments(),
             OrderModel.countDocuments({ status: "confirmed" }),
             OrderModel.countDocuments({ status: "packed" }),
@@ -803,13 +867,21 @@ export const getOrderSummary = async (req, res) => {
             OrderModel.countDocuments({ status: "delivered" }),
             OrderModel.countDocuments({ status: "pending" }),
             OrderModel.countDocuments({ status: "cancelled" }),
-            OrderModel.countDocuments({ createdAt: { $gte: currentWindowStart } }),
-            OrderModel.countDocuments({ createdAt: { $gte: previousWindowStart, $lt: currentWindowStart } }),
-            OrderModel.countDocuments({ status: "delivered", createdAt: { $gte: currentWindowStart } }),
-            OrderModel.countDocuments({ status: "delivered", createdAt: { $gte: previousWindowStart, $lt: currentWindowStart } }),
-            OrderModel.countDocuments({ status: "cancelled", createdAt: { $gte: currentWindowStart } }),
-            OrderModel.countDocuments({ status: "cancelled", createdAt: { $gte: previousWindowStart, $lt: currentWindowStart } }),
+            OrderModel.countDocuments({ createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
+            OrderModel.countDocuments({ status: "delivered", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ status: "delivered", createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
+            OrderModel.countDocuments({ status: "cancelled", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ status: "cancelled", createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
         ]);
+
+        const availableYears = availableYearsAgg
+            .map((item) => Number(item?._id))
+            .filter((year) => Number.isInteger(year));
+
+        const availableMonths = availableMonthsAgg
+            .map((item) => Number(item?._id))
+            .filter((month) => Number.isInteger(month) && month >= 1 && month <= 12);
 
         const summaryCards = [
             {
@@ -824,13 +896,13 @@ export const getOrderSummary = async (req, res) => {
             },
             {
                 title: "Completed Orders",
-                value: Number(deliveredTotal || 0).toLocaleString("en-IN"),
+                value: Number(currentPeriodCompleted || 0).toLocaleString("en-IN"),
                 ...formatChange(currentPeriodCompleted, previousPeriodCompleted),
             },
             {
                 title: "Canceled Orders",
-                value: Number(cancelledTotal || 0).toLocaleString("en-IN"),
-                ...formatChange(currentPeriodCancelled, previousPeriodCancelled),
+                value: Number(currentPeriodCancelled || 0).toLocaleString("en-IN"),
+                ...formatChange(currentPeriodCancelled, previousPeriodCancelled, { invertPositiveColor: true }),
             },
         ];
 
@@ -852,6 +924,12 @@ export const getOrderSummary = async (req, res) => {
             data: {
                 summaryCards,
                 tabs,
+                period,
+                periodLabel,
+                selectedYear,
+                selectedMonth,
+                availableYears,
+                availableMonths,
             },
         });
     } catch (error) {

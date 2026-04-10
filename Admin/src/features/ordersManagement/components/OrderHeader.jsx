@@ -10,8 +10,15 @@ const OrderHeader = () => {
     createOrderFromPayload,
     fetchAllOrdersForExport,
     exportCurrentOrdersCsv,
-    reloadOrders,
     isCreateOrderLoading,
+    summaryPeriod,
+    setSummaryPeriod,
+    summaryYear,
+    setSummaryYear,
+    summaryMonth,
+    setSummaryMonth,
+    availableSummaryYears,
+    availableSummaryMonths,
   } = useOrder();
   const [isAddOrderOpen, setIsAddOrderOpen] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -111,6 +118,9 @@ const OrderHeader = () => {
     date: 'Select date range from available dates only.',
   };
 
+  const summaryYearOptions = availableSummaryYears.length ? availableSummaryYears : Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - index);
+  const summaryMonthOptions = availableSummaryMonths.length ? availableSummaryMonths : Array.from({ length: 12 }, (_, index) => index + 1);
+
   return (
     <>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
@@ -136,10 +146,91 @@ const OrderHeader = () => {
           </button>
 
           {isMenuOpen ? (
-            <div className="order-header-menu absolute right-0 top-12 z-20 min-w-52 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-gray-950">
+            <div className="order-header-menu absolute right-0 top-12 z-20 min-w-60 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-gray-950">
+              <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-700">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Summary view</p>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">Global</span>
+                </div>
+                <p className="mt-1 text-[11px] leading-4 text-slate-500 dark:text-slate-400">Applies to all order summary cards.</p>
+
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {[
+                    { label: '7D', value: '7days' },
+                    { label: 'Month', value: 'daywise' },
+                    { label: 'Year', value: 'month' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`rounded-lg px-2.5 py-2 text-xs font-semibold transition ${summaryPeriod === option.value ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-gray-900 dark:text-slate-300 dark:hover:bg-gray-800'}`}
+                      onClick={() => {
+                        setSummaryPeriod(option.value);
+
+                        if (option.value === '7days') {
+                          setSummaryYear('');
+                          setSummaryMonth('');
+                          return;
+                        }
+
+                        if (option.value === 'month') {
+                          setSummaryMonth('');
+                        }
+
+                        if (option.value === 'daywise') {
+                          if (!summaryYear) {
+                            setSummaryYear(String(new Date().getFullYear()));
+                          }
+
+                          if (!summaryMonth) {
+                            setSummaryMonth(String(new Date().getMonth() + 1).padStart(2, '0'));
+                          }
+                        }
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                {(summaryPeriod === 'month' || summaryPeriod === 'daywise') ? (
+                  <div className="mt-3">
+                    <label className="mb-1 block text-[11px] font-medium text-slate-500 dark:text-slate-400">Select year</label>
+                    <select
+                      value={summaryYear}
+                      onChange={(event) => setSummaryYear(event.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-emerald-500 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
+                    >
+                      <option value="">Current year</option>
+                      {summaryYearOptions.map((year) => (
+                        <option key={year} value={String(year)}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+
+                {summaryPeriod === 'daywise' ? (
+                  <div className="mt-3">
+                    <label className="mb-1 block text-[11px] font-medium text-slate-500 dark:text-slate-400">Select month</label>
+                    <select
+                      value={summaryMonth}
+                      onChange={(event) => setSummaryMonth(event.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-emerald-500 dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
+                    >
+                      <option value="">Current month</option>
+                      {summaryMonthOptions.map((monthValue) => (
+                        <option key={monthValue} value={String(monthValue).padStart(2, '0')}>
+                          {String(monthValue).padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+
               <button
                 type="button"
-                className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900"
+                className="block w-full px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900"
                 onClick={() => {
                   exportState.openDialog();
                   setIsMenuOpen(false);
@@ -150,24 +241,13 @@ const OrderHeader = () => {
 
               <button
                 type="button"
-                className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900"
+                className="block w-full px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900"
                 onClick={() => {
                   exportCurrentOrdersCsv();
                   setIsMenuOpen(false);
                 }}
               >
                 Export Current Page CSV
-              </button>
-
-              <button
-                type="button"
-                className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900"
-                onClick={() => {
-                  reloadOrders();
-                  setIsMenuOpen(false);
-                }}
-              >
-                Refresh Orders
               </button>
             </div>
           ) : null}

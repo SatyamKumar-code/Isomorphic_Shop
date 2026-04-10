@@ -500,6 +500,27 @@ export const getCustomersController = async (req, res) => {
                 lastPurchaseDate: formatDateDisplay(stats.lastPurchaseDate || user.createdAt),
                 lastLoginDate: formatDateDisplay(user.last_login_date),
                 supportNote: user.support_note || "",
+                supportNoteUpdatedAt: user.support_note_updated_at || null,
+                supportNoteUpdatedBy: user.support_note_updated_by
+                    ? {
+                        adminId: user.support_note_updated_by.adminId || null,
+                        adminName: user.support_note_updated_by.adminName || "",
+                        adminEmail: user.support_note_updated_by.adminEmail || "",
+                    }
+                    : null,
+                supportNoteHistory: Array.isArray(user.support_note_history)
+                    ? user.support_note_history.map((entry) => ({
+                        note: entry?.note || "",
+                        updatedAt: entry?.updatedAt || null,
+                        updatedBy: entry?.updatedBy
+                            ? {
+                                adminId: entry.updatedBy.adminId || null,
+                                adminName: entry.updatedBy.adminName || "",
+                                adminEmail: entry.updatedBy.adminEmail || "",
+                            }
+                            : null,
+                    }))
+                    : [],
                 createdAt: user.createdAt,
                 firstOrderDate: stats.firstOrderDate,
             };
@@ -1509,6 +1530,7 @@ export async function adminUpdateCustomerNoteController(req, res) {
     try {
         const { id } = req.params;
         const { note } = req.body;
+        const { userId } = req;
 
         const nextNote = String(note || "").trim();
         if (nextNote.length > 500) {
@@ -1519,11 +1541,7 @@ export async function adminUpdateCustomerNoteController(req, res) {
             })
         }
 
-        const user = await UserModel.findByIdAndUpdate(
-            { _id: id },
-            { support_note: nextNote },
-            { new: true }
-        );
+        const user = await UserModel.findById(id);
 
         if (!user) {
             return res.status(404).json({
@@ -1533,12 +1551,85 @@ export async function adminUpdateCustomerNoteController(req, res) {
             })
         }
 
+        let editorMeta = {
+            adminId: null,
+            adminName: "",
+            adminEmail: "",
+        };
+
+        if (userId) {
+            const editor = await UserModel.findById(userId).select("name email").lean();
+            if (editor) {
+                editorMeta = {
+                    adminId: editor._id || null,
+                    adminName: editor.name || "",
+                    adminEmail: editor.email || "",
+                };
+            }
+        }
+
+        const previousNote = String(user.support_note || "").trim();
+        const hasChanged = previousNote !== nextNote;
+
+        if (hasChanged) {
+            if (previousNote) {
+                const previousNoteUpdatedAt = user.support_note_updated_at || user.updatedAt || user.createdAt || new Date();
+                const previousUpdatedBy = user.support_note_updated_by && typeof user.support_note_updated_by === "object"
+                    ? {
+                        adminId: user.support_note_updated_by.adminId || null,
+                        adminName: user.support_note_updated_by.adminName || "",
+                        adminEmail: user.support_note_updated_by.adminEmail || "",
+                    }
+                    : {
+                        adminId: null,
+                        adminName: "",
+                        adminEmail: "",
+                    };
+                const existingHistory = Array.isArray(user.support_note_history) ? user.support_note_history : [];
+
+                user.support_note_history = [
+                    {
+                        note: previousNote,
+                        updatedAt: previousNoteUpdatedAt,
+                        updatedBy: previousUpdatedBy,
+                    },
+                    ...existingHistory,
+                ].slice(0, 5);
+            }
+
+            user.support_note = nextNote;
+            user.support_note_updated_at = new Date();
+            user.support_note_updated_by = editorMeta;
+            await user.save();
+        }
+
         return res.status(200).json({
             message: "Customer note updated",
             error: false,
             success: true,
             data: {
-                supportNote: user.support_note || ""
+                supportNote: user.support_note || "",
+                supportNoteUpdatedAt: user.support_note_updated_at || null,
+                supportNoteUpdatedBy: user.support_note_updated_by
+                    ? {
+                        adminId: user.support_note_updated_by.adminId || null,
+                        adminName: user.support_note_updated_by.adminName || "",
+                        adminEmail: user.support_note_updated_by.adminEmail || "",
+                    }
+                    : null,
+                supportNoteHistory: Array.isArray(user.support_note_history)
+                    ? user.support_note_history.map((entry) => ({
+                        note: entry?.note || "",
+                        updatedAt: entry?.updatedAt || null,
+                        updatedBy: entry?.updatedBy
+                            ? {
+                                adminId: entry.updatedBy.adminId || null,
+                                adminName: entry.updatedBy.adminName || "",
+                                adminEmail: entry.updatedBy.adminEmail || "",
+                            }
+                            : null,
+                    }))
+                    : []
             }
         })
     } catch (error) {
