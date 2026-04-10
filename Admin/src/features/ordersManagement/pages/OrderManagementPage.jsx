@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import OrderFilters from '../components/OrderFilters';
 import OrderHeader from '../components/OrderHeader';
 import OrderPagination from '../components/OrderPagination';
@@ -18,7 +19,14 @@ const OrderManagementPage = () => {
     thumbnailColors,
     isLoading,
     pageSize,
+    setCustomerIdFilter,
   } = useOrder();
+  const [searchParams] = useSearchParams();
+
+  React.useEffect(() => {
+    const customerId = searchParams.get("customerId") || "";
+    setCustomerIdFilter(customerId);
+  }, [searchParams, setCustomerIdFilter]);
 
   return (
     <div className="w-full overflow-x-auto scrollbarNone px-5 pb-6 pt-4">

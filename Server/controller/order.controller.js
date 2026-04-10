@@ -194,7 +194,7 @@ export const createOrderWithRazorpay = async (req, res) => {
             success: false
         })
     }
-} 
+}
 
 export const getUserOrders = async (req, res) => {
     try {
@@ -230,6 +230,7 @@ export const getAllOrders = async (req, res) => {
     try {
         // Pagination parameters
         let { page = 1, limit = 20 } = req.query;
+        const customerId = String(req.query?.customerId || "").trim();
         page = parseInt(page, 10);
         limit = parseInt(limit, 10);
         if (isNaN(page) || page < 1) page = 1;
@@ -238,8 +239,13 @@ export const getAllOrders = async (req, res) => {
         if (limit > MAX_LIMIT) limit = MAX_LIMIT;
         const skip = (page - 1) * limit;
 
+        const query = {};
+        if (customerId) {
+            query.userId = customerId;
+        }
+
         // Query for paginated orders
-        const orders = await OrderModel.find()
+        const orders = await OrderModel.find(query)
             .populate("userId")
             .populate("products.productId")
             .populate("delivery_address")
@@ -247,13 +253,13 @@ export const getAllOrders = async (req, res) => {
             .skip(skip)
             .limit(limit);
 
-        const total = await OrderModel.countDocuments();
+        const total = await OrderModel.countDocuments(query);
 
         if (!orders || orders.length === 0) {
-            return res.status(404).json({
+            return res.status(200).json({
                 message: "No orders found",
-                error: true,
-                success: false,
+                error: false,
+                success: true,
                 orders: [],
                 total: 0,
                 page,

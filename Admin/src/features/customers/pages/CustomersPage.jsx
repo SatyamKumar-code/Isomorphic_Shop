@@ -7,7 +7,7 @@ import CustomersPagination from "../components/CustomersPagination";
 import { useCustomers } from "../../../Context/customers/useCustomers";
 
 const CustomersPage = () => {
-    const { overviewStats, weekSeries, rangeOptions, activeRange, setActiveRange, activeStat, setActiveStat, selectedCustomerId } = useCustomers();
+    const { overviewStats, weekSeries, rangeOptions, activeRange, setActiveRange, activeStat, setActiveStat, selectedCustomer } = useCustomers();
 
     const overviewChartProps = {
         title: "Customer Overview",
@@ -28,14 +28,14 @@ const CustomersPage = () => {
             </div>
 
             <div className="mt-5 flex flex-col gap-5 xl:flex-row">
-                <div className={selectedCustomerId ? "xl:w-[75%]" : "xl:w-full"}>
+                <div className={selectedCustomer ? "xl:w-[75%]" : "xl:w-full"}>
                     <div className="p-4 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg">
                         <CustomersTable />
                         <CustomersPagination />
                     </div>
                 </div>
 
-                {selectedCustomerId && <CustomerDetailsCard />}
+                {selectedCustomer && <CustomerDetailsCard />}
             </div>
         </div>
     );

@@ -198,6 +198,11 @@ const SummaryCards = () => {
                 const settings = getSettingsForCard(card.title);
                 const baseCard = baseCardMap[card.title] || card;
                 const displayCard = cardDataMap[card.title] || baseCard;
+                const parsedChange = Number.parseFloat(String(displayCard.change || "").replace("%", ""));
+                const backendSaysNegative = String(displayCard.changeColor || "").toLowerCase() === "#ef4444";
+                const isNegativeChange = backendSaysNegative || (Number.isFinite(parsedChange) && parsedChange < 0);
+                const changeIndicator = isNegativeChange ? "↓" : "↑";
+                const changeColor = displayCard.changeColor || (isNegativeChange ? "#EF4444" : "#22C55E");
 
                 return (
                     <div
@@ -276,7 +281,7 @@ const SummaryCards = () => {
                         <div className="text-[14px] font-semibold text-slate-900 dark:text-slate-50">{displayCard.title}</div>
                         <div className="mt-4 flex items-end gap-3">
                             <div className="text-[28px] font-semibold leading-none text-slate-950 dark:text-slate-50">{displayCard.value}</div>
-                            <div className="mb-1 text-[12px] font-semibold text-emerald-500">↑ {displayCard.change}</div>
+                            <div className="mb-1 text-[12px] font-semibold" style={{ color: changeColor }}>{changeIndicator} {displayCard.change}</div>
                         </div>
                         <div className="mt-2 text-[12px] text-slate-500 dark:text-slate-400">{getCardPeriodLabel(settings)}</div>
                     </div>

@@ -15,6 +15,10 @@ const CustomerDetailsCard = () => {
     const { selectedCustomer } = useCustomers();
     const [copyMessage, setCopyMessage] = useState("");
 
+    if (!selectedCustomer) {
+        return null;
+    }
+
     const showCopyMessage = (message) => {
         setCopyMessage(message);
         setTimeout(() => {

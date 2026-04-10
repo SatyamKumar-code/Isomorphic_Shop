@@ -18,6 +18,7 @@ cloudinary.config({
 });
 
 const SHORT_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const SHORT_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const formatDateDisplay = (value) => {
     if (!value) return "";
@@ -66,14 +67,52 @@ const getAvailableYears = (users, orders) => {
     return Array.from(years).sort((a, b) => a - b);
 };
 
-const getPeriodConfig = ({ period, year, month, availableYears }) => {
+const getAvailableMonthsByYear = (users, orders) => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const monthsByYear = new Map();
+
+    const addDate = (value) => {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return;
+        }
+
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        if (year === currentYear && month > currentMonth) {
+            return;
+        }
+
+        const existing = monthsByYear.get(year) || new Set();
+        existing.add(month);
+        monthsByYear.set(year, existing);
+    };
+
+    users.forEach((user) => addDate(user.createdAt));
+    orders.forEach((order) => addDate(order.createdAt));
+
+    return Array.from(monthsByYear.entries()).reduce((accumulator, [year, months]) => {
+        accumulator[year] = Array.from(months).sort((a, b) => a - b);
+        return accumulator;
+    }, {});
+};
+
+const getPeriodConfig = ({ period, year, month, availableYears, availableMonthsByYear }) => {
     const now = new Date();
     const normalizedPeriod = ["7days", "daywise", "month", "year"].includes(period) ? period : "7days";
 
     const defaultYear = now.getFullYear();
     const fallbackYear = availableYears.includes(defaultYear) ? defaultYear : availableYears[availableYears.length - 1] || defaultYear;
     const selectedYear = Number.isInteger(year) && availableYears.includes(year) ? year : fallbackYear;
-    const selectedMonth = Number.isInteger(month) && month >= 1 && month <= 12 ? month : (now.getMonth() + 1);
+    const availableMonthsForSelectedYear = Array.isArray(availableMonthsByYear?.[selectedYear])
+        ? availableMonthsByYear[selectedYear]
+        : [];
+    const fallbackMonth = availableMonthsForSelectedYear.includes(now.getMonth() + 1)
+        ? (now.getMonth() + 1)
+        : (availableMonthsForSelectedYear[availableMonthsForSelectedYear.length - 1] || (now.getMonth() + 1));
+    const selectedMonth = Number.isInteger(month) && availableMonthsForSelectedYear.includes(month) ? month : fallbackMonth;
 
     if (normalizedPeriod === "year") {
         return {
@@ -173,7 +212,7 @@ const getComparisonWindow = (periodConfig) => {
     return { currentStart, currentEnd, previousStart, previousEnd };
 };
 
-const buildSeries = ({ users, orders, secondOrderDateByUser, points }) => {
+const buildSeries = ({ users, orders, secondOrderDateByUser, buckets }) => {
     const series = {
         activeCustomers: [],
         repeatCustomers: [],
@@ -181,21 +220,29 @@ const buildSeries = ({ users, orders, secondOrderDateByUser, points }) => {
         conversionRate: [],
     };
 
-    points.forEach((dayEnd) => {
-        const safeDayEnd = new Date(dayEnd);
-        if (Number.isNaN(safeDayEnd.getTime())) {
+    buckets.forEach((bucket) => {
+        const safeStart = new Date(bucket.start);
+        const safeEnd = new Date(bucket.end);
+
+        if (Number.isNaN(safeStart.getTime()) || Number.isNaN(safeEnd.getTime())) {
             return;
         }
 
-        const activeCustomers = users.filter((user) => user.status === "Active" && new Date(user.createdAt) <= safeDayEnd).length;
+        const activeCustomers = users.filter((user) => {
+            const createdAt = new Date(user.createdAt);
+            return user.status === "Active" && createdAt >= safeStart && createdAt <= safeEnd;
+        }).length;
+
         const repeatCustomers = users.filter((user) => {
             const secondOrderDate = secondOrderDateByUser.get(String(user.uid));
-            return secondOrderDate instanceof Date && secondOrderDate <= safeDayEnd;
+            return secondOrderDate instanceof Date && secondOrderDate >= safeStart && secondOrderDate <= safeEnd;
         }).length;
+
         const shopVisitor = orders.filter((order) => {
             const orderDate = new Date(order.createdAt);
-            return !Number.isNaN(orderDate.getTime()) && orderDate <= safeDayEnd;
+            return !Number.isNaN(orderDate.getTime()) && orderDate >= safeStart && orderDate <= safeEnd;
         }).length;
+
         const conversionRate = activeCustomers ? Number(((shopVisitor / activeCustomers) * 100).toFixed(1)) : 0;
 
         series.activeCustomers.push(activeCustomers);
@@ -207,10 +254,158 @@ const buildSeries = ({ users, orders, secondOrderDateByUser, points }) => {
     return series;
 };
 
+const isCurrentMonthAndYear = (year, month, now) => year === now.getFullYear() && month === (now.getMonth() + 1);
+
+const buildBucketsForPeriod = ({ periodConfig, comparisonWindow, users, orders }) => {
+    const now = new Date();
+
+    if (periodConfig.period === "year") {
+        const yearsWithData = new Set();
+
+        users.forEach((user) => {
+            const date = new Date(user.createdAt);
+            if (!Number.isNaN(date.getTime())) {
+                yearsWithData.add(date.getFullYear());
+            }
+        });
+
+        orders.forEach((order) => {
+            const date = new Date(order.createdAt);
+            if (!Number.isNaN(date.getTime())) {
+                yearsWithData.add(date.getFullYear());
+            }
+        });
+
+        const years = periodConfig.xLabels
+            .map((value) => Number(value))
+            .filter((year) => Number.isInteger(year) && yearsWithData.has(year));
+
+        return years.map((year) => ({
+            label: String(year),
+            start: new Date(year, 0, 1, 0, 0, 0, 0),
+            end: new Date(year, 11, 31, 23, 59, 59, 999),
+        }));
+    }
+
+    if (periodConfig.period === "month") {
+        const maxMonth = periodConfig.selectedYear === now.getFullYear() ? (now.getMonth() + 1) : 12;
+        const monthsWithData = new Set();
+
+        users.forEach((user) => {
+            const date = new Date(user.createdAt);
+            if (!Number.isNaN(date.getTime()) && date.getFullYear() === periodConfig.selectedYear) {
+                const month = date.getMonth() + 1;
+                if (month <= maxMonth) {
+                    monthsWithData.add(month);
+                }
+            }
+        });
+
+        orders.forEach((order) => {
+            const date = new Date(order.createdAt);
+            if (!Number.isNaN(date.getTime()) && date.getFullYear() === periodConfig.selectedYear) {
+                const month = date.getMonth() + 1;
+                if (month <= maxMonth) {
+                    monthsWithData.add(month);
+                }
+            }
+        });
+
+        return Array.from(monthsWithData)
+            .sort((a, b) => a - b)
+            .map((month) => ({
+                label: SHORT_MONTH_NAMES[month - 1],
+                start: new Date(periodConfig.selectedYear, month - 1, 1, 0, 0, 0, 0),
+                end: isCurrentMonthAndYear(periodConfig.selectedYear, month, now)
+                    ? new Date(now)
+                    : new Date(periodConfig.selectedYear, month, 0, 23, 59, 59, 999),
+            }));
+    }
+
+    if (periodConfig.period === "daywise") {
+        const daysInMonth = new Date(periodConfig.selectedYear, periodConfig.selectedMonth, 0).getDate();
+        const maxDay = isCurrentMonthAndYear(periodConfig.selectedYear, periodConfig.selectedMonth, now)
+            ? now.getDate()
+            : daysInMonth;
+
+        return Array.from({ length: Math.max(0, maxDay) }, (_, index) => {
+            const day = index + 1;
+            const start = new Date(periodConfig.selectedYear, periodConfig.selectedMonth - 1, day, 0, 0, 0, 0);
+            const end = new Date(periodConfig.selectedYear, periodConfig.selectedMonth - 1, day, 23, 59, 59, 999);
+
+            return {
+                label: String(day),
+                start,
+                end: isCurrentMonthAndYear(periodConfig.selectedYear, periodConfig.selectedMonth, now) && day === now.getDate()
+                    ? new Date(now)
+                    : end,
+            };
+        });
+    }
+
+    return Array.from({ length: 7 }, (_, index) => {
+        const start = new Date(comparisonWindow.currentStart);
+        start.setDate(comparisonWindow.currentStart.getDate() + index);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+
+        return {
+            label: SHORT_DAY_NAMES[start.getDay()],
+            start,
+            end,
+        };
+    });
+};
+
+const buildLastWeekBuckets = (comparisonWindow) => {
+    return Array.from({ length: 7 }, (_, index) => {
+        const start = new Date(comparisonWindow.previousStart);
+        start.setDate(comparisonWindow.previousStart.getDate() + index);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+
+        return {
+            label: SHORT_DAY_NAMES[start.getDay()],
+            start,
+            end,
+        };
+    });
+};
+
+const formatChangePercentage = (currentValue, previousValue) => {
+    if (!previousValue) {
+        if (!currentValue) {
+            return "0.0%";
+        }
+
+        return "+100.0%";
+    }
+
+    const percentage = ((currentValue - previousValue) / previousValue) * 100;
+    const rounded = percentage.toFixed(1);
+
+    if (percentage > 0) {
+        return `+${rounded}%`;
+    }
+
+    return `${rounded}%`;
+};
+
 export const getCustomersController = async (req, res) => {
     try {
         const requestedYear = Number.parseInt(req.query?.year, 10);
         const requestedMonth = Number.parseInt(req.query?.month, 10);
+        const requestedPage = Number.parseInt(req.query?.page, 10);
+        const requestedLimit = Number.parseInt(req.query?.limit, 10);
+        const searchText = String(req.query?.search || "").trim().toLowerCase();
+        const rawStatusFilter = String(req.query?.status || "all").trim().toLowerCase();
+        const statusFilter = rawStatusFilter === "inactive" ? "blocked" : rawStatusFilter;
+        const orderSort = String(req.query?.orderSort || "none").trim().toLowerCase();
+        const spendSort = String(req.query?.spendSort || "none").trim().toLowerCase();
 
         const users = await UserModel.find({ role: "user" })
             .select("-password -refresh_token -otp -otp_expiry")
@@ -226,12 +421,17 @@ export const getCustomersController = async (req, res) => {
             : [];
 
         const availableYears = getAvailableYears(users, orders);
+        const availableMonthsByYear = getAvailableMonthsByYear(users, orders);
         const periodConfig = getPeriodConfig({
             period: req.query?.period,
             year: Number.isInteger(requestedYear) ? requestedYear : null,
             month: Number.isInteger(requestedMonth) ? requestedMonth : null,
             availableYears,
+            availableMonthsByYear,
         });
+        const availableMonths = Array.isArray(availableMonthsByYear?.[periodConfig.selectedYear])
+            ? availableMonthsByYear[periodConfig.selectedYear]
+            : [];
         const comparisonWindow = getComparisonWindow(periodConfig);
 
         const orderStatsByUser = orders.reduce((accumulator, order) => {
@@ -291,17 +491,78 @@ export const getCustomersController = async (req, res) => {
                 phone: user.mobile ? `+${user.mobile}` : "-",
                 orderCount: stats.orderCount || 0,
                 totalSpend: stats.totalSpend || 0,
-                status: user.status || "Inactive",
+                status: user.status === "Inactive" ? "Blocked" : (user.status || "Blocked"),
                 address: user.address || "-",
                 totalOrders: stats.orderCount || 0,
                 completedOrders: stats.completedOrders || 0,
                 canceledOrders: stats.canceledOrders || 0,
                 registrationDate: formatDateDisplay(user.createdAt),
                 lastPurchaseDate: formatDateDisplay(stats.lastPurchaseDate || user.createdAt),
+                lastLoginDate: formatDateDisplay(user.last_login_date),
+                supportNote: user.support_note || "",
                 createdAt: user.createdAt,
                 firstOrderDate: stats.firstOrderDate,
             };
         });
+
+        const filteredCustomers = customers.filter((customer) => {
+            const matchesStatus = statusFilter === "all"
+                ? true
+                : String(customer.status || "").toLowerCase() === statusFilter;
+
+            if (!matchesStatus) {
+                return false;
+            }
+
+            if (!searchText) {
+                return true;
+            }
+
+            const fields = [
+                customer.id,
+                customer.name,
+                customer.email,
+                customer.phone,
+                customer.address,
+                customer.status,
+            ];
+
+            return fields.some((value) => String(value || "").toLowerCase().includes(searchText));
+        });
+
+        const sortedCustomers = [...filteredCustomers].sort((a, b) => {
+            const orderDiff = Number(a.orderCount || 0) - Number(b.orderCount || 0);
+            const spendDiff = Number(a.totalSpend || 0) - Number(b.totalSpend || 0);
+
+            if (orderSort === "asc" && orderDiff !== 0) {
+                return orderDiff;
+            }
+
+            if (orderSort === "desc" && orderDiff !== 0) {
+                return -orderDiff;
+            }
+
+            if (spendSort === "asc" && spendDiff !== 0) {
+                return spendDiff;
+            }
+
+            if (spendSort === "desc" && spendDiff !== 0) {
+                return -spendDiff;
+            }
+
+            return 0;
+        });
+
+        const safeLimit = Number.isInteger(requestedLimit) && requestedLimit > 0
+            ? Math.min(requestedLimit, 100)
+            : 10;
+        const totalCount = sortedCustomers.length;
+        const totalPages = Math.max(1, Math.ceil(totalCount / safeLimit));
+        const safePage = Number.isInteger(requestedPage) && requestedPage > 0
+            ? Math.min(requestedPage, totalPages)
+            : 1;
+        const startIndex = (safePage - 1) * safeLimit;
+        const paginatedCustomers = sortedCustomers.slice(startIndex, startIndex + safeLimit);
 
         const thisPeriodUsers = users.filter((user) => {
             const createdAt = new Date(user.createdAt);
@@ -323,6 +584,16 @@ export const getCustomersController = async (req, res) => {
             return createdAt >= comparisonWindow.previousStart && createdAt <= comparisonWindow.previousEnd;
         }).length;
 
+        const totalCustomersCurrent = users.filter((user) => {
+            const createdAt = new Date(user.createdAt);
+            return createdAt <= comparisonWindow.currentEnd;
+        }).length;
+
+        const totalCustomersPrevious = users.filter((user) => {
+            const createdAt = new Date(user.createdAt);
+            return createdAt <= comparisonWindow.previousEnd;
+        }).length;
+
         const activeCustomersCount = customers.filter((customer) => {
             const createdAt = new Date(customer.createdAt);
             return customer.status === "Active" && createdAt >= comparisonWindow.currentStart && createdAt <= comparisonWindow.currentEnd;
@@ -340,20 +611,20 @@ export const getCustomersController = async (req, res) => {
         const summaryCards = [
             {
                 title: "Total Customers",
-                value: formatCompactNumber(thisPeriodUsers),
-                change: previousPeriodUsers ? `${(((thisPeriodUsers - previousPeriodUsers) / previousPeriodUsers) * 100).toFixed(1)}%` : "+0%",
-                changeColor: thisPeriodUsers >= previousPeriodUsers ? "#22C55E" : "#EF4444",
+                value: formatCompactNumber(totalCustomersCurrent),
+                change: formatChangePercentage(totalCustomersCurrent, totalCustomersPrevious),
+                changeColor: totalCustomersCurrent >= totalCustomersPrevious ? "#22C55E" : "#EF4444",
             },
             {
                 title: "New Customers",
                 value: formatCompactNumber(thisPeriodUsers),
-                change: previousPeriodUsers ? `${(((thisPeriodUsers - previousPeriodUsers) / previousPeriodUsers) * 100).toFixed(1)}%` : "+0%",
+                change: formatChangePercentage(thisPeriodUsers, previousPeriodUsers),
                 changeColor: thisPeriodUsers >= previousPeriodUsers ? "#22C55E" : "#EF4444",
             },
             {
                 title: "Visitor",
                 value: formatCompactNumber(thisPeriodOrders),
-                change: previousPeriodOrders ? `${(((thisPeriodOrders - previousPeriodOrders) / previousPeriodOrders) * 100).toFixed(1)}%` : "+0%",
+                change: formatChangePercentage(thisPeriodOrders, previousPeriodOrders),
                 changeColor: thisPeriodOrders >= previousPeriodOrders ? "#22C55E" : "#EF4444",
             },
         ];
@@ -365,42 +636,12 @@ export const getCustomersController = async (req, res) => {
             { key: "conversionRate", label: "Conversion Rate", value: `${conversionRate}%` },
         ];
 
-        const buildPointEnds = () => {
-            if (periodConfig.period === "year") {
-                return availableYears.map((year) => new Date(year, 11, 31, 23, 59, 59, 999));
-            }
-
-            if (periodConfig.period === "month") {
-                return Array.from({ length: 12 }, (_, index) => new Date(periodConfig.selectedYear, index + 1, 0, 23, 59, 59, 999));
-            }
-
-            if (periodConfig.period === "daywise") {
-                const daysInMonth = new Date(periodConfig.selectedYear, periodConfig.selectedMonth, 0).getDate();
-                return Array.from({ length: daysInMonth }, (_, index) => new Date(periodConfig.selectedYear, periodConfig.selectedMonth - 1, index + 1, 23, 59, 59, 999));
-            }
-
-            const currentEnd = comparisonWindow.currentEnd;
-            return Array.from({ length: 7 }, (_, index) => {
-                const date = new Date(currentEnd);
-                date.setDate(currentEnd.getDate() - (6 - index));
-                date.setHours(23, 59, 59, 999);
-                return date;
-            });
-        };
-
-        const buildLastPointEnds = () => {
-            if (periodConfig.period !== "7days") {
-                return [];
-            }
-
-            const previousEnd = comparisonWindow.previousEnd;
-            return Array.from({ length: 7 }, (_, index) => {
-                const date = new Date(previousEnd);
-                date.setDate(previousEnd.getDate() - (6 - index));
-                date.setHours(23, 59, 59, 999);
-                return date;
-            });
-        };
+        const currentBuckets = buildBucketsForPeriod({
+            periodConfig,
+            comparisonWindow,
+            users,
+            orders,
+        });
 
         const currentRangeValue = periodConfig.ranges[0].value;
         const weekSeries = {
@@ -408,7 +649,7 @@ export const getCustomersController = async (req, res) => {
                 users: customers,
                 orders,
                 secondOrderDateByUser,
-                points: buildPointEnds(),
+                buckets: currentBuckets,
             }),
         };
 
@@ -417,16 +658,16 @@ export const getCustomersController = async (req, res) => {
                 users: customers,
                 orders,
                 secondOrderDateByUser,
-                points: buildLastPointEnds(),
+                buckets: buildLastWeekBuckets(comparisonWindow),
             });
         }
 
         const xLabelsByRange = {
-            [currentRangeValue]: periodConfig.xLabels,
+            [currentRangeValue]: currentBuckets.map((bucket) => bucket.label),
         };
 
         if (periodConfig.period === "7days" && periodConfig.ranges[1]) {
-            xLabelsByRange[periodConfig.ranges[1].value] = periodConfig.xLabels;
+            xLabelsByRange[periodConfig.ranges[1].value] = buildLastWeekBuckets(comparisonWindow).map((bucket) => bucket.label);
         }
 
         return res.status(200).json({
@@ -434,7 +675,14 @@ export const getCustomersController = async (req, res) => {
             error: false,
             success: true,
             data: {
-                customers,
+                customers: paginatedCustomers,
+                allCustomers: sortedCustomers,
+                pagination: {
+                    page: safePage,
+                    limit: safeLimit,
+                    totalCount,
+                    totalPages,
+                },
                 summaryCards,
                 overviewStats,
                 weekSeries,
@@ -444,6 +692,7 @@ export const getCustomersController = async (req, res) => {
                 selectedYear: periodConfig.selectedYear,
                 selectedMonth: periodConfig.selectedMonth,
                 availableYears,
+                availableMonths,
                 xLabelsByRange,
             },
         });
@@ -604,9 +853,9 @@ export const loginUserController = async (req, res) => {
             })
         }
 
-        if (user.status !== "Active") {
+        if (!["Active", "VIP"].includes(user.status)) {
             return res.status(403).json({
-                message: "Contact to Admin, Your Account is Inactive",
+                message: "Contact to Admin, Your Account is Blocked",
                 error: true,
                 success: false
             })
@@ -1151,12 +1400,22 @@ export async function updateUserStatus(req, res) {
         const { id } = req.params;
         const { status } = req.body;
 
+        const normalizedStatus = status === "Inactive" ? "Blocked" : status;
+        const allowedStatuses = ["Active", "Blocked", "VIP"];
+        if (!allowedStatuses.includes(normalizedStatus)) {
+            return res.status(400).json({
+                message: "Invalid status",
+                error: true,
+                success: false
+            })
+        }
+
         const updatedUserStatus = await UserModel.findByIdAndUpdate(
             {
                 _id: id,
             },
             {
-                status: status
+                status: normalizedStatus
             },
             { new: true }
         )
@@ -1165,6 +1424,122 @@ export async function updateUserStatus(req, res) {
             success: true,
             message: "User status updated",
             user: updatedUserStatus
+        })
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message || error,
+            error: true,
+            success: false
+        })
+    }
+}
+
+export async function adminSendResetPasswordLinkController(req, res) {
+    try {
+        const { id } = req.params;
+
+        const user = await UserModel.findById(id);
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false
+            })
+        }
+
+        const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+        user.otp = verifyCode;
+        user.otp_expiry = Date.now() + 10 * 60 * 1000;
+        await user.save();
+
+        await sendEmailFun({
+            to: user.email,
+            subject: "Password Reset OTP from Classyshop App",
+            text: "",
+            html: VerificationEmail(user.name, verifyCode)
+        });
+
+        return res.status(200).json({
+            message: "Password reset OTP sent successfully",
+            error: false,
+            success: true
+        })
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message || error,
+            error: true,
+            success: false
+        })
+    }
+}
+
+export async function adminForceLogoutUserController(req, res) {
+    try {
+        const { id } = req.params;
+
+        const user = await UserModel.findByIdAndUpdate(
+            { _id: id },
+            { refresh_token: "" },
+            { new: true }
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false
+            })
+        }
+
+        return res.status(200).json({
+            message: "User logged out from active sessions",
+            error: false,
+            success: true
+        })
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message || error,
+            error: true,
+            success: false
+        })
+    }
+}
+
+export async function adminUpdateCustomerNoteController(req, res) {
+    try {
+        const { id } = req.params;
+        const { note } = req.body;
+
+        const nextNote = String(note || "").trim();
+        if (nextNote.length > 500) {
+            return res.status(400).json({
+                message: "Note is too long",
+                error: true,
+                success: false
+            })
+        }
+
+        const user = await UserModel.findByIdAndUpdate(
+            { _id: id },
+            { support_note: nextNote },
+            { new: true }
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false
+            })
+        }
+
+        return res.status(200).json({
+            message: "Customer note updated",
+            error: false,
+            success: true,
+            data: {
+                supportNote: user.support_note || ""
+            }
         })
     } catch (error) {
         return res.status(500).json({

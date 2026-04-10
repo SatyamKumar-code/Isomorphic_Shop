@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    role : {
+    role: {
         type: String,
         enum: ['user', 'admin'],
         default: 'user'
@@ -37,8 +37,12 @@ const userSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Active', 'Inactive'],
+        enum: ['Active', 'Blocked', 'VIP'],
         default: 'Active'
+    },
+    support_note: {
+        type: String,
+        default: ""
     },
     last_login_date: {
         type: Date,

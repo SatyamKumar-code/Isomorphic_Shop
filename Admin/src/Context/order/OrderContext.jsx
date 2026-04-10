@@ -1,4 +1,4 @@
-import { createContext, useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getOrderSummary, getOrders } from "../../features/ordersManagement/OrderManagementAPI";
 
 export const OrderContext = createContext();
@@ -17,30 +17,7 @@ const initialTabs = [
     { label: "Cancelled", count: null },
 ];
 
-const initialOrders = [
-    { id: "#ORD0001", product: "Wireless Bluetooth Headphones", image: "https://picsum.photos/seed/headphones/80/80", date: "01-01-2025", price: "49.99", payment: "Paid", status: "Delivered" },
-    { id: "#ORD0002", product: "Men's T-Shirt", image: "https://picsum.photos/seed/tshirt1/80/80", date: "01-01-2025", price: "14.99", payment: "Unpaid", status: "Pending" },
-    { id: "#ORD0003", product: "Men's Leather Wallet", image: "https://picsum.photos/seed/wallet/80/80", date: "01-01-2025", price: "49.99", payment: "Paid", status: "Delivered" },
-    { id: "#ORD0004", product: "Memory Foam Pillow", image: "https://picsum.photos/seed/pillow/80/80", date: "01-01-2025", price: "39.99", payment: "Paid", status: "Shipped" },
-    { id: "#ORD0005", product: "Adjustable Dumbbells", image: "https://picsum.photos/seed/dumbbells/80/80", date: "01-01-2025", price: "14.99", payment: "Unpaid", status: "Pending" },
-    { id: "#ORD0006", product: "Coffee Maker", image: "https://picsum.photos/seed/coffeemaker/80/80", date: "01-01-2025", price: "79.99", payment: "Unpaid", status: "Cancelled" },
-    { id: "#ORD0007", product: "Casual Baseball Cap", image: "https://picsum.photos/seed/cap/80/80", date: "01-01-2025", price: "49.99", payment: "Paid", status: "Delivered" },
-    { id: "#ORD0008", product: "Full HD Webcam", image: "https://picsum.photos/seed/webcam/80/80", date: "01-01-2025", price: "39.99", payment: "Paid", status: "Delivered" },
-    { id: "#ORD0009", product: "Smart LED Color Bulb", image: "https://picsum.photos/seed/bulb/80/80", date: "01-01-2025", price: "79.99", payment: "Unpaid", status: "Delivered" },
-    { id: "#ORD0010", product: "Men's T-Shirt", image: "https://picsum.photos/seed/tshirt2/80/80", date: "01-01-2025", price: "14.99", payment: "Unpaid", status: "Delivered" },
-    { id: "#ORD0011", product: "Men's T-Shirt", image: "https://picsum.photos/seed/tshirt3/80/80", date: "01-01-2025", price: "14.99", payment: "Unpaid", status: "Delivered" },
-    { id: "#ORD0012", product: "Wireless Bluetooth Headphones", image: "https://picsum.photos/seed/headphones/80/80", date: "01-01-2025", price: "49.99", payment: "Paid", status: "Delivered" },
-    { id: "#ORD0013", product: "Men's T-Shirt", image: "https://picsum.photos/seed/tshirt1/80/80", date: "01-01-2025", price: "14.99", payment: "Unpaid", status: "Pending" },
-    { id: "#ORD0014", product: "Men's Leather Wallet", image: "https://picsum.photos/seed/wallet/80/80", date: "01-01-2025", price: "49.99", payment: "Paid", status: "Delivered" },
-    { id: "#ORD0015", product: "Memory Foam Pillow", image: "https://picsum.photos/seed/pillow/80/80", date: "01-01-2025", price: "39.99", payment: "Paid", status: "Shipped" },
-    { id: "#ORD0016", product: "Adjustable Dumbbells", image: "https://picsum.photos/seed/dumbbells/80/80", date: "01-01-2025", price: "14.99", payment: "Unpaid", status: "Pending" },
-    { id: "#ORD0017", product: "Coffee Maker", image: "https://picsum.photos/seed/coffeemaker/80/80", date: "01-01-2025", price: "79.99", payment: "Unpaid", status: "Cancelled" },
-    { id: "#ORD0018", product: "Casual Baseball Cap", image: "https://picsum.photos/seed/cap/80/80", date: "01-01-2025", price: "49.99", payment: "Paid", status: "Delivered" },
-    { id: "#ORD0019", product: "Full HD Webcam", image: "https://picsum.photos/seed/webcam/80/80", date: "01-01-2025", price: "39.99", payment: "Paid", status: "Delivered" },
-    { id: "#ORD0020", product: "Smart LED Color Bulb", image: "https://picsum.photos/seed/bulb/80/80", date: "01-01-2025", price: "79.99", payment: "Unpaid", status: "Delivered" },
-    { id: "#ORD0021", product: "Men's T-Shirt", image: "https://picsum.photos/seed/tshirt2/80/80", date: "01-01-2025", price: "14.99", payment: "Unpaid", status: "Delivered" },
-    { id: "#ORD0022", product: "Men's T-Shirt", image: "https://picsum.photos/seed/tshirt3/80/80", date: "01-01-2025", price: "14.99", payment: "Unpaid", status: "Delivered" },
-];
+const initialOrders = [];
 
 const pageSize = 10;
 
@@ -72,7 +49,9 @@ export const OrderProvider = ({ children }) => {
     const [activeTab, setActiveTab] = useState("All order");
     const [currentPage, setCurrentPage] = useState(1);
     const [searchText, setSearchText] = useState("");
+    const [customerIdFilter, setCustomerIdFilter] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const latestOrdersRequestRef = useRef(0);
 
     const loadSummary = useCallback(async () => {
         try {
@@ -89,18 +68,39 @@ export const OrderProvider = ({ children }) => {
     }, []);
 
     const loadOrders = useCallback(async () => {
+        const requestId = latestOrdersRequestRef.current + 1;
+        latestOrdersRequestRef.current = requestId;
+
         try {
             setIsLoading(true);
-            const res = await getOrders();
-            if (Array.isArray(res?.data?.data)) {
-                setOrders(res.data.data);
+            const params = customerIdFilter ? { customerId: customerIdFilter } : {};
+            const res = await getOrders(params);
+
+            if (requestId !== latestOrdersRequestRef.current) {
+                return;
+            }
+
+            const payloadOrders = Array.isArray(res?.data?.orders)
+                ? res.data.orders
+                : (Array.isArray(res?.data?.data) ? res.data.data : null);
+
+            if (Array.isArray(payloadOrders)) {
+                setOrders(payloadOrders);
+            } else {
+                setOrders([]);
             }
         } catch (error) {
-            // Keep fallback local data when API is unavailable.
+            if (requestId !== latestOrdersRequestRef.current) {
+                return;
+            }
+
+            setOrders([]);
         } finally {
-            setIsLoading(false);
+            if (requestId === latestOrdersRequestRef.current) {
+                setIsLoading(false);
+            }
         }
-    }, []);
+    }, [customerIdFilter]);
 
     useEffect(() => {
         loadSummary();
@@ -165,9 +165,11 @@ export const OrderProvider = ({ children }) => {
         setCurrentPage,
         searchText,
         setSearchText,
+        customerIdFilter,
+        setCustomerIdFilter,
         isLoading,
         reloadOrders: loadOrders,
-    }), [summaryCards, tabs, paginatedOrders, pagination, totalPages, activeTab, currentPage, searchText, isLoading, loadOrders]);
+    }), [summaryCards, tabs, paginatedOrders, pagination, totalPages, activeTab, currentPage, searchText, customerIdFilter, isLoading, loadOrders]);
 
     return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;
 };

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginUserController, registerUserController, verifyEmailController, refreshTokenController, userAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController } from "../controller/user.controller.js";
+import { loginUserController, registerUserController, verifyEmailController, refreshTokenController, userAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController, adminSendResetPasswordLinkController, adminForceLogoutUserController, adminUpdateCustomerNoteController } from "../controller/user.controller.js";
 import upload from "../middlewares/multer.js";
 import userMiddleware from "../middlewares/userMiddleware.js";
 import adminMiddleware from "../middlewares/adminMiddleware.js";
@@ -19,6 +19,9 @@ userRouter.put("/user-avatar", userMiddleware, upload.array('avatar'), userAvata
 userRouter.delete("/deleteImage", userMiddleware, removeImageFromCloudinary);
 userRouter.put("/", userMiddleware, updateUserDetails);
 userRouter.put("/updateUserStatus/:id", adminMiddleware, updateUserStatus);
+userRouter.post("/admin/send-reset-link/:id", adminMiddleware, adminSendResetPasswordLinkController);
+userRouter.post("/admin/force-logout/:id", adminMiddleware, adminForceLogoutUserController);
+userRouter.put("/admin/customer-note/:id", adminMiddleware, adminUpdateCustomerNoteController);
 userRouter.post("/forgot-password", forgotPasswordController);
 userRouter.post("/verify-forgot-password-otp", verifyForgotPasswordOtpController);
 userRouter.post("/reset-password-withOtp", resetPasswordWithOtpController);
