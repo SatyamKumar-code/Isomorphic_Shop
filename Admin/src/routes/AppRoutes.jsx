@@ -14,6 +14,7 @@ const CategoriesPage = lazy(() => import("../features/categories/pages/Categorie
 const AddProductPage = lazy(() => import("../features/addProducts/pages/AddProductPage"));
 const ProductListPage = lazy(() => import("../features/productList/pages/ProductListPage"));
 const ProductReviewsPage = lazy(() => import("../features/productReviews/pages/ProductReviewsPage"));
+const TransactionPage = lazy(() => import("../features/Transaction/pages/TransactionPage"));
 
 
 
@@ -111,6 +112,18 @@ const AppRoutes = () => {
                 <ProtectedRoute allowedRoles={["seller"]}>
                     <MainLayout title="Product Reviews">
                         <ProductReviewsPage />
+                    </MainLayout>
+                </ProtectedRoute>
+            )
+        },
+
+        {
+            path: '/transaction',
+            exact: true,
+            element: (
+                <ProtectedRoute allowedRoles={["admin", "seller"]}>
+                    <MainLayout title="Transaction">
+                        <TransactionPage />
                     </MainLayout>
                 </ProtectedRoute>
             )

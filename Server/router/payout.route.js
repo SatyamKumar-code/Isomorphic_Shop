@@ -1,9 +1,20 @@
 import { Router } from "express";
 import adminMiddleware from "../middlewares/adminMiddleware.js";
-import { getSellerPayoutByIdController, updateSellerPaidAmountController } from "../controller/payout.controller.js";
+import {
+    getSellerOrderPayoutRowsController,
+    getSellerPayoutByIdController,
+    getSellerPayoutDashboardController,
+    getSellerPayoutHistoryController,
+    updateSellerPaidAmountController,
+    getSellerPeriodAnalyticsController,
+} from "../controller/payout.controller.js";
 
 const payoutRouter = Router();
 
+payoutRouter.get("/dashboard", adminMiddleware, getSellerPayoutDashboardController);
+payoutRouter.get("/orders", adminMiddleware, getSellerOrderPayoutRowsController);
+payoutRouter.get("/history", adminMiddleware, getSellerPayoutHistoryController);
+payoutRouter.get("/analytics", adminMiddleware, getSellerPeriodAnalyticsController);
 payoutRouter.get("/admin/seller/:sellerId", adminMiddleware, getSellerPayoutByIdController);
 payoutRouter.put("/admin/seller/:sellerId/paid", adminMiddleware, updateSellerPaidAmountController);
 

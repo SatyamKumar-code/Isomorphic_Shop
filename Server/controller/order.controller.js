@@ -182,6 +182,13 @@ const formatOrderForAdmin = (orderDoc) => {
     const displayProduct = hasMultipleProducts
         ? `${productName} +${orderDoc.products.length - 1} more`
         : productName;
+    const paymentMethod = orderDoc?.paymentMethod || "Razorpay";
+    const paymentStatus = orderDoc?.paymentStatus || "pending";
+    const paymentStatusLabelMap = {
+        pending: "Pending",
+        completed: "Paid",
+        failed: "Failed",
+    };
 
     return {
         id: orderDoc?._id,
@@ -194,7 +201,12 @@ const formatOrderForAdmin = (orderDoc) => {
             year: "numeric",
         }),
         price: `Rs ${Number(orderDoc.totalAmount || 0).toLocaleString("en-IN")}`,
-        payment: orderDoc.paymentStatus === "completed" ? "Paid" : "Unpaid",
+        amountValue: Number(orderDoc.totalAmount || 0),
+        payment: paymentStatus === "completed" ? "Paid" : "Unpaid",
+        paymentMethod,
+        paymentStatus,
+        paymentStatusLabel: paymentStatusLabelMap[paymentStatus] || "Pending",
+        paymentId: orderDoc.paymentId || "",
         status: formatOrderStatus(orderDoc.status),
         rawStatus: orderDoc.status,
         refundStatus: formatRefundStatus(orderDoc.refundStatus),
@@ -1356,6 +1368,11 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         if (normalizedIncomingStatus === "delivered" && previousStatus !== "delivered") {
+            // For COD orders, mark payment as completed on delivery
+            if (String(updatedStatus.paymentMethod || "").trim() === "COD" && String(updatedStatus.paymentStatus || "").toLowerCase() === "pending") {
+                await OrderModel.findByIdAndUpdate(orderId, { paymentStatus: "completed" });
+            }
+
             for (const item of updatedStatus.products) {
                 const productRef = item?.productId?._id || item?.productId;
                 if (!ownedProductIdSet.has(String(productRef))) {

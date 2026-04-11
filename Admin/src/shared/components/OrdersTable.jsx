@@ -161,6 +161,27 @@ const EmptyTable = ({ colSpan }) => (
     </tr>
 );
 
+const normalizeOrderToken = (value) => String(value || '').replace(/^#/, '').trim().toUpperCase();
+
+const isOrderMatch = (order, focusedOrderId) => {
+    const target = normalizeOrderToken(focusedOrderId);
+    if (!target) return false;
+
+    const orderIdToken = normalizeOrderToken(order?.orderId);
+    const rawIdToken = normalizeOrderToken(order?.id);
+    const targetShort = target.slice(-8);
+
+    if (orderIdToken && (orderIdToken === target || orderIdToken.slice(-8) === targetShort)) {
+        return true;
+    }
+
+    if (rawIdToken && (rawIdToken === target || rawIdToken.slice(-8) === targetShort)) {
+        return true;
+    }
+
+    return false;
+};
+
 const OrdersTable = ({
     variant = 'orders',
     rows = [],
@@ -175,7 +196,36 @@ const OrdersTable = ({
     isRefundUpdatingId = '',
     showOrderActions = true,
     showSellerColumn = true,
+    focusedOrderId = '',
 }) => {
+    const focusedRowRef = React.useRef(null);
+    const [activeHighlightOrderId, setActiveHighlightOrderId] = React.useState('');
+
+    React.useEffect(() => {
+        if (!focusedOrderId) {
+            setActiveHighlightOrderId('');
+            return;
+        }
+
+        setActiveHighlightOrderId(focusedOrderId);
+
+        const timeoutId = window.setTimeout(() => {
+            setActiveHighlightOrderId('');
+        }, 3800);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [focusedOrderId]);
+
+    React.useEffect(() => {
+        if (!focusedOrderId || !focusedRowRef.current) {
+            return;
+        }
+
+        focusedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, [focusedOrderId, rows]);
+
     if (isLoading) {
         return <div className="mt-6 text-sm text-slate-500">Loading records...</div>;
     }
@@ -259,7 +309,11 @@ const OrdersTable = ({
                         ? rows.map((order, index) => (
 
                             // Order Table Row
-                            <tr key={`${order.id}-${index}`} className="border-b border-slate-200 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200">
+                            <tr
+                                key={`${order.id}-${index}`}
+                                ref={isOrderMatch(order, focusedOrderId) ? focusedRowRef : null}
+                                className={`border-b border-slate-200 text-sm text-slate-700 transition-colors duration-700 dark:border-slate-800 dark:text-slate-200 ${isOrderMatch(order, activeHighlightOrderId) ? 'bg-amber-50/70 dark:bg-amber-500/10' : ''}`}
+                            >
                                 {(() => {
                                     const currentRawStatus = String(order.rawStatus || order.status || '').toLowerCase();
                                     const currentRawRefundStatus = String(order.rawRefundStatus || 'none').toLowerCase();

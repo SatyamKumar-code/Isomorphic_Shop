@@ -21,19 +21,23 @@ const OrderManagementPage = () => {
     isLoading,
     pageSize,
     setCustomerIdFilter,
+    setSearchText,
     handleStatusChange,
     isStatusUpdatingId,
     handleRefundStatusChange,
     isRefundUpdatingId,
   } = useOrder();
   const [searchParams] = useSearchParams();
+  const focusedOrderId = searchParams.get("focusOrder") || "";
   const canManageOrderActions = userData?.role === 'seller';
   const canViewSellerName = userData?.role === 'admin';
 
   React.useEffect(() => {
     const customerId = searchParams.get("customerId") || "";
+    const search = searchParams.get("search") || "";
     setCustomerIdFilter(customerId);
-  }, [searchParams, setCustomerIdFilter]);
+    setSearchText(search);
+  }, [searchParams, setCustomerIdFilter, setSearchText]);
 
   return (
     <div className="w-full overflow-x-auto scrollbarNone px-5 pb-6 pt-4">
@@ -51,6 +55,7 @@ const OrderManagementPage = () => {
           pageSize={pageSize}
           paymentColor={paymentColor}
           thumbnailColors={thumbnailColors}
+          focusedOrderId={focusedOrderId}
           showSellerColumn={canViewSellerName}
           showOrderActions={canManageOrderActions}
           onOrderStatusChange={handleStatusChange}

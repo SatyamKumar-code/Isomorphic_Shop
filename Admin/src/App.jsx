@@ -9,6 +9,7 @@ import { DashboardProvider } from './Context/dashboard/DashboardContext'
 import { AddProductProvider } from './Context/addProduct/AddProductContext'
 import { ProductListProvider } from './Context/productList/ProductListContext'
 import { ProductReviewsProvider } from './Context/productReviews/ProductReviewsContext'
+import { TransactionProvider } from './Context/transaction/TransactionContext'
 import AppRoutes from './routes/AppRoutes'
 
 const MyContext = createContext();
@@ -23,8 +24,10 @@ function App() {
               <AddProductProvider>
                 <ProductListProvider>
                   <ProductReviewsProvider>
-                    <AppRoutes />
-                    <Toaster />
+                    <TransactionProvider>
+                      <AppRoutes />
+                      <Toaster />
+                    </TransactionProvider>
                   </ProductReviewsProvider>
                 </ProductListProvider>
               </AddProductProvider>
