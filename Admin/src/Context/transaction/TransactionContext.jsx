@@ -5,6 +5,7 @@ import {
     getPayoutDashboard,
     getSellerOrderPayoutRows,
     getSellerPayoutHistory,
+    getSellerPayoutPreview,
     updateSellerPaidAmount,
 } from '../../features/Transaction/TransactionAPI';
 
@@ -21,8 +22,17 @@ const DEFAULT_SUMMARY = {
     paidAmount: 0,
     payoutDue: 0,
     refundTotal: 0,
+    returnChargeTotal: 0,
     commissionRate: 10,
     currency: 'INR',
+};
+
+const DEFAULT_ADMIN_TOTALS = {
+    grossSales: 0,
+    commissionAmount: 0,
+    netRevenue: 0,
+    paidAmount: 0,
+    payoutDue: 0,
 };
 
 const DEFAULT_PERIODS = {
@@ -86,7 +96,14 @@ const mapOrderRow = (row) => {
         commissionAmount: Number(row?.commissionAmount || 0),
         netAfterRefund: Number(row?.netAfterRefund || 0),
         commissionRate: Number(row?.commissionRate || 0),
-        payoutEligible: Boolean(row?.userPaymentDone) && !Boolean(row?.isRefunded) && rawOrderStatus !== 'cancelled',
+        returnChargeAmount: Number(row?.returnChargeAmount || 0),
+        returnChargeRate: Number(row?.returnChargeRate || 0),
+        payoutUnlocked: Boolean(row?.payoutUnlocked),
+        payoutHoldDaysRemaining: Number(row?.payoutHoldDaysRemaining || 0),
+        payoutBlockedReason: String(row?.payoutBlockedReason || ''),
+        payoutAvailableAt: row?.payoutAvailableAt || null,
+        deliveredAt: row?.deliveredAt || null,
+        payoutEligible: Boolean(row?.userPaymentDone) && !Boolean(row?.isRefunded) && rawOrderStatus !== 'cancelled' && Boolean(row?.payoutUnlocked),
         payoutMarked: Boolean(row?.payoutMarked),
         searchValue: [
             row?.orderId,
@@ -106,6 +123,7 @@ export const TransactionProvider = ({ children }) => {
 
     const [transactions, setTransactions] = useState([]);
     const [summary, setSummary] = useState(DEFAULT_SUMMARY);
+    const [adminTotals, setAdminTotals] = useState(DEFAULT_ADMIN_TOTALS);
     const [periods, setPeriods] = useState(DEFAULT_PERIODS);
     const [sellerWiseSummaries, setSellerWiseSummaries] = useState([]);
     const [sellerOptions, setSellerOptions] = useState([]);
@@ -135,14 +153,30 @@ export const TransactionProvider = ({ children }) => {
         orderId: '',
     });
     const [isPayoutUpdating, setIsPayoutUpdating] = useState(false);
+    const [payoutPreview, setPayoutPreview] = useState({
+        periodDays: 7,
+        orders: [],
+        orderIds: [],
+        amount: 0,
+    });
     const loadSellerDirectory = useCallback(async () => {
         if (!isAdmin) {
+            setAdminTotals(DEFAULT_ADMIN_TOTALS);
             return;
         }
 
         const response = await getPayoutDashboard();
-        const sellerWise = Array.isArray(response?.data?.data?.sellerWise) ? response.data.data.sellerWise : [];
+        const payload = response?.data?.data || {};
+        const sellerWise = Array.isArray(payload?.sellerWise) ? payload.sellerWise : [];
+        const totals = payload?.totals || {};
         setSellerWiseSummaries(sellerWise);
+        setAdminTotals({
+            grossSales: Number(totals?.grossSales || 0),
+            commissionAmount: Number(totals?.commissionAmount || 0),
+            netRevenue: Number(totals?.netRevenue || 0),
+            paidAmount: Number(totals?.paidAmount || 0),
+            payoutDue: Number(totals?.payoutDue || 0),
+        });
 
         const options = sellerWise.map((item) => ({
             id: String(item.sellerId || ''),
@@ -319,29 +353,42 @@ export const TransactionProvider = ({ children }) => {
             }));
     }, [payoutSourceRows]);
 
-    const payoutPreview = useMemo(() => {
-        const periodDays = Number(payoutForm.periodDays || 7);
-        const effectivePeriodDays = PAYOUT_PERIOD_OPTIONS.includes(periodDays) ? periodDays : 7;
+    useEffect(() => {
+        const loadPayoutPreview = async () => {
+            if (!isAdmin && !isSeller) {
+                return;
+            }
 
-        const start = new Date();
-        start.setDate(start.getDate() - effectivePeriodDays);
+            try {
+                const params = {
+                    periodDays: payoutForm.periodDays,
+                };
 
-        const orders = payoutSourceRows.filter((item) => {
-            if (!item.payoutEligible || item.payoutMarked) return false;
-            const createdAt = new Date(item.createdAt);
-            if (Number.isNaN(createdAt.getTime())) return false;
-            return createdAt >= start;
-        });
+                if (isAdmin && selectedSellerId) {
+                    params.sellerId = selectedSellerId;
+                }
 
-        const amount = orders.reduce((sum, item) => sum + Number(item.netAfterRefund || 0), 0);
-
-        return {
-            periodDays: effectivePeriodDays,
-            orders,
-            orderIds: orders.map((item) => item.id),
-            amount: Number(amount.toFixed(2)),
+                const response = await getSellerPayoutPreview(params);
+                const data = response?.data?.data || {
+                    periodDays: payoutForm.periodDays,
+                    orders: [],
+                    orderIds: [],
+                    amount: 0,
+                };
+                setPayoutPreview(data);
+            } catch (error) {
+                console.error('Error loading payout preview:', error);
+                setPayoutPreview({
+                    periodDays: payoutForm.periodDays,
+                    orders: [],
+                    orderIds: [],
+                    amount: 0,
+                });
+            }
         };
-    }, [payoutSourceRows, payoutForm.periodDays]);
+
+        loadPayoutPreview();
+    }, [payoutForm.periodDays, selectedSellerId, isAdmin, isSeller]);
 
     const submitSellerPayout = useCallback(async () => {
         if (!isAdmin) {
@@ -355,7 +402,7 @@ export const TransactionProvider = ({ children }) => {
         }
 
         if (!payoutPreview.orderIds.length || payoutPreview.amount <= 0) {
-            toast.error(`No eligible unpaid orders found in last ${payoutPreview.periodDays} days`);
+            toast.error('No eligible payout orders yet. Only delivered orders older than 7 days can be paid.');
             return;
         }
 
@@ -382,6 +429,7 @@ export const TransactionProvider = ({ children }) => {
     const value = {
         transactions,
         summary,
+        adminTotals,
         periods,
         sellerWiseSummaries,
         sellerOptions,

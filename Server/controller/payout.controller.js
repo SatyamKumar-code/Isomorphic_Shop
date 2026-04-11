@@ -7,7 +7,22 @@ import OrderModel from "../models/order.model.js";
 
 const toTwoDecimals = (value) => Number(Number(value || 0).toFixed(2));
 const DEFAULT_COMMISSION_RATE = 10;
+const MIN_PAYOUT_HOLD_DAYS = 7;
 const REFUND_SETTLED_STATUSES = new Set(["approved", "pickup_completed", "initiated", "processed"]);
+
+const getReturnChargeRate = () => {
+    const rawRate = Number.parseFloat(process.env.RETURN_CHARGE_RATE || "2");
+    if (!Number.isFinite(rawRate)) {
+        return 2;
+    }
+
+    return Math.max(0, Math.min(100, rawRate));
+};
+
+const getPayoutSettings = () => ({
+    holdDaysAfterDelivery: MIN_PAYOUT_HOLD_DAYS,
+    returnChargeRate: getReturnChargeRate(),
+});
 
 const toObjectIdString = (value) => String(value || "");
 
@@ -41,9 +56,51 @@ const getShortOrderId = (orderId) => {
 
 const PAYOUT_WINDOW_DAYS = new Set([7, 15, 30, 90]);
 
+const isValidDate = (value) => {
+    const date = new Date(value);
+    return !Number.isNaN(date.getTime());
+};
+
+const toDateOrNull = (value) => {
+    if (!isValidDate(value)) return null;
+    return new Date(value);
+};
+
+const resolveDeliveredAt = (order) => {
+    const status = String(order?.status || "").toLowerCase();
+    if (status !== "delivered") return null;
+
+    return toDateOrNull(order?.deliveredAt) || toDateOrNull(order?.updatedAt) || toDateOrNull(order?.createdAt);
+};
+
+const getPayoutAvailability = (deliveredAt, now = new Date()) => {
+    if (!deliveredAt) {
+        return {
+            payoutAvailableAt: null,
+            payoutUnlocked: false,
+            payoutHoldDaysRemaining: MIN_PAYOUT_HOLD_DAYS,
+        };
+    }
+
+    const payoutAvailableAt = new Date(deliveredAt);
+    payoutAvailableAt.setDate(payoutAvailableAt.getDate() + MIN_PAYOUT_HOLD_DAYS);
+
+    const msDiff = payoutAvailableAt.getTime() - now.getTime();
+    const daysRemaining = msDiff > 0 ? Math.ceil(msDiff / (1000 * 60 * 60 * 24)) : 0;
+
+    return {
+        payoutAvailableAt,
+        payoutUnlocked: daysRemaining <= 0,
+        payoutHoldDaysRemaining: daysRemaining,
+    };
+};
+
 const isRowPayoutEligible = (row) => {
     const orderStatus = String(row?.rawOrderStatus || "").toLowerCase();
-    return orderStatus !== "cancelled" && Boolean(row?.userPaymentDone) && !Boolean(row?.isRefunded);
+    return orderStatus !== "cancelled"
+        && Boolean(row?.userPaymentDone)
+        && !Boolean(row?.isRefunded)
+        && Boolean(row?.payoutUnlocked);
 };
 
 const getOrderTabCounts = (rows = []) => ({
@@ -219,6 +276,8 @@ const getSellerOrderRows = async (sellerId, commissionRate) => {
         .lean();
 
     const rows = [];
+    const now = new Date();
+    const returnChargeRate = getReturnChargeRate();
 
     for (const order of orders) {
         const items = Array.isArray(order.products) ? order.products : [];
@@ -235,16 +294,31 @@ const getSellerOrderRows = async (sellerId, commissionRate) => {
             return sum + (price * quantity);
         }, 0);
 
-        const commissionAmount = (sellerGross * Number(commissionRate || 0)) / 100;
+        const baseCommissionAmount = (sellerGross * Number(commissionRate || 0)) / 100;
         const totalAmount = Number(order?.totalAmount || 0);
         const rawRefundAmount = Number(order?.refundAmount || 0);
         const refundEligible = REFUND_SETTLED_STATUSES.has(String(order?.refundStatus || "").trim().toLowerCase());
         const refundShare = refundEligible && totalAmount > 0
             ? rawRefundAmount * (sellerGross / totalAmount)
             : 0;
+        const returnChargeAmount = refundEligible ? ((sellerGross * returnChargeRate) / 100) : 0;
+        const totalCommissionAmount = baseCommissionAmount + returnChargeAmount;
+        const deliveredAt = resolveDeliveredAt(order);
+        const { payoutAvailableAt, payoutUnlocked, payoutHoldDaysRemaining } = getPayoutAvailability(deliveredAt, now);
 
-        const netAfterCommission = sellerGross - commissionAmount;
+        const netAfterCommission = sellerGross - totalCommissionAmount;
         const netAfterRefund = Math.max(0, netAfterCommission - refundShare);
+
+        let payoutBlockedReason = "";
+        if (String(order?.status || "").toLowerCase() !== "delivered") {
+            payoutBlockedReason = "Order not delivered yet";
+        } else if (!payoutUnlocked) {
+            payoutBlockedReason = `Payout hold active (${payoutHoldDaysRemaining} day${payoutHoldDaysRemaining === 1 ? "" : "s"} left)`;
+        } else if (refundEligible) {
+            payoutBlockedReason = "Refund settled on order";
+        } else if (String(order?.paymentStatus || "").toLowerCase() !== "completed") {
+            payoutBlockedReason = "Payment not completed";
+        }
 
         rows.push({
             id: String(order?._id || ""),
@@ -264,11 +338,19 @@ const getSellerOrderRows = async (sellerId, commissionRate) => {
             date: formatDateLabel(order?.createdAt),
             grossSales: toTwoDecimals(sellerGross),
             commissionRate: Number(commissionRate || 0),
-            commissionAmount: toTwoDecimals(commissionAmount),
+            commissionAmount: toTwoDecimals(totalCommissionAmount),
+            baseCommissionAmount: toTwoDecimals(baseCommissionAmount),
+            returnChargeRate,
+            returnChargeAmount: toTwoDecimals(returnChargeAmount),
             netAfterCommission: toTwoDecimals(netAfterCommission),
             netAfterRefund: toTwoDecimals(netAfterRefund),
             userPaymentDone: String(order?.paymentStatus || "").toLowerCase() === "completed",
             isRefunded: refundEligible,
+            deliveredAt,
+            payoutAvailableAt,
+            payoutUnlocked,
+            payoutHoldDaysRemaining,
+            payoutBlockedReason,
         });
     }
 
@@ -281,6 +363,7 @@ const summarizeRows = (rows, paidAmount) => {
 
     const grossSales = payoutRows.reduce((sum, item) => sum + Number(item.grossSales || 0), 0);
     const commissionAmount = payoutRows.reduce((sum, item) => sum + Number(item.commissionAmount || 0), 0);
+    const returnChargeTotal = payoutRows.reduce((sum, item) => sum + Number(item.returnChargeAmount || 0), 0);
     const netRevenue = payoutRows.reduce((sum, item) => sum + Number(item.netAfterRefund || 0), 0);
     const userPaidRevenue = payoutRows
         .filter((item) => item.userPaymentDone)
@@ -294,6 +377,7 @@ const summarizeRows = (rows, paidAmount) => {
         refundOrders: payoutRows.filter((item) => item.isRefunded).length,
         grossSales: toTwoDecimals(grossSales),
         commissionAmount: toTwoDecimals(commissionAmount),
+        returnChargeTotal: toTwoDecimals(returnChargeTotal),
         netRevenue: toTwoDecimals(netRevenue),
         userPaidRevenue: toTwoDecimals(userPaidRevenue),
         refundTotal: toTwoDecimals(refundTotal),
@@ -550,26 +634,7 @@ export const updateSellerPaidAmountController = async (req, res) => {
 
         const now = new Date();
 
-        if (payoutWindowDays) {
-            const startDate = new Date(now);
-            startDate.setDate(startDate.getDate() - payoutWindowDays);
-
-            const eligibleRows = snapshot.rows.filter((row) => {
-                const createdAt = new Date(row.createdAt);
-                return createdAt >= startDate && isRowPayoutEligible(row) && !row.payoutMarked;
-            });
-
-            if (!eligibleRows.length) {
-                return res.status(400).json({
-                    message: `No eligible unpaid orders found in last ${payoutWindowDays} days`,
-                    error: true,
-                    success: false,
-                });
-            }
-
-            effectiveOrderIds = eligibleRows.map((row) => String(row.id));
-            effectiveAmount = toTwoDecimals(eligibleRows.reduce((sum, row) => sum + Number(row.netAfterRefund || 0), 0));
-        } else if (orderIds.length > 0) {
+        if (orderIds.length > 0) {
             const selectedRows = snapshot.rows.filter((row) => orderIds.includes(String(row.id)));
 
             if (selectedRows.length !== orderIds.length) {
@@ -591,6 +656,25 @@ export const updateSellerPaidAmountController = async (req, res) => {
 
             effectiveOrderIds = selectedRows.map((row) => String(row.id));
             effectiveAmount = toTwoDecimals(selectedRows.reduce((sum, row) => sum + Number(row.netAfterRefund || 0), 0));
+        } else if (payoutWindowDays) {
+            const startDate = new Date(now);
+            startDate.setDate(startDate.getDate() - payoutWindowDays);
+
+            const eligibleRows = snapshot.rows.filter((row) => {
+                const createdAt = new Date(row.createdAt);
+                return createdAt >= startDate && isRowPayoutEligible(row) && !row.payoutMarked;
+            });
+
+            if (!eligibleRows.length) {
+                return res.status(400).json({
+                    message: `No eligible unpaid orders found. Only delivered orders older than ${MIN_PAYOUT_HOLD_DAYS} days are payable`,
+                    error: true,
+                    success: false,
+                });
+            }
+
+            effectiveOrderIds = eligibleRows.map((row) => String(row.id));
+            effectiveAmount = toTwoDecimals(eligibleRows.reduce((sum, row) => sum + Number(row.netAfterRefund || 0), 0));
         }
 
         if (orderId) {
@@ -644,6 +728,14 @@ export const updateSellerPaidAmountController = async (req, res) => {
             if (!linkedRow || linkedRow.payoutMarked) {
                 return res.status(400).json({
                     message: "This order is already marked as paid",
+                    error: true,
+                    success: false,
+                });
+            }
+
+            if (!isRowPayoutEligible(linkedRow)) {
+                return res.status(400).json({
+                    message: linkedRow.payoutBlockedReason || `Order is payout-eligible only after ${MIN_PAYOUT_HOLD_DAYS} days of delivery`,
                     error: true,
                     success: false,
                 });
@@ -798,6 +890,7 @@ export const getSellerPayoutDashboardController = async (req, res) => {
                 success: true,
                 data: {
                     actorRole: access.actorRole,
+                    settings: getPayoutSettings(),
                     sellerWise,
                     totals: {
                         grossSales: toTwoDecimals(totals.grossSales),
@@ -825,6 +918,7 @@ export const getSellerPayoutDashboardController = async (req, res) => {
             success: true,
             data: {
                 actorRole: access.actorRole,
+                settings: getPayoutSettings(),
                 seller: {
                     id: String(snapshot.seller._id),
                     name: snapshot.seller.name || "",
@@ -1116,6 +1210,122 @@ export const getSellerPeriodAnalyticsController = async (req, res) => {
                     totalPages,
                 },
                 rows: paginatedRows,
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal Server Error",
+            error: error.message,
+            success: false,
+        });
+    }
+};
+
+export const getSellerPayoutPreviewController = async (req, res) => {
+    try {
+        const requestedSellerId = String(req.query?.sellerId || "").trim();
+        const periodDays = Number(req.query?.periodDays || 7);
+
+        const access = await ensureSellerAccess(req, requestedSellerId);
+        if (access.error) {
+            return res.status(access.error.status).json({
+                message: access.error.message,
+                error: true,
+                success: false,
+            });
+        }
+
+        if (!access.targetSellerId) {
+            return res.status(400).json({
+                message: "sellerId is required for this endpoint",
+                error: true,
+                success: false,
+            });
+        }
+
+        // Ensure valid period days
+        const effectivePeriodDays = PAYOUT_WINDOW_DAYS.has(periodDays) ? periodDays : 7;
+
+        const snapshot = await computeSellerPayoutSnapshot(access.targetSellerId);
+        if (snapshot.error) {
+            return res.status(snapshot.error.status).json({
+                message: snapshot.error.message,
+                error: true,
+                success: false,
+            });
+        }
+
+        const allRows = snapshot.rows || [];
+        // Filter eligible unpaid orders
+        const eligibleOrders = allRows.filter(
+            (row) => isRowPayoutEligible(row) && !row.payoutMarked
+        );
+
+        if (eligibleOrders.length === 0) {
+            return res.status(200).json({
+                message: "Payout preview calculated successfully",
+                error: false,
+                success: true,
+                data: {
+                    settings: getPayoutSettings(),
+                    periodDays: effectivePeriodDays,
+                    orders: [],
+                    orderIds: [],
+                    amount: 0,
+                    note: `Only delivered orders older than ${MIN_PAYOUT_HOLD_DAYS} days are eligible for payout`,
+                },
+            });
+        }
+
+        // Sort by date to find oldest
+        const sortedByDate = [...eligibleOrders].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+
+        // Get the oldest order date
+        const oldestOrder = sortedByDate[0];
+        const oldestDate = new Date(oldestOrder.createdAt);
+
+        // Normalize to start of day (midnight UTC)
+        const startDate = new Date(
+            Date.UTC(oldestDate.getUTCFullYear(), oldestDate.getUTCMonth(), oldestDate.getUTCDate(), 0, 0, 0, 0)
+        );
+
+        // Calculate end date: oldest date + period days (end of day UTC)
+        const endDateObj = new Date(startDate);
+        endDateObj.setUTCDate(endDateObj.getUTCDate() + effectivePeriodDays);
+        const endDate = new Date(
+            Date.UTC(
+                endDateObj.getUTCFullYear(),
+                endDateObj.getUTCMonth(),
+                endDateObj.getUTCDate(),
+                23,
+                59,
+                59,
+                999
+            )
+        );
+
+        // Filter orders between oldest date and (oldest date + period days)
+        const filteredOrders = eligibleOrders.filter((item) => {
+            const itemDate = new Date(item.createdAt).getTime();
+            return itemDate >= startDate.getTime() && itemDate <= endDate.getTime();
+        });
+
+        const totalAmount = toTwoDecimals(
+            filteredOrders.reduce((sum, item) => sum + Number(item.netAfterRefund || 0), 0)
+        );
+
+        return res.status(200).json({
+            message: "Payout preview calculated successfully",
+            error: false,
+            success: true,
+            data: {
+                settings: getPayoutSettings(),
+                periodDays: effectivePeriodDays,
+                orders: filteredOrders,
+                orderIds: filteredOrders.map((item) => String(item.id)),
+                amount: totalAmount,
             },
         });
     } catch (error) {

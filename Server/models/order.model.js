@@ -79,6 +79,10 @@ const orderSchema = new mongoose.Schema({
     refundProcessedAt: {
         type: Date,
         default: null
+    },
+    deliveredAt: {
+        type: Date,
+        default: null
     }
 
 }, { timestamps: true });

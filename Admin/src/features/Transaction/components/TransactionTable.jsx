@@ -106,9 +106,14 @@ const TransactionTable = () => {
                                         </td>
                                         <td className="w-30 px-6 py-4 text-[13px]">
                                             {!transaction.payoutEligible ? (
-                                                <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-[12px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                                                    Not Eligible
-                                                </span>
+                                                <>
+                                                    <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-[12px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                                                        Not Eligible
+                                                    </span>
+                                                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                                                        {transaction.payoutBlockedReason || 'Not eligible for payout'}
+                                                    </p>
+                                                </>
                                             ) : transaction.payoutMarked ? (
                                                 <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-[12px] font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
                                                     Paid Out
@@ -124,6 +129,9 @@ const TransactionTable = () => {
                                         </td>
                                         <td className="w-28 px-6 py-4 text-[13px] font-medium text-red-600">
                                             Rs {Number(transaction.commissionAmount || 0).toLocaleString('en-IN')}
+                                            {Number(transaction.returnChargeAmount || 0) > 0 ? (
+                                                <p className="text-[11px] text-red-500">incl. return charge</p>
+                                            ) : null}
                                         </td>
                                         <td className="w-28 px-6 py-4 text-[13px] font-semibold text-[#4EA674]">
                                             Rs {Number(transaction.netAfterRefund || 0).toLocaleString('en-IN')}

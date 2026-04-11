@@ -6,6 +6,8 @@ export const getSellerOrderPayoutRows = (params = {}) => api.get("/api/payout/or
 
 export const getSellerPayoutHistory = (params = {}) => api.get("/api/payout/history", { params });
 
+export const getSellerPayoutPreview = (params = {}) => api.get("/api/payout/preview", { params });
+
 export const getSellerPeriodAnalytics = (params = {}) => api.get("/api/payout/analytics", { params });
 
 export const updateSellerPaidAmount = (sellerId, payload) => api.put(`/api/payout/admin/seller/${sellerId}/paid`, payload);

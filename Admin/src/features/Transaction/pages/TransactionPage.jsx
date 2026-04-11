@@ -18,8 +18,6 @@ const TransactionPage = () => {
 
             <TransactionStats />
 
-            <SellerWiseSummaryTable />
-
             <PeriodAnalyticsSection selectedSellerId={selectedSellerId} isAdmin={isAdmin} />
 
             <div className="w-full mt-5 bg-white rounded-lg border border-gray-100 shadow-sm dark:bg-gray-950 dark:border-gray-800">

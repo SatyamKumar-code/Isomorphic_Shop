@@ -1348,8 +1348,13 @@ export const updateOrderStatus = async (req, res) => {
             });
         }
 
-        // Update the order status
-        const updatedStatus = await OrderModel.findByIdAndUpdate(orderId, { status: normalizedIncomingStatus }, { new: true });
+        // Update the order status and persist delivery timestamp for payout hold calculations
+        const updatePayload = { status: normalizedIncomingStatus };
+        if (normalizedIncomingStatus === "delivered" && previousStatus !== "delivered") {
+            updatePayload.deliveredAt = new Date();
+        }
+
+        const updatedStatus = await OrderModel.findByIdAndUpdate(orderId, updatePayload, { new: true });
 
         // Only apply side-effects if status is changing to cancelled or delivered
         if (normalizedIncomingStatus === "cancelled" && previousStatus !== "cancelled") {

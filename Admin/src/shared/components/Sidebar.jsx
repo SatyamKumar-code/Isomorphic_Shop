@@ -17,6 +17,7 @@ const Sidebar = () => {
     if (pathname === '/product-list') return 'productList';
     if (pathname === '/product-reviews') return 'productReviews';
     if (pathname === '/transaction') return 'transaction';
+    if (pathname === '/revenue-overview') return 'revenueOverview';
     return 'Dashboard';
   };
 
@@ -171,6 +172,24 @@ const Sidebar = () => {
                 </svg>
             }
             <span className={`text-[15px] text-[#6A717F] ${active === "transaction" && "text-white font-bold"}`}>Transaction</span>
+          </li>
+
+          <li style={isSeller ? { display: 'none' } : undefined} className={`menuItem flex items-center rounded-sm cursor-pointer px-4 py-2.25 gap-2 ${active === "revenueOverview" && "bg-[#4EA674] font-bold text-white"}`} onClick={() => { setActive("revenueOverview"); navigate('/revenue-overview'); }}>
+            {
+              active === "revenueOverview" ?
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3.33337 16.6667H16.6667" stroke="white" stroke-width="1.65" stroke-linecap="round" />
+                  <path d="M5.00004 13.3333L8.33337 10L10.4167 12.0833L15 7.5" stroke="white" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M13.3334 7.5H15V9.16667" stroke="white" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                :
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3.33337 16.6667H16.6667" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" />
+                  <path d="M5.00004 13.3333L8.33337 10L10.4167 12.0833L15 7.5" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M13.3334 7.5H15V9.16667" stroke="#6A717F" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            }
+            <span className={`text-[15px] text-[#6A717F] ${active === "revenueOverview" && "text-white font-bold"}`}>Revenue Overview</span>
           </li>
 
 

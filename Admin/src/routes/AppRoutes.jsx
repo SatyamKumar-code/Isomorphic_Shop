@@ -15,6 +15,7 @@ const AddProductPage = lazy(() => import("../features/addProducts/pages/AddProdu
 const ProductListPage = lazy(() => import("../features/productList/pages/ProductListPage"));
 const ProductReviewsPage = lazy(() => import("../features/productReviews/pages/ProductReviewsPage"));
 const TransactionPage = lazy(() => import("../features/Transaction/pages/TransactionPage"));
+const RevenueOverviewPage = lazy(() => import("../features/Transaction/pages/RevenueOverviewPage"));
 
 
 
@@ -124,6 +125,18 @@ const AppRoutes = () => {
                 <ProtectedRoute allowedRoles={["admin", "seller"]}>
                     <MainLayout title="Transaction">
                         <TransactionPage />
+                    </MainLayout>
+                </ProtectedRoute>
+            )
+        },
+
+        {
+            path: '/revenue-overview',
+            exact: true,
+            element: (
+                <ProtectedRoute allowedRoles={["admin"]}>
+                    <MainLayout title="Revenue Overview">
+                        <RevenueOverviewPage />
                     </MainLayout>
                 </ProtectedRoute>
             )

@@ -7,6 +7,7 @@ import {
     getSellerPayoutHistoryController,
     updateSellerPaidAmountController,
     getSellerPeriodAnalyticsController,
+    getSellerPayoutPreviewController,
 } from "../controller/payout.controller.js";
 
 const payoutRouter = Router();
@@ -14,6 +15,7 @@ const payoutRouter = Router();
 payoutRouter.get("/dashboard", adminMiddleware, getSellerPayoutDashboardController);
 payoutRouter.get("/orders", adminMiddleware, getSellerOrderPayoutRowsController);
 payoutRouter.get("/history", adminMiddleware, getSellerPayoutHistoryController);
+payoutRouter.get("/preview", adminMiddleware, getSellerPayoutPreviewController);
 payoutRouter.get("/analytics", adminMiddleware, getSellerPeriodAnalyticsController);
 payoutRouter.get("/admin/seller/:sellerId", adminMiddleware, getSellerPayoutByIdController);
 payoutRouter.put("/admin/seller/:sellerId/paid", adminMiddleware, updateSellerPaidAmountController);

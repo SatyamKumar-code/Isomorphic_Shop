@@ -61,6 +61,9 @@ MONGODB_URI=your_mongodb_connection_string
 SECRET_KEY_ACCESS_TOKEN=your_access_token_secret
 SECRET_KEY_REFRESH_TOKEN=your_refresh_token_secret
 
+# Payout Settings
+RETURN_CHARGE_RATE=2
+
 # SendGrid
 SENDGRID_API_KEY=your_sendgrid_api_key
 
