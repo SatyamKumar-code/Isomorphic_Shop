@@ -38,7 +38,6 @@ const TransactionPagination = () => {
     const handlePageChange = (page) => {
         if (page !== '...' && page !== currentPage) {
             setCurrentPage(page);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
 

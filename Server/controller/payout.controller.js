@@ -371,18 +371,36 @@ const getSellerOrderRows = async (sellerId, commissionRate) => {
         const baseCommissionAmount = (sellerGross * Number(commissionRate || 0)) / 100;
         const totalAmount = Number(order?.totalAmount || 0);
         const rawRefundAmount = Number(order?.refundAmount || 0);
-        const isDelivered = String(order?.status || "").toLowerCase() === "delivered";
+        const status = String(order?.status || "").toLowerCase();
+        const isDelivered = status === "delivered";
+        const isCancelled = status === "cancelled";
         const refundEligible = isDelivered && REFUND_SETTLED_STATUSES.has(String(order?.refundStatus || "").trim().toLowerCase());
         const refundShare = refundEligible && totalAmount > 0
             ? rawRefundAmount * (sellerGross / totalAmount)
             : 0;
-        const returnChargeAmount = refundEligible ? returnChargeRate : 0;
-        const totalCommissionAmount = baseCommissionAmount + returnChargeAmount;
+        let commissionAmount = 0;
+        let returnChargeAmount = 0;
+
+        if (isCancelled) {
+            commissionAmount = 0;
+            returnChargeAmount = 0;
+        } else if (refundEligible) {
+            commissionAmount = 0;
+            returnChargeAmount = returnChargeRate;
+        } else {
+            commissionAmount = baseCommissionAmount;
+            returnChargeAmount = 0;
+        }
+        const totalCommissionAmount = commissionAmount + returnChargeAmount;
         const deliveredAt = resolveDeliveredAt(order);
         const { payoutAvailableAt, payoutUnlocked, payoutHoldDaysRemaining } = getPayoutAvailability(deliveredAt, now);
 
-        const netAfterCommission = sellerGross - totalCommissionAmount;
-        const netAfterRefund = Math.max(0, netAfterCommission - refundShare);
+        let netAfterCommission = sellerGross - totalCommissionAmount;
+        let netAfterRefund = Math.max(0, netAfterCommission - refundShare);
+        if (isCancelled) {
+            netAfterCommission = 0;
+            netAfterRefund = 0;
+        }
 
         let payoutBlockedReason = "";
         if (String(order?.status || "").toLowerCase() !== "delivered") {
@@ -413,7 +431,7 @@ const getSellerOrderRows = async (sellerId, commissionRate) => {
             date: formatDateLabel(order?.createdAt),
             grossSales: toTwoDecimals(sellerGross),
             commissionRate: Number(commissionRate || 0),
-            commissionAmount: toTwoDecimals(totalCommissionAmount),
+            commissionAmount: toTwoDecimals(commissionAmount),
             baseCommissionAmount: toTwoDecimals(baseCommissionAmount),
             returnChargeRate,
             returnChargeAmount: toTwoDecimals(returnChargeAmount),
@@ -1200,6 +1218,9 @@ export const getSellerPeriodAnalyticsController = async (req, res) => {
             : null;
 
         let periodRows = snapshot.rows;
+
+        // Remove cancelled orders (❌ No Payout) from analytics and table
+        periodRows = periodRows.filter(row => row.rawOrderStatus !== 'cancelled');
 
         // Filter by date range if provided (takes precedence)
         const hasDateRange = !!(startDate && !Number.isNaN(startDate.getTime())) &&

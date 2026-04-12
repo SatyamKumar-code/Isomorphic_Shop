@@ -9,7 +9,7 @@ const TransactionHeaderMenu = () => {
         <div className="relative">
             <button
                 type="button"
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="p-2 rounded-full text-black dark:text-[#ffffff] hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() => setOpen((v) => !v)}
                 aria-label="More options"
             >

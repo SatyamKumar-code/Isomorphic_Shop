@@ -16,36 +16,30 @@ const PeriodAnalyticsSection = ({ selectedSellerId, isAdmin }) => {
         return row.rawOrderStatus !== 'cancelled' && row.userPaymentDone && !row.isRefunded;
     };
 
-    const getStatusBadge = (row) => {
+    const getPayoutStatusBadge = (row) => {
         if (row.rawOrderStatus === 'cancelled') {
             return (
-                <div className="flex flex-col gap-1">
-                    <span className="inline-block rounded px-2 py-1 font-medium w-fit bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                        Cancelled
-                    </span>
-                    <span className="inline-block rounded px-1.5 py-0.5 font-medium w-fit text-xs bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                        ❌ No Payout
-                    </span>
-                </div>
+                <span className="inline-block rounded px-2 py-1 font-medium w-fit bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                    Cancelled / ❌ No Payout
+                </span>
             );
         }
-
         const eligible = isPayoutEligible(row);
+        // If return charge is applied, show a more informative message
+        if (!eligible && Number(row.returnChargeAmount || 0) > 0) {
+            return (
+                <span className="inline-block rounded px-2 py-1 font-medium w-fit text-xs bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400">
+                    Return charge deducted from payout
+                </span>
+            );
+        }
         return (
-            <div className="flex flex-col gap-1">
-                <span className={`inline-block rounded px-2 py-1 font-medium w-fit ${row.userPaymentDone
-                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                    }`}>
-                    {row.userPaymentDone ? 'Paid' : 'Pending'}
-                </span>
-                <span className={`inline-block rounded px-1.5 py-0.5 font-medium w-fit text-xs ${eligible
-                    ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                    : 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400'
-                    }`}>
-                    {eligible ? '✅ Payout Eligible' : `❌ Not Eligible${row.isRefunded ? ' (Refunded)' : ''}`}
-                </span>
-            </div>
+            <span className={`inline-block rounded px-2 py-1 font-medium w-fit text-xs ${eligible
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                : 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400'
+                }`}>
+                {eligible ? '✅ Payout Eligible' : (row.isRefunded ? '❌ Not Eligible (Refunded)' : '❌ Not Eligible')}
+            </span>
         );
     };
 
@@ -372,14 +366,6 @@ const PeriodAnalyticsSection = ({ selectedSellerId, isAdmin }) => {
                             </p>
                         </div>
 
-                        <div className="rounded-lg border border-orange-100 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-900/20">
-                            <p className="text-xs font-medium text-orange-700 dark:text-orange-400">Cancelled Orders</p>
-                            <p className="mt-1 text-lg font-semibold text-orange-700 dark:text-orange-400">
-                                {analytics.analytics?.cancelledCount || 0} (Rs {Number(analytics.analytics?.totalCancelled || 0).toLocaleString('en-IN')})
-                            </p>
-                            <p className="mt-1 text-[10px] text-orange-600 dark:text-orange-500">(No earnings on cancelled)</p>
-                        </div>
-
                         <div className="rounded-lg border border-yellow-100 bg-yellow-50 p-4 dark:border-yellow-900 dark:bg-yellow-900/20">
                             <p className="text-xs font-medium text-yellow-700 dark:text-yellow-400">Returned Orders / Charges</p>
                             <p className="mt-1 text-lg font-semibold text-yellow-700 dark:text-yellow-400">
@@ -404,7 +390,9 @@ const PeriodAnalyticsSection = ({ selectedSellerId, isAdmin }) => {
                                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300">Order ID</th>
                                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300">Date</th>
                                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300">Gross</th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300">Payment & Payout Status</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300">Commission</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300">Return Charge</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300">Payout Status</th>
                                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300">Payout Done?</th>
                                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300">Net (After Refund)</th>
                                 </tr>
@@ -422,11 +410,21 @@ const PeriodAnalyticsSection = ({ selectedSellerId, isAdmin }) => {
                                             <td className="px-4 py-3 text-xs text-gray-700 dark:text-gray-300">
                                                 Rs {Number(row.grossSales || 0).toLocaleString('en-IN')}
                                             </td>
-                                            <td className="px-4 py-3 text-xs">
-                                                {getStatusBadge(row)}
+                                            <td className="px-4 py-3 text-xs text-blue-700 dark:text-blue-400">
+                                                Rs {Number(row.commissionAmount || 0).toLocaleString('en-IN')}
+                                            </td>
+                                            <td className="px-4 py-3 text-xs text-red-700 dark:text-red-400">
+                                                {Number(row.returnChargeAmount || 0) > 0 ? `Rs ${Number(row.returnChargeAmount).toLocaleString('en-IN')}` : '-'}
                                             </td>
                                             <td className="px-4 py-3 text-xs">
-                                                {!isPayoutEligible(row) ? (
+                                                {getPayoutStatusBadge(row)}
+                                            </td>
+                                            <td className="px-4 py-3 text-xs">
+                                                {Number(row.returnChargeAmount || 0) > 0 ? (
+                                                    <span className="inline-block rounded px-2 py-1 font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400">
+                                                        Deducted
+                                                    </span>
+                                                ) : !isPayoutEligible(row) ? (
                                                     <span className="inline-block rounded px-2 py-1 font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
                                                         N/A
                                                     </span>

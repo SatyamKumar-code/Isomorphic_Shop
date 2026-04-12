@@ -17,8 +17,12 @@ const TransactionHeader = () => {
     return (
         <div className="mb-6 w-full">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
-                <h1 className="text-2xl font-bold text-[#23272E] dark:text-white">Transaction & Payout</h1>
-
+                <div className="flex items-center justify-between">
+                    <h1 className="text-2xl font-bold text-[#23272E] dark:text-white">Transaction & Payout</h1>
+                    <div className='xl:hidden'>
+                        <TransactionHeaderMenu />
+                    </div>
+                </div>
                 <div className="flex w-full flex-1 flex-col gap-3 xl:ml-auto xl:flex-row xl:justify-end">
                     {isAdmin ? (
                         <select
@@ -53,8 +57,13 @@ const TransactionHeader = () => {
                     >
                         {isLoading ? 'Refreshing...' : 'Refresh'}
                     </button>
-                    {isAdmin && <TransactionHeaderMenu />}
+                    {isAdmin && 
+                        <div className='hidden xl:block'>
+                            <TransactionHeaderMenu />
+                        </div>
+                    }
                 </div>
+                
             </div>
 
         </div>

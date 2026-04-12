@@ -97,26 +97,36 @@ const TransactionTable = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="w-30 px-6 py-4 text-[13px]">
+                                        <td className="w-30 px-6 py-4 text-center text-[13px]">
                                             <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-medium ${statusColors.bg} ${statusColors.text}`}>
                                                 <span className={`w-2 h-2 rounded-full ${statusColors.dot}`}></span>
-                                                {transaction.status}
+                                                {transaction.isRefunded
+                                                    ? (transaction.refundStatus && transaction.refundStatus !== 'none'
+                                                        ? (transaction.refundStatus.toLowerCase() === 'processed'
+                                                            ? 'Returned'
+                                                            : transaction.refundStatus.charAt(0).toUpperCase() + transaction.refundStatus.slice(1))
+                                                        : 'Refunded')
+                                                    : (transaction.rawOrderStatus
+                                                        ? transaction.rawOrderStatus.charAt(0).toUpperCase() + transaction.rawOrderStatus.slice(1)
+                                                        : transaction.status)}
                                             </span>
-                                            <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Refund: {transaction.refundStatus}</p>
+                                            {transaction.refundStatus && transaction.refundStatus !== 'none' && (
+                                                <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Refund: {transaction.refundStatus.charAt(0).toUpperCase() + transaction.refundStatus.slice(1)}</p>
+                                            )}
                                         </td>
                                         <td className="w-30 px-6 py-4 text-[13px]">
                                             {!transaction.payoutEligible ? (
                                                 <>
-                                                    <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-[12px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                                                    {/* <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-[12px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
                                                         Not Eligible
-                                                    </span>
+                                                    </span> */}
                                                     <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
                                                         {transaction.payoutBlockedReason || 'Not eligible for payout'}
                                                     </p>
                                                 </>
                                             ) : transaction.payoutMarked ? (
                                                 <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-[12px] font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
-                                                    Paid Out
+                                                    Paid
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex rounded-full bg-yellow-100 px-3 py-1 text-[12px] font-medium text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400">
@@ -128,7 +138,9 @@ const TransactionTable = () => {
                                             Rs {Number(transaction.grossSales || 0).toLocaleString('en-IN')}
                                         </td>
                                         <td className="w-28 px-6 py-4 text-[13px] font-medium text-red-600">
-                                            Rs {Number(transaction.commissionAmount || 0).toLocaleString('en-IN')}
+                                            {Number(transaction.returnChargeAmount || 0) > 0
+                                                ? 'Rs 0'
+                                                : `Rs ${Number(transaction.commissionAmount || 0).toLocaleString('en-IN')}`}
                                         </td>
                                         <td className="w-28 px-6 py-4 text-[13px] font-semibold text-[#4EA674]">
                                             {Number(transaction.returnChargeAmount || 0) > 0 ? (
