@@ -4,19 +4,93 @@ import SellerPayoutTransactionModel from "../models/sellerPayoutTransaction.mode
 import UserModel from "../models/user.model.js";
 import ProductModel from "../models/product.model.js";
 import OrderModel from "../models/order.model.js";
+import SettingsModel from "../models/settings.model.js";
 
 const toTwoDecimals = (value) => Number(Number(value || 0).toFixed(2));
-const DEFAULT_COMMISSION_RATE = 10;
+const FALLBACK_COMMISSION_RATE = 10;
 const MIN_PAYOUT_HOLD_DAYS = 7;
 const REFUND_SETTLED_STATUSES = new Set(["approved", "pickup_completed", "initiated", "processed"]);
 
-const getReturnChargeRate = () => {
+
+// Fetch commission rate from DB, fallback to env/hardcoded
+export const getCommissionRate = async () => {
+    const doc = await SettingsModel.findOne({ key: "DEFAULT_COMMISSION_RATE" });
+    if (doc && Number.isFinite(Number(doc.value))) {
+        return Number(doc.value);
+    }
+    if (process.env.DEFAULT_COMMISSION_RATE && Number.isFinite(Number(process.env.DEFAULT_COMMISSION_RATE))) {
+        return Number(process.env.DEFAULT_COMMISSION_RATE);
+    }
+    return FALLBACK_COMMISSION_RATE;
+};
+
+// Fetch return charge (fixed amount) from DB, fallback to env/hardcoded
+export const getReturnChargeRate = async () => {
+    const doc = await SettingsModel.findOne({ key: "RETURN_CHARGE_RATE" });
+    if (doc && Number.isFinite(Number(doc.value))) {
+        return Math.max(0, Number(doc.value));
+    }
     const rawRate = Number.parseFloat(process.env.RETURN_CHARGE_RATE || "2");
     if (!Number.isFinite(rawRate)) {
         return 2;
     }
+    return Math.max(0, rawRate);
+};
 
-    return Math.max(0, Math.min(100, rawRate));
+// Admin: Get current payout settings
+export const getPayoutSettingsController = async (req, res) => {
+    try {
+        const commissionRate = await getCommissionRate();
+        const returnChargeRate = await getReturnChargeRate();
+        return res.status(200).json({
+            success: true,
+            error: false,
+            data: {
+                commissionRate,
+                returnChargeRate,
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: true,
+            message: error.message,
+        });
+    }
+};
+
+// Admin: Update payout settings
+export const updatePayoutSettingsController = async (req, res) => {
+    try {
+        const { commissionRate, returnChargeRate } = req.body;
+        const updates = [];
+        if (commissionRate !== undefined) {
+            updates.push(SettingsModel.findOneAndUpdate(
+                { key: "DEFAULT_COMMISSION_RATE" },
+                { value: Number(commissionRate) },
+                { upsert: true, new: true }
+            ));
+        }
+        if (returnChargeRate !== undefined) {
+            updates.push(SettingsModel.findOneAndUpdate(
+                { key: "RETURN_CHARGE_RATE" },
+                { value: Math.max(0, Math.min(100, Number(returnChargeRate))) },
+                { upsert: true, new: true }
+            ));
+        }
+        await Promise.all(updates);
+        return res.status(200).json({
+            success: true,
+            error: false,
+            message: "Settings updated successfully",
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: true,
+            message: error.message,
+        });
+    }
 };
 
 const getPayoutSettings = () => ({
@@ -277,7 +351,7 @@ const getSellerOrderRows = async (sellerId, commissionRate) => {
 
     const rows = [];
     const now = new Date();
-    const returnChargeRate = getReturnChargeRate();
+    const returnChargeRate = await getReturnChargeRate();
 
     for (const order of orders) {
         const items = Array.isArray(order.products) ? order.products : [];
@@ -297,11 +371,12 @@ const getSellerOrderRows = async (sellerId, commissionRate) => {
         const baseCommissionAmount = (sellerGross * Number(commissionRate || 0)) / 100;
         const totalAmount = Number(order?.totalAmount || 0);
         const rawRefundAmount = Number(order?.refundAmount || 0);
-        const refundEligible = REFUND_SETTLED_STATUSES.has(String(order?.refundStatus || "").trim().toLowerCase());
+        const isDelivered = String(order?.status || "").toLowerCase() === "delivered";
+        const refundEligible = isDelivered && REFUND_SETTLED_STATUSES.has(String(order?.refundStatus || "").trim().toLowerCase());
         const refundShare = refundEligible && totalAmount > 0
             ? rawRefundAmount * (sellerGross / totalAmount)
             : 0;
-        const returnChargeAmount = refundEligible ? ((sellerGross * returnChargeRate) / 100) : 0;
+        const returnChargeAmount = refundEligible ? returnChargeRate : 0;
         const totalCommissionAmount = baseCommissionAmount + returnChargeAmount;
         const deliveredAt = resolveDeliveredAt(order);
         const { payoutAvailableAt, payoutUnlocked, payoutHoldDaysRemaining } = getPayoutAvailability(deliveredAt, now);
@@ -371,6 +446,10 @@ const summarizeRows = (rows, paidAmount) => {
     const refundTotal = payoutRows.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0);
     const payoutDue = Math.max(0, netRevenue - Number(paidAmount || 0));
 
+    // Return orders: delivered + refunded (not cancelled)
+    const returnOrders = payoutRows.filter((item) => item.isRefunded).length;
+    const returnTotal = payoutRows.filter((item) => item.isRefunded).reduce((sum, item) => sum + Number(item.refundAmount || 0), 0);
+
     return {
         totalOrders: payoutRows.length,
         userPaidOrders: payoutRows.filter((item) => item.userPaymentDone).length,
@@ -383,6 +462,8 @@ const summarizeRows = (rows, paidAmount) => {
         refundTotal: toTwoDecimals(refundTotal),
         paidAmount: toTwoDecimals(Number(paidAmount || 0)),
         payoutDue: toTwoDecimals(payoutDue),
+        returnOrders,
+        returnTotal: toTwoDecimals(returnTotal),
     };
 };
 
@@ -437,7 +518,11 @@ const computeSellerPayoutSnapshot = async (sellerId) => {
     }
 
     const payoutDoc = await getSellerPayoutDoc(sellerId);
-    const commissionRate = Number(payoutDoc?.commissionRate ?? DEFAULT_COMMISSION_RATE);
+    // Use DB commission rate if set, else fallback
+    let commissionRate = Number(payoutDoc?.commissionRate);
+    if (!Number.isFinite(commissionRate)) {
+        commissionRate = await getCommissionRate();
+    }
     const paidAmount = Number(payoutDoc?.paidAmount || 0);
     const currency = payoutDoc?.currency || "INR";
 
@@ -1202,6 +1287,9 @@ export const getSellerPeriodAnalyticsController = async (req, res) => {
                     refundedOrders: activeRows.filter((row) => row.isRefunded).length,
                     cancelledCount,
                     totalCancelled,
+                    // Returned orders and total return charge
+                    returnOrders: activeRows.filter((row) => row.isRefunded).length,
+                    returnChargeTotal: activeRows.filter((row) => row.isRefunded).reduce((sum, row) => sum + Number(row.returnChargeAmount || 0), 0),
                 },
                 pagination: {
                     page: pagination.page,

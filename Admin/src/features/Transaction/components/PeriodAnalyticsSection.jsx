@@ -377,7 +377,15 @@ const PeriodAnalyticsSection = ({ selectedSellerId, isAdmin }) => {
                             <p className="mt-1 text-lg font-semibold text-orange-700 dark:text-orange-400">
                                 {analytics.analytics?.cancelledCount || 0} (Rs {Number(analytics.analytics?.totalCancelled || 0).toLocaleString('en-IN')})
                             </p>
-                            <p className="mt-1 text-[10px] text-orange-600 dark:text-orange-500">(No earnings)</p>
+                            <p className="mt-1 text-[10px] text-orange-600 dark:text-orange-500">(No earnings on cancelled)</p>
+                        </div>
+
+                        <div className="rounded-lg border border-yellow-100 bg-yellow-50 p-4 dark:border-yellow-900 dark:bg-yellow-900/20">
+                            <p className="text-xs font-medium text-yellow-700 dark:text-yellow-400">Returned Orders / Charges</p>
+                            <p className="mt-1 text-lg font-semibold text-yellow-700 dark:text-yellow-400">
+                                {analytics.analytics?.returnOrders || 0} (Rs {Number(analytics.analytics?.returnChargeTotal || 0).toLocaleString('en-IN')})
+                            </p>
+                            <p className="mt-1 text-[10px] text-yellow-600 dark:text-yellow-500">(Return charge on returned orders)</p>
                         </div>
                     </div>
 
@@ -433,7 +441,16 @@ const PeriodAnalyticsSection = ({ selectedSellerId, isAdmin }) => {
                                                 )}
                                             </td>
                                             <td className="px-4 py-3 text-xs font-semibold text-green-600 dark:text-green-400">
-                                                Rs {Number(row.netAfterRefund || 0).toLocaleString('en-IN')}
+                                                {Number(row.returnChargeAmount || 0) > 0 ? (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                                                        title={`Return charge deducted: Rs ${Number(row.returnChargeAmount).toLocaleString('en-IN')}`}
+                                                    >
+                                                        -Rs {Number(row.returnChargeAmount).toLocaleString('en-IN')}
+                                                    </span>
+                                                ) : (
+                                                    <>Rs {Number(row.netAfterRefund || 0).toLocaleString('en-IN')}</>
+                                                )}
                                             </td>
                                         </tr>
                                     ))

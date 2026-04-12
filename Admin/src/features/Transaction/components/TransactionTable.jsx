@@ -129,12 +129,18 @@ const TransactionTable = () => {
                                         </td>
                                         <td className="w-28 px-6 py-4 text-[13px] font-medium text-red-600">
                                             Rs {Number(transaction.commissionAmount || 0).toLocaleString('en-IN')}
-                                            {Number(transaction.returnChargeAmount || 0) > 0 ? (
-                                                <p className="text-[11px] text-red-500">incl. return charge</p>
-                                            ) : null}
                                         </td>
                                         <td className="w-28 px-6 py-4 text-[13px] font-semibold text-[#4EA674]">
-                                            Rs {Number(transaction.netAfterRefund || 0).toLocaleString('en-IN')}
+                                            {Number(transaction.returnChargeAmount || 0) > 0 ? (
+                                                <span
+                                                    className="inline-flex items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                                                    title={`Return charge deducted: Rs ${Number(transaction.returnChargeAmount).toLocaleString('en-IN')}`}
+                                                >
+                                                    -Rs {Number(transaction.returnChargeAmount).toLocaleString('en-IN')}
+                                                </span>
+                                            ) : (
+                                                <>Rs {Number(transaction.netAfterRefund || 0).toLocaleString('en-IN')}</>
+                                            )}
                                         </td>
                                     </tr>
                                 );

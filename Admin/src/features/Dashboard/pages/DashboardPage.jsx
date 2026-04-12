@@ -8,6 +8,7 @@ import TransactionTable from '../components/TransactionTable';
 import TopProduct from '../components/TopProduct';
 import BestSelingProductTable from '../components/BestSelingProductTable';
 import AddProductSidebar from '../components/AddProductSidebar';
+import PayoutSettingsPanel from '../components/PayoutSettingsPanel';
 import { useDashboard } from '../../../Context/dashboard/useDashboard';
 import { useOrder } from '../../../Context/order/useOrder';
 
@@ -75,6 +76,10 @@ const Dashbord = () => {
       <div className="flex w-full mb-5 gap-5">
         <BestSelingProductTable />
         <AddProductSidebar />
+      </div>
+
+      <div className="flex w-full mb-5 gap-5">
+        <PayoutSettingsPanel />
       </div>
     </div>
   )

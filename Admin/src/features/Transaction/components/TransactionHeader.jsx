@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTransaction } from '../../../Context/transaction/useTransaction';
+import TransactionHeaderMenu from './TransactionHeaderMenu';
 
 const TransactionHeader = () => {
     const {
@@ -52,6 +53,7 @@ const TransactionHeader = () => {
                     >
                         {isLoading ? 'Refreshing...' : 'Refresh'}
                     </button>
+                    {isAdmin && <TransactionHeaderMenu />}
                 </div>
             </div>
 
