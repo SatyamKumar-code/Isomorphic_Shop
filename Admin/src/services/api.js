@@ -8,7 +8,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("accessToken");
+    const token = cookieStore.get("accessToken");
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
@@ -31,7 +31,7 @@ api.interceptors.response.use(
         ) {
             originalRequest._retry = true;
             try {
-                const refreshToken = localStorage.getItem("refreshToken");
+                const refreshToken = cookieStore.get("refreshToken");
                 if (!refreshToken) throw new Error("No refresh token");
                 // Call refresh token endpoint
                 const res = await axios.post(
@@ -43,19 +43,19 @@ api.interceptors.response.use(
                     }
                 );
                 if (res.data?.data?.accessToken) {
-                    localStorage.setItem("accessToken", res.data.data.accessToken);
+                    cookieStore.set("accessToken", res.data.data.accessToken);
                     // Update Authorization header and retry original request
                     originalRequest.headers["Authorization"] = `Bearer ${res.data.data.accessToken}`;
                     return api(originalRequest);
                 } else {
                     // If refresh fails, clear tokens and reload
-                    localStorage.removeItem("accessToken");
-                    localStorage.removeItem("refreshToken");
+                    cookieStore.remove("accessToken");
+                    cookieStore.remove("refreshToken");
                     window.location.reload();
                 }
             } catch (refreshError) {
-                localStorage.removeItem("accessToken");
-                localStorage.removeItem("refreshToken");
+                cookieStore.remove("accessToken");
+                cookieStore.remove("refreshToken");
                 window.location.reload();
             }
         }

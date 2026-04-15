@@ -1,5 +1,5 @@
 import { createContext, useMemo, useState, useEffect } from "react";
-import { loginUser, getProfile } from "../../features/auth/authAPI";
+import { loginUser, logoutUser, getProfile } from "../../features/auth/authAPI";
 import { alertBox } from "../../shared/utils/alert";
 
 export const AuthContext = createContext();
@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
     // Check for token and fetch user profile on mount
     useEffect(() => {
         const checkUser = async () => {
-            const token = localStorage.getItem("accessToken");
+            const token = cookieStore.get("accessToken")
             if (token) {
                 try {
                     setIsLoading(true);
@@ -52,8 +52,8 @@ export const AuthProvider = ({ children }) => {
                 setUserData(res?.data?.data);
                 setIsLoggedIn(true);
 
-                localStorage.setItem("accessToken", res?.data?.data?.accessToken);
-                localStorage.setItem("refreshToken", res?.data?.data?.refreshToken);
+                // localStorage.setItem("accessToken", res?.data?.data?.accessToken);
+                // localStorage.setItem("refreshToken", res?.data?.data?.refreshToken);
 
                 alertBox("Success", res?.data?.message);
             }
@@ -64,12 +64,16 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const logout = () => {
-        setUserData(null);
-        setIsLoggedIn(false);
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        alertBox("Success", "LogOut successfully");
+    const logout = async () => {
+        try {
+            await logoutUser();
+        } catch (error) {
+            console.error("Error occurred while logging out:", error);
+        } finally {
+            setUserData(null);
+            setIsLoggedIn(false);
+            alertBox("Success", "LogOut successfully");
+        }
     };
 
 

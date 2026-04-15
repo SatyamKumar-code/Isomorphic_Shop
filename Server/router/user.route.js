@@ -11,6 +11,7 @@ userRouter.post("/register", registerUserController);
 userRouter.post("/verify-email", verifyEmailController);
 userRouter.post("/login", loginUserController);
 userRouter.get("/logout", userMiddleware, logoutController);
+userRouter.get("/admin/logout", adminMiddleware, logoutController);
 userRouter.get("/userData", userMiddleware, getUserController);
 userRouter.get("/admin/userData", adminMiddleware, getUserController);
 userRouter.get("/admin/access-mode", adminMiddleware, getAdminAccessModeController);
