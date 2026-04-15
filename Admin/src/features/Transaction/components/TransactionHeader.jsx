@@ -57,13 +57,13 @@ const TransactionHeader = () => {
                     >
                         {isLoading ? 'Refreshing...' : 'Refresh'}
                     </button>
-                    {isAdmin && 
-                        <div className='hidden xl:block'>
-                            <TransactionHeaderMenu />
-                        </div>
-                    }
+
+                    <div className='hidden xl:block'>
+                        <TransactionHeaderMenu />
+                    </div>
+
                 </div>
-                
+
             </div>
 
         </div>
