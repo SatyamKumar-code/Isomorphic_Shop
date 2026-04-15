@@ -30,6 +30,16 @@ const CsvExportDialog = ({ title, modeLabelMap, exportState }) => {
     return (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
             <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-gray-950">
+                {/* Force date input calendar popup to white in dark mode */}
+                <style>{`
+                                    /* Calendar icon color for date input */
+                                    input[type="date"]::-webkit-calendar-picker-indicator {
+                                        filter: invert(0);
+                                    }
+                                    .dark input[type="date"]::-webkit-calendar-picker-indicator {
+                                        filter: invert(1);
+                                    }
+                                `}</style>
                 <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h4>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{modeLabelMap[exportMode]}</p>
 
