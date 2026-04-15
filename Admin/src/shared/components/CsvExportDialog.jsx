@@ -41,7 +41,14 @@ const CsvExportDialog = ({ title, modeLabelMap, exportState }) => {
                             <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Export Type</label>
                             <select
                                 value={exportMode}
-                                onChange={(event) => setExportMode(event.target.value)}
+                                onChange={(event) => {
+                                    const val = event.target.value;
+                                    setExportMode(val);
+                                    if (val === 'date') {
+                                        setSelectedFromDate('');
+                                        setSelectedToDate('');
+                                    }
+                                }}
                                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
                             >
                                 <option value="all">All Data</option>
@@ -81,35 +88,69 @@ const CsvExportDialog = ({ title, modeLabelMap, exportState }) => {
                             </div>
                         ) : null}
 
-                        {exportMode === 'date' ? (
-                            <>
+                        {exportMode === 'date' ? (() => {
+                            // If data exists, restrict to availableDates range
+                            let minDate = availableDates[0];
+                            let maxDate = availableDates[availableDates.length - 1];
+                            // If no data, fallback to last 1 year
+                            if (!minDate || !maxDate) {
+                                const today = new Date();
+                                const lastYear = new Date();
+                                lastYear.setFullYear(today.getFullYear() - 1);
+                                minDate = lastYear.toISOString().slice(0, 10);
+                                maxDate = today.toISOString().slice(0, 10);
+                            }
+
+                            // Ensure value is yyyy-mm-dd for input type=date
+                            function toISODate(val) {
+                                if (!val) return '';
+                                if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+                                const d = new Date(val);
+                                if (Number.isNaN(d.getTime())) return '';
+                                return d.toISOString().slice(0, 10);
+                            }
+
+                            const fromDateValue = toISODate(selectedFromDate);
+                            const toDateValue = toISODate(selectedToDate);
+
+                            return <>
                                 <div className="mt-4">
                                     <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">From Date</label>
-                                    <select
-                                        value={selectedFromDate}
-                                        onChange={(event) => setSelectedFromDate(event.target.value)}
+                                    <input
+                                        type="date"
+                                        value={fromDateValue}
+                                        min={minDate}
+                                        max={toDateValue || maxDate}
+                                        onChange={(event) => {
+                                            setSelectedFromDate(event.target.value);
+                                            if (toDateValue && event.target.value > toDateValue) {
+                                                setSelectedToDate(event.target.value);
+                                            }
+                                        }}
+                                        placeholder="Select From Date"
                                         className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
-                                    >
-                                        {availableDates.map((date) => (
-                                            <option key={date} value={date}>{toDateLabel(date)}</option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
-
                                 <div className="mt-4">
                                     <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">To Date</label>
-                                    <select
-                                        value={selectedToDate}
-                                        onChange={(event) => setSelectedToDate(event.target.value)}
+                                    <input
+                                        type="date"
+                                        value={toDateValue}
+                                        min={fromDateValue || minDate}
+                                        max={maxDate}
+                                        onChange={(event) => {
+                                            let nextEnd = event.target.value;
+                                            if (fromDateValue && nextEnd < fromDateValue) {
+                                                nextEnd = fromDateValue;
+                                            }
+                                            setSelectedToDate(nextEnd);
+                                        }}
+                                        placeholder="Select To Date"
                                         className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-gray-950 dark:text-slate-200"
-                                    >
-                                        {availableDates.map((date) => (
-                                            <option key={date} value={date}>{toDateLabel(date)}</option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
-                            </>
-                        ) : null}
+                            </>;
+                        })() : null}
                     </>
                 )}
 

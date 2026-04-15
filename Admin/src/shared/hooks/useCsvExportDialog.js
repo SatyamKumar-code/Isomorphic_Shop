@@ -142,16 +142,12 @@ export const useCsvExportDialog = ({
         }
     }, [isOpen, selectedMonth, availableMonthsForYear]);
 
+
     useEffect(() => {
         if (!isOpen) return;
-
-        if (!selectedFromDate && availableDates.length) {
-            setSelectedFromDate(availableDates[0]);
-        }
-        if (!selectedToDate && availableDates.length) {
-            setSelectedToDate(availableDates[availableDates.length - 1]);
-        }
-    }, [isOpen, selectedFromDate, selectedToDate, availableDates]);
+        // Do not auto-select from/to date, let user pick
+        // Only clear values if mode changes
+    }, [isOpen]);
 
     const exportByMode = useCallback(async () => {
         try {
