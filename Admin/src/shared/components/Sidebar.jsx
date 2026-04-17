@@ -9,6 +9,7 @@ const Sidebar = () => {
   const { userData, logout } = useAuth();
   const isSeller = userData?.role === 'seller';
   const getActiveMenu = (pathname) => {
+    if (pathname === '/') return 'Dashboard';
     if (pathname === '/order-management') return 'order';
     if (pathname === '/customers') return 'customers';
     if (pathname === '/seller') return 'seller';
@@ -18,7 +19,6 @@ const Sidebar = () => {
     if (pathname === '/product-reviews') return 'productReviews';
     if (pathname === '/transaction') return 'transaction';
     if (pathname === '/revenue-overview') return 'revenueOverview';
-    return 'Dashboard';
   };
 
   const [active, setActive] = React.useState(getActiveMenu(location.pathname));
@@ -329,8 +329,8 @@ const Sidebar = () => {
 
       <div
         className='mb-10 px-3.5 flex items-center w-full gap-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition'
-        onClick={() => navigate('/account')}
-        title='Account Management'
+        onClick={() => navigate('/profile-settings')}
+        title='Profile Settings'
       >
         <img src="/user.png" alt="" className='w-10 h-10' />
         <div className='leading-3.5'>
