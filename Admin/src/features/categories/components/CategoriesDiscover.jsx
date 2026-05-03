@@ -38,7 +38,7 @@ const CategoriesDiscover = ({ selectedCategory, onSelect, onDeleteCategory }) =>
                                     e.stopPropagation();
                                     onDeleteCategory?.(category.id);
                                 }}
-                                className="shrink-0 hidden group-hover:inline-flex h-8 w-8 items-center justify-center rounded-md text-red-400 hover:text-red-600 transition"
+                                className="shrink-0 cursor-pointer hidden group-hover:inline-flex h-8 w-8 items-center justify-center rounded-md text-red-400 hover:text-red-600 transition"
                                 title="Delete category"
                             >
                                 <FiTrash2 size={16} />

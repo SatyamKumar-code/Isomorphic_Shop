@@ -21,6 +21,17 @@ const CategoriesAddModal = ({ open, mode = 'add', entity = 'category', onClose, 
     const isCategoryEntity = entity === 'category';
     const isSubcategoryEntity = entity === 'subcategory';
 
+    const originalCategoryName = selectedCategory?.name || '';
+    const hasCategoryChanges =
+        editCatName.trim() !== originalCategoryName.trim() ||
+        Boolean(editCatImage);
+
+    const originalSubCategoryName = selectedSubCategory?.subCatName || '';
+    const originalSubCategoryParentId = selectedSubCategory?.categoryId?._id || selectedSubCategory?.categoryId || selectedCategory?.id || '';
+    const hasSubCategoryChanges =
+        editSubCategoryName.trim() !== originalSubCategoryName.trim() ||
+        editSubCategoryParentId !== originalSubCategoryParentId;
+
     useEffect(() => {
         setEditCatName(selectedCategory?.name || '');
         setEditCatPreview(selectedCategory?.image || '');
@@ -99,7 +110,7 @@ const CategoriesAddModal = ({ open, mode = 'add', entity = 'category', onClose, 
             <div className="w-full max-w-2xl rounded-md bg-white p-6 shadow-lg dark:bg-gray-900">
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg text-slate-900 dark:text-slate-100 font-semibold">{isAddMode ? 'Add Category / Subcategory' : 'Update Category / Subcategory'}</h3>
-                    <button onClick={onClose} className="text-slate-500 text-slate-700 dark:text-slate-300">Close</button>
+                    <button onClick={onClose} className="text-slate-700 dark:text-slate-300">Close</button>
                 </div>
 
                 <div className="mt-4 grid gap-4">
@@ -117,7 +128,7 @@ const CategoriesAddModal = ({ open, mode = 'add', entity = 'category', onClose, 
                                 ) : null}
                                 <div className="flex gap-2">
                                     <input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="Category name" className="flex-1 rounded-md border px-3 py-2 text-slate-900 dark:text-slate-100" />
-                                    <button onClick={handleCreateCat} className="rounded-md bg-blue-600 px-4 py-2 text-white">Create</button>
+                                    <button onClick={handleCreateCat} disabled={!catName.trim() || !catImage} className={`rounded-md bg-blue-600 px-4 py-2 text-white ${!catName.trim() || !catImage ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>Create</button>
                                 </div>
                             </div>
                         </div>
@@ -134,7 +145,7 @@ const CategoriesAddModal = ({ open, mode = 'add', entity = 'category', onClose, 
                                     ))}
                                 </select>
                                 <input value={subName} onChange={(e) => setSubName(e.target.value)} placeholder="Subcategory name" className="flex-1 rounded-md border text-slate-900 dark:text-slate-100 px-3 py-2" />
-                                <button onClick={handleCreateSub} className="rounded-md bg-green-600 px-4 py-2 text-white">Create</button>
+                                <button onClick={handleCreateSub} disabled={!subCatId || !subName} className={`rounded-md bg-green-600 px-4 py-2 text-white ${(!subCatId || !subName) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>Create</button>
                             </div>
                         </div>
                     ) : null}
@@ -153,7 +164,7 @@ const CategoriesAddModal = ({ open, mode = 'add', entity = 'category', onClose, 
                                 ) : null}
                                 <div className="flex gap-2">
                                     <input value={editCatName} onChange={(e) => setEditCatName(e.target.value)} placeholder="Edit category name" className="flex-1 rounded-md border text-slate-900 dark:text-slate-100 px-3 py-2" />
-                                    <button onClick={handleUpdateCat} disabled={!selectedCategory} className="rounded-md bg-amber-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50">Update</button>
+                                    <button onClick={handleUpdateCat} disabled={!selectedCategory || !editCatName.trim() || !hasCategoryChanges} className={`rounded-md bg-amber-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50 ${selectedCategory && editCatName.trim() && hasCategoryChanges ? 'cursor-pointer' : 'cursor-not-allowed'}`}>Update</button>
                                 </div>
                             </div>
                         </div>
@@ -177,7 +188,7 @@ const CategoriesAddModal = ({ open, mode = 'add', entity = 'category', onClose, 
                                         ))}
                                     </select>
                                     <input value={editSubCategoryName} onChange={(e) => setEditSubCategoryName(e.target.value)} placeholder="Edit subcategory name" className="flex-1 rounded-md border text-slate-900 dark:text-slate-100 px-3 py-2" />
-                                    <button onClick={handleUpdateSub} disabled={!selectedSubCategory} className="rounded-md bg-amber-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50">Update</button>
+                                    <button onClick={handleUpdateSub} disabled={!selectedSubCategory || !editSubCategoryName.trim() || !hasSubCategoryChanges} className={`rounded-md bg-amber-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50 ${selectedSubCategory && editSubCategoryName.trim() && hasSubCategoryChanges ? 'cursor-pointer' : 'cursor-not-allowed'}`}>Update</button>
                                 </div>
                             </div>
                         </div>
