@@ -14,20 +14,7 @@ const thumbnailColors = [
     { background: '#EFF6FF', color: '#0284C7' },
 ];
 
-const initialTabs = [
-    { label: 'All Product', count: 145 },
-    { label: 'Featured Products', count: null },
-    { label: 'On Sale', count: null },
-    { label: 'Out of Stock', count: null },
-];
-
-const matchesTab = (item, activeTab) => {
-    if (activeTab === 'All Product') return true;
-    if (activeTab === 'Featured Products') return item.featured;
-    if (activeTab === 'On Sale') return item.onSale;
-    if (activeTab === 'Out of Stock') return item.stock === 0;
-    return true;
-};
+// tabs removed: category view no longer exposes tabbed product filters
 
 const formatDate = (value) => {
     const date = new Date(value);
@@ -44,8 +31,6 @@ const formatDate = (value) => {
 export const CategoriesProvider = ({ children }) => {
     const [discoverCategories, setDiscoverCategories] = useState([]);
     const [products, setProducts] = useState([]);
-    const [tabs, setTabs] = useState(initialTabs);
-    const [activeTab, setActiveTab] = useState('All Product');
     const [searchText, setSearchText] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
@@ -98,18 +83,8 @@ export const CategoriesProvider = ({ children }) => {
                 });
 
                 setProducts(normalized);
-                setTabs((prev) =>
-                    prev.map((tab) => {
-                        if (tab.label === 'All Product') {
-                            return { ...tab, count: normalized.length };
-                        }
-
-                        return { ...tab, count: normalized.filter((item) => matchesTab(item, tab.label)).length };
-                    }),
-                );
             } else {
                 setProducts([]);
-                setTabs((prev) => prev.map((tab) => ({ ...tab, count: 0 })));
             }
         } catch (error) {
             // Keep fallback table rows when API is unavailable.
@@ -136,14 +111,10 @@ export const CategoriesProvider = ({ children }) => {
         const query = searchText.trim().toLowerCase();
 
         return products.filter((item) => {
-            const tabMatch = matchesTab(item, activeTab);
-            if (!query) {
-                return tabMatch;
-            }
-
-            return tabMatch && `${item.product} ${item.date} ${item.stock}`.toLowerCase().includes(query);
+            if (!query) return true;
+            return `${item.product} ${item.date} ${item.stock}`.toLowerCase().includes(query);
         });
-    }, [products, activeTab, searchText]);
+    }, [products, searchText]);
 
     const totalPages = useMemo(() => {
         return Math.max(1, Math.ceil(filteredProducts.length / pageSize));
@@ -151,7 +122,7 @@ export const CategoriesProvider = ({ children }) => {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [activeTab, searchText]);
+    }, [searchText]);
 
     useEffect(() => {
         if (currentPage > totalPages) {
@@ -171,9 +142,6 @@ export const CategoriesProvider = ({ children }) => {
     const value = useMemo(
         () => ({
             discoverCategories,
-            tabs,
-            activeTab,
-            setActiveTab,
             searchText,
             setSearchText,
             rows: paginatedProducts,
@@ -189,7 +157,7 @@ export const CategoriesProvider = ({ children }) => {
                 loadProducts();
             },
         }),
-        [discoverCategories, tabs, activeTab, searchText, paginatedProducts, currentPage, pagination, totalPages, isLoading, loadCategories, loadProducts],
+        [discoverCategories, searchText, paginatedProducts, currentPage, pagination, totalPages, isLoading, loadCategories, loadProducts],
     );
 
     return (

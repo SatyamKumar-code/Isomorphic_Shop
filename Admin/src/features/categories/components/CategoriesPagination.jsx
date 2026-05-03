@@ -2,8 +2,12 @@ import React from 'react';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useCategories } from '../../../Context/categories/useCategories';
 
-const CategoriesPagination = () => {
-    const { pagination, totalPages, currentPage, setCurrentPage } = useCategories();
+const CategoriesPagination = ({ currentPage: propPage, setCurrentPage: propSetPage, pagination: propPagination, totalPages: propTotalPages }) => {
+    const ctx = useCategories();
+    const pagination = propPagination || ctx.pagination;
+    const totalPages = propTotalPages ?? ctx.totalPages;
+    const currentPage = propPage ?? ctx.currentPage;
+    const setCurrentPage = propSetPage || ctx.setCurrentPage;
 
     return (
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">

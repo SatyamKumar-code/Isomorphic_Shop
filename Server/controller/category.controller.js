@@ -3,6 +3,7 @@ import categoryModel from "../models/category.model.js";
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import subCatModel from "../models/subCategory.model.js";
+import mongoose from "mongoose";
 
 cloudinary.config({
     cloud_name: process.env.cloudinary_Config_Cloud_Name,
@@ -13,6 +14,18 @@ cloudinary.config({
 
 // image upload
 var imagesArr = [];
+
+const deleteCloudinaryImage = async (imgUrl) => {
+    if (!imgUrl) return;
+
+    const urlArr = imgUrl.split("/");
+    const image = urlArr[urlArr.length - 1];
+    const imageName = image.split(".")[0];
+
+    if (imageName) {
+        await cloudinary.uploader.destroy(imageName, () => { });
+    }
+};
 
 export async function uploadImages(req, res) {
     try {
@@ -78,13 +91,13 @@ export async function removeImageFromCloudinary(request, response) {
             success: false
         })
     }
-} 
+}
 
 export const createCategoryController = async (req, res) => {
     try {
         const { catName } = req.body;
 
-        if(!catName){
+        if (!catName) {
             return res.status(400).json({
                 message: "Category Name is required",
                 error: true,
@@ -92,9 +105,9 @@ export const createCategoryController = async (req, res) => {
             })
         }
 
-        const existingCategory = await categoryModel.findOne({catName});
+        const existingCategory = await categoryModel.findOne({ catName });
 
-        if(existingCategory) {
+        if (existingCategory) {
             return res.status(400).json({
                 message: "Category  already existed",
                 error: true,
@@ -108,7 +121,7 @@ export const createCategoryController = async (req, res) => {
             image: imagesArr[0] // Assuming you want to store the first uploaded image
         });
 
-        if(!newCategory) {
+        if (!newCategory) {
             return res.status(500).json({
                 message: "Failed to create category",
                 error: true,
@@ -127,8 +140,8 @@ export const createCategoryController = async (req, res) => {
         })
 
 
-        
-    }catch (error) {
+
+    } catch (error) {
         return res.status(500).json({
             message: error.message,
             error: true,
@@ -137,25 +150,79 @@ export const createCategoryController = async (req, res) => {
     }
 }
 
+export const updateCategoryController = async (req, res) => {
+    try {
+        const categoryId = req.params.id;
+        const { catName, image } = req.body;
+
+        const category = await categoryModel.findById(categoryId);
+
+        if (!category) {
+            return res.status(404).json({
+                message: "Category not found",
+                error: true,
+                success: false
+            });
+        }
+
+        if (catName) {
+            const existingCategory = await categoryModel.findOne({
+                catName,
+                _id: { $ne: categoryId }
+            });
+
+            if (existingCategory) {
+                return res.status(400).json({
+                    message: "Category already existed",
+                    error: true,
+                    success: false
+                });
+            }
+
+            category.catName = catName;
+        }
+
+        if (image && image !== category.image) {
+            await deleteCloudinaryImage(category.image);
+            category.image = image;
+        }
+
+        await category.save();
+
+        return res.status(200).json({
+            message: "Category updated successfully",
+            error: false,
+            success: true,
+            category
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+            error: true,
+            success: false
+        });
+    }
+}
+
 export const getAllCategoriesController = async (req, res) => {
     try {
         let categories = await categoryModel.find();
 
         categories = categories.sort((a, b) => {
-            if(a.catName && b.catName) {
+            if (a.catName && b.catName) {
                 return a.catName.localeCompare(b.catName);
             }
             return 0;
         })
 
-        if(categories.length === 0) {
+        if (categories.length === 0) {
             return res.status(404).json({
                 message: "No categories found",
                 error: true,
                 success: false
             })
         }
-        
+
         return res.status(200).json({
             message: "Categories retrieved successfully",
             error: false,
@@ -173,12 +240,94 @@ export const getAllCategoriesController = async (req, res) => {
     }
 }
 
+export const getAllSubCategoriesController = async (req, res) => {
+    try {
+        const categoryId = String(req.query.categoryId || '').trim();
+        const page = Math.max(1, parseInt(req.query.page || '1', 10));
+        const pageSize = Math.max(1, parseInt(req.query.pageSize || '10', 10));
+        const search = String(req.query.search || '').trim();
+
+        const matchStage = {};
+
+        if (categoryId) {
+            matchStage.categoryId = new mongoose.Types.ObjectId(categoryId);
+        }
+
+        if (search) {
+            matchStage.subCatName = { $regex: search, $options: 'i' };
+        }
+
+        const totalCount = await subCatModel.countDocuments(matchStage);
+        const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+        const subCategories = await subCatModel.aggregate([
+            Object.keys(matchStage).length ? { $match: matchStage } : { $match: {} },
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: 'categoryId',
+                    foreignField: '_id',
+                    as: 'category',
+                    pipeline: [{ $project: { catName: 1, image: 1 } }],
+                },
+            },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: '_id',
+                    foreignField: 'subCategory',
+                    as: 'products',
+                    pipeline: [{ $project: { _id: 1 } }],
+                },
+            },
+            {
+                $addFields: {
+                    productCount: { $size: '$products' },
+                },
+            },
+            {
+                $unwind: {
+                    path: '$category',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $project: {
+                    products: 0,
+                },
+            },
+            {
+                $sort: { subCatName: 1, createdAt: -1 },
+            },
+            { $skip: (page - 1) * pageSize },
+            { $limit: pageSize },
+        ]);
+
+        return res.status(200).json({
+            message: 'Sub categories retrieved successfully',
+            error: false,
+            success: true,
+            subCategories,
+            totalCount,
+            totalPages,
+            page,
+            pageSize,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+            error: true,
+            success: false,
+        });
+    }
+}
+
 export const getCategoryByIdController = async (req, res) => {
     try {
         const categoryId = req.params.id;
         const category = await categoryModel.findById(categoryId);
 
-        if(!category) {
+        if (!category) {
             return res.status(404).json({
                 message: "Category not found",
                 error: true,
@@ -207,25 +356,10 @@ export const deleteCategoryController = async (req, res) => {
     try {
         const categoryId = req.params.id;
         const category = await categoryModel.findById(categoryId);
-        const images = category.image ? [category.image] : [];
-
-        let img = "";
-        for (img of images) {
-            const imgUrl = img;
-            const urlArr = imgUrl.split("/");
-            const image = urlArr[urlArr.length - 1];
-
-            const imageName = image.split(".")[0];
-
-            if (imageName) {
-                cloudinary.uploader.destroy(imageName, (error, result) => {
-                    //console.log(result, error);
-                });
-            }
-        }
+        await deleteCloudinaryImage(category?.image);
 
         const subCategories = await subCatModel.find({ categoryId });
-        for(let subCategory of subCategories) {
+        for (let subCategory of subCategories) {
             await subCatModel.findByIdAndDelete(subCategory._id);
         }
 
@@ -250,7 +384,7 @@ export const CreateSubCategoryController = async (req, res) => {
     try {
         const { subCatName, categoryId } = req.body;
 
-        if(!subCatName || !categoryId) {
+        if (!subCatName || !categoryId) {
             return res.status(400).json({
                 message: "Sub Category Name and Category Id are required",
                 error: true,
@@ -258,14 +392,14 @@ export const CreateSubCategoryController = async (req, res) => {
             })
         }
 
-        const existingSubCategory = await subCatModel.findOne({subCatName, categoryId});
+        const existingSubCategory = await subCatModel.findOne({ subCatName, categoryId });
 
-        if(existingSubCategory) {
+        if (existingSubCategory) {
             return res.status(400).json({
                 message: "Sub Category already existed in this category",
                 error: true,
                 success: false
-             })
+            })
         }
 
         const subCategory = new subCatModel({
@@ -296,7 +430,7 @@ export const getAllSubCategoriesByCategoryIdController = async (req, res) => {
         const categoryId = req.params.id;
         const subCategories = await subCatModel.find({ categoryId });
 
-        if(subCategories.length === 0) {
+        if (subCategories.length === 0) {
             return res.status(404).json({
                 message: "No sub categories found for this category",
                 error: true,
@@ -324,12 +458,12 @@ export const getSubCategoryByIdController = async (req, res) => {
     try {
         const subCategoryId = req.params.id;
         const subCategory = await subCatModel.findById(subCategoryId);
-        if(!subCategory) {
+        if (!subCategory) {
             return res.status(404).json({
                 message: "Sub category not found",
                 error: true,
                 success: false
-             })
+            })
         }
         return res.status(200).json({
             message: "Sub category retrieved successfully",
@@ -338,7 +472,7 @@ export const getSubCategoryByIdController = async (req, res) => {
             subCategory
         })
 
-    }catch (error) {
+    } catch (error) {
         return res.status(500).json({
             message: error.message,
             error: true,
@@ -352,7 +486,7 @@ export const deleteSubCategoryController = async (req, res) => {
         const subCategoryId = req.params.id;
         const subCategory = await subCatModel.findById(subCategoryId);
 
-        if(!subCategory) {
+        if (!subCategory) {
             return res.status(404).json({
                 message: "Sub category not found",
                 error: true,
@@ -374,5 +508,57 @@ export const deleteSubCategoryController = async (req, res) => {
             error: true,
             success: false
         })
+    }
+}
+
+export const updateSubCategoryController = async (req, res) => {
+    try {
+        const subCategoryId = req.params.id;
+        const { subCatName, categoryId } = req.body;
+
+        const subCategory = await subCatModel.findById(subCategoryId);
+
+        if (!subCategory) {
+            return res.status(404).json({
+                message: "Sub category not found",
+                error: true,
+                success: false
+            });
+        }
+
+        const nextCategoryId = categoryId || subCategory.categoryId;
+        const nextSubCatName = subCatName || subCategory.subCatName;
+
+        const existingSubCategory = await subCatModel.findOne({
+            subCatName: nextSubCatName,
+            categoryId: nextCategoryId,
+            _id: { $ne: subCategoryId }
+        });
+
+        if (existingSubCategory) {
+            return res.status(400).json({
+                message: "Sub category already existed in this category",
+                error: true,
+                success: false
+            });
+        }
+
+        subCategory.subCatName = nextSubCatName;
+        subCategory.categoryId = nextCategoryId;
+
+        await subCategory.save();
+
+        return res.status(200).json({
+            message: "Sub category updated successfully",
+            error: false,
+            success: true,
+            subCategory
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+            error: true,
+            success: false
+        });
     }
 }
