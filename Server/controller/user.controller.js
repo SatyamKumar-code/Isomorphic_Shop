@@ -3,6 +3,8 @@ import UserModel from '../models/user.model.js';
 import OrderModel from '../models/order.model.js';
 import ProductModel from '../models/product.model.js';
 import SellerPayoutModel from '../models/sellerPayout.model.js';
+import SellerLocationModel from '../models/sellerLocation.model.js';
+import SellerSocialLinksModel from '../models/sellerSocialLinks.model.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import generateAccessToken from '../utils/generateAccessToken.js';
@@ -417,6 +419,42 @@ const getAccessModeFromRole = (role) => {
 
     return "user";
 };
+
+const getSellerLocation = async (userId, role) => {
+    if (!['admin', 'seller'].includes(role)) {
+        return '';
+    }
+
+    const sellerLocation = await SellerLocationModel.findOne({ userId }).select('location').lean();
+    return sellerLocation?.location || '';
+};
+
+const getSellerSocialLinks = async (userId, role) => {
+    if (!['admin', 'seller'].includes(role)) {
+        return {
+            instagramLink: '',
+            facebookLink: '',
+            whatsappNumber: '',
+        };
+    }
+
+    const socialLinks = await SellerSocialLinksModel.findOne({ userId })
+        .select('instagramLink facebookLink whatsappNumber')
+        .lean();
+
+    return {
+        instagramLink: socialLinks?.instagramLink || '',
+        facebookLink: socialLinks?.facebookLink || '',
+        whatsappNumber: socialLinks?.whatsappNumber || '',
+    };
+};
+
+const buildUserResponse = async (user) => ({
+    ...user.toObject(),
+    location: await getSellerLocation(user._id, user.role),
+    socialLinks: await getSellerSocialLinks(user._id, user.role),
+    accessMode: getAccessModeFromRole(user.role),
+});
 
 const hasGlobalAdminAccess = async (adminId) => {
     if (!adminId) {
@@ -1386,6 +1424,8 @@ export const getUserController = async (req, res) => {
             success: true,
             data: {
                 ...user.toObject(),
+                location: await getSellerLocation(user._id, user.role),
+                socialLinks: await getSellerSocialLinks(user._id, user.role),
                 accessMode: getAccessModeFromRole(user.role),
             }
         });
@@ -1517,12 +1557,9 @@ export const refreshTokenController = async (req, res) => {
     }
 }
 
-// image upload
-var imagesArr = [];
-
-export async function userAvatarController(req, res) {
+const uploadAvatarImage = async (req) => {
     try {
-        imagesArr = [];
+        const imagesArr = [];
 
         const userId = req.userId;
         const image = req.files;
@@ -1530,11 +1567,13 @@ export async function userAvatarController(req, res) {
         const user = await UserModel.findById({ _id: userId });
 
         if (!user) {
-            return res.status(404).json({
-                message: "User not found",
-                error: true,
-                success: false
-            });
+            return {
+                status: 404, body: {
+                    message: "User not found",
+                    error: true,
+                    success: false
+                }
+            };
         }
 
         //first remove image from cloudinary
@@ -1557,7 +1596,7 @@ export async function userAvatarController(req, res) {
         };
 
         for (let i = 0; i < image?.length; i++) {
-            const img = await cloudinary.uploader.upload(
+            await cloudinary.uploader.upload(
                 image[i].path,
                 option,
                 function (error, result) {
@@ -1570,18 +1609,49 @@ export async function userAvatarController(req, res) {
         user.avatar = imagesArr[0];
         await user.save();
 
-        return res.status(200).json({
-            _id: userId,
-            avatar: imagesArr[0],
-        });
-
     } catch (error) {
-        return res.status(500).json({
-            message: error.message || error,
-            error: true,
-            success: false
-        })
+        return {
+            status: 500, body: {
+                message: error.message || error,
+                error: true,
+                success: false
+            }
+        };
     }
+};
+
+export async function userAvatarController(req, res) {
+    const result = await uploadAvatarImage(req);
+    if (result?.status) {
+        return res.status(result.status).json(result.body);
+    }
+
+    return res.status(200).json({
+        error: false,
+        success: true,
+        message: "Avatar updated successfully",
+        data: {
+            _id: req.userId,
+            avatar: (await UserModel.findById(req.userId).select("avatar").lean())?.avatar || null,
+        },
+    });
+}
+
+export async function adminAvatarController(req, res) {
+    const result = await uploadAvatarImage(req);
+    if (result?.status) {
+        return res.status(result.status).json(result.body);
+    }
+
+    return res.status(200).json({
+        error: false,
+        success: true,
+        message: "Avatar updated successfully",
+        data: {
+            _id: req.userId,
+            avatar: (await UserModel.findById(req.userId).select("avatar").lean())?.avatar || null,
+        },
+    });
 }
 
 export async function removeImageFromCloudinary(request, response) {
@@ -1737,7 +1807,7 @@ export const resetPasswordController = async (req, res) => {
             });
         }
 
-        if (!newPassword || !confirmPassword || oldPassword) {
+        if (!oldPassword || !newPassword || !confirmPassword) {
             return res.status(400).json({
                 message: "All fields are required",
                 error: true,
@@ -1745,7 +1815,7 @@ export const resetPasswordController = async (req, res) => {
             })
         }
 
-        const checkPassword = bcrypt.compare(oldPassword, user.password)
+        const checkPassword = await bcrypt.compare(oldPassword, user.password)
 
         if (!checkPassword) {
             return res.status(400).json({
@@ -1784,6 +1854,66 @@ export const resetPasswordController = async (req, res) => {
         })
     }
 }
+
+export const adminChangePasswordController = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { oldPassword, newPassword, confirmPassword } = req.body;
+
+        const user = await UserModel.findById({ _id: userId });
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false,
+            });
+        }
+
+        if (!oldPassword || !newPassword || !confirmPassword) {
+            return res.status(400).json({
+                message: "All fields are required",
+                error: true,
+                success: false,
+            });
+        }
+
+        const checkPassword = await bcrypt.compare(oldPassword, user.password);
+        if (!checkPassword) {
+            return res.status(400).json({
+                message: "Your OldPassword is Worng",
+                error: true,
+                success: false,
+            });
+        }
+
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({
+                message: "Password and Confirm Password must be same",
+                error: true,
+                success: false,
+            });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+        user.password = hashedPassword;
+
+        await user.save();
+
+        return res.status(200).json({
+            message: "Password reset successfully",
+            error: false,
+            success: true,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message || error,
+            error: true,
+            success: false,
+        });
+    }
+};
 
 export const resetPasswordWithOtpController = async (req, res) => {
     try {
@@ -1841,7 +1971,21 @@ export const resetPasswordWithOtpController = async (req, res) => {
 export const updateUserDetails = async (req, res) => {
     try {
         const userId = req.userId;
-        const { name, password, mobile } = req.body;
+        const {
+            name,
+            firstName,
+            lastName,
+            email,
+            password,
+            mobile,
+            location,
+            bankName,
+            ifcCode,
+            accountNumber,
+            instagramLink,
+            facebookLink,
+            whatsappNumber,
+        } = req.body;
 
         const user = await UserModel.findById({ _id: userId });
         if (!user) {
@@ -1854,6 +1998,20 @@ export const updateUserDetails = async (req, res) => {
 
         if (name) {
             user.name = name;
+        } else if (firstName || lastName) {
+            user.name = `${firstName || ""} ${lastName || ""}`.trim();
+        }
+
+        if (email && email !== user.email) {
+            const existingEmail = await UserModel.findOne({ email, _id: { $ne: userId } }).select("_id").lean();
+            if (existingEmail) {
+                return res.status(400).json({
+                    message: "Email already exists",
+                    error: true,
+                    success: false,
+                });
+            }
+            user.email = email;
         }
 
         if (password) {
@@ -1866,13 +2024,60 @@ export const updateUserDetails = async (req, res) => {
             user.mobile = mobile;
         }
 
+        if (location !== undefined && ['admin', 'seller'].includes(user.role)) {
+            await SellerLocationModel.findOneAndUpdate(
+                { userId },
+                { userId, location },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+        }
+
+        if (bankName !== undefined) {
+            user.bankName = bankName;
+        }
+
+        if (ifcCode !== undefined) {
+            user.ifcCode = ifcCode;
+        }
+
+        if (accountNumber !== undefined) {
+            user.accountNumber = accountNumber;
+        }
+
+        if (['admin', 'seller'].includes(user.role) && (
+            instagramLink !== undefined ||
+            facebookLink !== undefined ||
+            whatsappNumber !== undefined
+        )) {
+            const normalizedWhatsAppNumber = whatsappNumber !== undefined ? String(whatsappNumber).replace(/\D/g, "") : undefined;
+
+            if (normalizedWhatsAppNumber !== undefined && normalizedWhatsAppNumber && normalizedWhatsAppNumber.length !== 10) {
+                return res.status(400).json({
+                    message: "WhatsApp number must be exactly 10 digits",
+                    error: true,
+                    success: false,
+                });
+            }
+
+            await SellerSocialLinksModel.findOneAndUpdate(
+                { userId },
+                {
+                    userId,
+                    instagramLink: instagramLink !== undefined ? instagramLink : '',
+                    facebookLink: facebookLink !== undefined ? facebookLink : '',
+                    whatsappNumber: normalizedWhatsAppNumber !== undefined ? normalizedWhatsAppNumber : '',
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+        }
+
         await user.save();
 
         return res.status(200).json({
             message: "User details updated successfully",
             error: false,
             success: true,
-            user
+            data: await buildUserResponse(user)
         })
     } catch (error) {
         return res.status(500).json({

@@ -335,7 +335,7 @@ const Sidebar = () => {
         <img src="/user.png" alt="" className='w-10 h-10' />
         <div className='leading-3.5'>
           <h3 className='text-[15px] text-black font-semibold dark:text-white'>{userData?.name || 'User Name'}</h3>
-          <span className='text-[13px] text-[#6A717F]'>{userData?.email || 'user@email.com'}</span>
+          <span className='text-[13px] text-[#6A717F]'>{(userData?.email || 'user@email.com').slice(0, 18)}{userData?.email && userData?.email.length > 18 ? '...' : ''}</span>
         </div>
         <svg
           width="20"

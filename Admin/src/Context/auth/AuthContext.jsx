@@ -1,4 +1,4 @@
-import { createContext, useMemo, useState, useEffect } from "react";
+import { createContext, useCallback, useMemo, useState, useEffect } from "react";
 import { loginUser, logoutUser, getProfile } from "../../features/auth/authAPI";
 import { alertBox } from "../../shared/utils/alert";
 
@@ -10,32 +10,37 @@ export const AuthProvider = ({ children }) => {
     const [userData, setUserData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    const loadProfile = useCallback(async () => {
+        const token = cookieStore.get("accessToken");
+        if (!token) {
+            setIsLoading(false);
+            return null;
+        }
+
+        try {
+            setIsLoading(true);
+            const res = await getProfile();
+            if (res?.data?.data && ["admin", "seller"].includes(res?.data?.data?.role)) {
+                setUserData(res?.data?.data);
+                setIsLoggedIn(true);
+                return res?.data?.data;
+            }
+
+            setUserData(null);
+            setIsLoggedIn(false);
+            return null;
+        } catch (err) {
+            setUserData(null);
+            setIsLoggedIn(false);
+            return null;
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
     // Check for token and fetch user profile on mount
     useEffect(() => {
-        const checkUser = async () => {
-            const token = cookieStore.get("accessToken")
-            if (token) {
-                try {
-                    setIsLoading(true);
-                    const res = await getProfile();
-                    if (res?.data?.data && ["admin", "seller"].includes(res?.data?.data?.role)) {
-                        setUserData(res?.data?.data);
-                        setIsLoggedIn(true);
-                    } else {
-                        setUserData(null);
-                        setIsLoggedIn(false);
-                    }
-                } catch (err) {
-                    setUserData(null);
-                    setIsLoggedIn(false);
-                } finally {
-                    setIsLoading(false);
-                }
-            } else {
-                setIsLoading(false);
-            }
-        };
-        checkUser();
+        loadProfile();
     }, []);
 
     const login = async (data) => {
@@ -82,8 +87,9 @@ export const AuthProvider = ({ children }) => {
         isLoggedIn,
         login,
         logout,
-        isLoading
-    }), [userData, isLoading, isLoggedIn]);
+        isLoading,
+        refreshUserProfile: loadProfile,
+    }), [userData, isLoading, isLoggedIn, loadProfile]);
 
     return (
         <AuthContext.Provider value={value}>

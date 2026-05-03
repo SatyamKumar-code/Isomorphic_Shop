@@ -1,6 +1,88 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { useAuth } from '../../../Context/auth/useAuth';
+import { alertBox } from '../../../shared/utils/alert';
+import { updateProfileDetails } from '../ProfileAPI';
+import { FaFacebookF, FaInstagram, FaWhatsapp } from 'react-icons/fa';
 
 const ProfileCard = () => {
+    const { userData, refreshUserProfile } = useAuth();
+    const defaultAvatar = "https://randomuser.me/api/portraits/men/32.jpg";
+    const name = userData?.name || "Profile";
+    const email = userData?.email || "-";
+    const avatar = userData?.avatar || defaultAvatar;
+    const roleLabel = userData?.role ? userData.role.toUpperCase() : "ADMIN";
+    const socialLinks = userData?.socialLinks || {};
+    const [isSocialModalOpen, setIsSocialModalOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [socialForm, setSocialForm] = useState({
+        instagramLink: "",
+        facebookLink: "",
+        whatsappNumber: "",
+    });
+
+    useEffect(() => {
+        if (!isSocialModalOpen) {
+            return;
+        }
+
+        setSocialForm({
+            instagramLink: socialLinks.instagramLink || "",
+            facebookLink: socialLinks.facebookLink || "",
+            whatsappNumber: socialLinks.whatsappNumber || "",
+        });
+    }, [isSocialModalOpen, socialLinks.instagramLink, socialLinks.facebookLink, socialLinks.whatsappNumber]);
+
+    const socialItems = [
+        { key: "instagramLink", href: socialLinks.instagramLink, icon: FaInstagram, alt: "Instagram", bgClass: "bg-[#E1306C]" },
+        { key: "facebookLink", href: socialLinks.facebookLink, icon: FaFacebookF, alt: "Facebook", bgClass: "bg-[#1877F2]" },
+        {
+            key: "whatsappNumber",
+            href: socialLinks.whatsappNumber ? `https://wa.me/${String(socialLinks.whatsappNumber).replace(/\D/g, "")}` : "",
+            icon: FaWhatsapp,
+            alt: "WhatsApp",
+            bgClass: "bg-[#25D366]",
+        },
+    ];
+
+    const handleSocialChange = (event) => {
+        const { name, value } = event.target;
+
+        if (name === "whatsappNumber") {
+            const digitsOnly = value.replace(/\D/g, "").slice(0, 10);
+            setSocialForm((current) => ({ ...current, [name]: digitsOnly }));
+            return;
+        }
+
+        setSocialForm((current) => ({ ...current, [name]: value }));
+    };
+
+    const handleSocialSave = async (event) => {
+        event.preventDefault();
+
+        if (socialForm.whatsappNumber && socialForm.whatsappNumber.length !== 10) {
+            alertBox("error", "WhatsApp number must be exactly 10 digits");
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            const response = await updateProfileDetails(socialForm);
+
+            if (response?.data?.error === false) {
+                await refreshUserProfile?.();
+                setIsSocialModalOpen(false);
+                alertBox("Success", response?.data?.message || "Social links updated successfully");
+                return;
+            }
+
+            alertBox("error", response?.data?.message || "Failed to update social links");
+        } catch (error) {
+            alertBox("error", error?.response?.data?.message || "Failed to update social links");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
 
         <div className="py-4 px-5 flex flex-col items-center shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg">
@@ -17,19 +99,100 @@ const ProfileCard = () => {
                 </div>
             </div>
             <div className="w-24 h-24 rounded-full overflow-hidden mb-2">
-                <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Profile" className="w-full h-full object-cover" />
+                <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
             </div>
-            <h3 className="text-[18px] font-bold mt-2 text-[#23272E] dark:text-[#c1c6cf]">Wade Warren</h3>
-            <p className="text-gray-500 text-sm leading-6.5">wade.warren@example.com</p>
-            <div className="m-5">
+            <h3 className="text-[18px] font-bold mt-2 text-[#23272E] dark:text-[#c1c6cf]">{name}</h3>
+            <p className="text-gray-500 text-sm leading-6.5">{email}</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-gray-400 mt-1">{roleLabel}</p>
+            <div className="m-5 justify-items-center">
                 <span className="block text-[14px] text-[#4B5563] dark:text-[#9CA3AF]">Linked with Social media</span>
                 <div className="flex justify-center gap-3 my-2">
-                    <img src="/assets/google.svg" alt="Google" className="w-6 h-6" />
-                    <img src="/assets/facebook.svg" alt="Facebook" className="w-6 h-6" />
-                    <img src="/assets/linkedin.svg" alt="LinkedIn" className="w-6 h-6" />
+                    {socialItems.map((item) => (
+                        item.href ? (
+                            <a key={item.key} href={item.href} target="_blank" rel="noreferrer" title={item.href} className={`flex h-7 w-7 items-center justify-center rounded-md text-white ${item.bgClass}`}>
+                                <item.icon />
+                            </a>
+                        ) : (
+                            <span key={item.key} title={`${item.alt} link not set`} className={`flex h-7 w-7 items-center justify-center rounded-md opacity-40 text-white ${item.bgClass}`}>
+                                <item.icon />
+                            </span>
+                        )
+                    ))}
                 </div>
-                <button className="mt-2 flex gap-2 items-center px-4 py-1 border-2 border-gray-300 dark:border-gray-700 rounded-lg text-[#4B5563] dark:text-[#9CA3AF] hover:text-[#6B7280] dark:hover:text-[#D1D5DB] transition">Social media</button>
+                <button type="button" onClick={() => setIsSocialModalOpen(true)} className="mt-2 flex gap-2 items-center px-4 py-1 border-2 border-gray-300 dark:border-gray-700 rounded-lg text-[#4B5563] dark:text-[#9CA3AF] hover:text-[#6B7280] dark:hover:text-[#D1D5DB] transition">Social media</button>
             </div>
+
+            {isSocialModalOpen ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" role="dialog" aria-modal="true">
+                    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-950">
+                        <div className="flex items-center justify-between gap-4 border-b border-gray-200 pb-4 dark:border-gray-800">
+                            <div>
+                                <h4 className="text-lg font-bold text-[#23272E] dark:text-[#c1c6cf]">Social Media Links</h4>
+                                <p className="text-sm text-gray-500">Add or update Instagram, Facebook, and WhatsApp.</p>
+                            </div>
+                            <button type="button" onClick={() => setIsSocialModalOpen(false)} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-900">
+                                <svg viewBox="0 0 20 20" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSocialSave} className="mt-5 flex flex-col gap-4">
+                            <div className="flex flex-col gap-1">
+                                <label className="text-sm font-medium text-[#23272E] dark:text-[#c1c6cf]">Instagram Link</label>
+                                <input
+                                    type="url"
+                                    name="instagramLink"
+                                    value={socialForm.instagramLink}
+                                    onChange={handleSocialChange}
+                                    placeholder="https://..."
+                                    disabled={isSaving}
+                                    className="rounded-lg border border-gray-300 px-3 py-2 text-[#23272E] outline-none focus:ring-2 focus:ring-green-400 dark:border-gray-700 dark:bg-gray-900 dark:text-[#c1c6cf]"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className="text-sm font-medium text-[#23272E] dark:text-[#c1c6cf]">Facebook Link</label>
+                                <input
+                                    type="url"
+                                    name="facebookLink"
+                                    value={socialForm.facebookLink}
+                                    onChange={handleSocialChange}
+                                    placeholder="https://..."
+                                    disabled={isSaving}
+                                    className="rounded-lg border border-gray-300 px-3 py-2 text-[#23272E] outline-none focus:ring-2 focus:ring-green-400 dark:border-gray-700 dark:bg-gray-900 dark:text-[#c1c6cf]"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className="text-sm font-medium text-[#23272E] dark:text-[#c1c6cf]">WhatsApp Number</label>
+                                <input
+                                    type="tel"
+                                    name="whatsappNumber"
+                                    value={socialForm.whatsappNumber}
+                                    onChange={handleSocialChange}
+                                    placeholder="10 digits"
+                                    maxLength={10}
+                                    inputMode="numeric"
+                                    disabled={isSaving}
+                                    className="rounded-lg border border-gray-300 px-3 py-2 text-[#23272E] outline-none focus:ring-2 focus:ring-green-400 dark:border-gray-700 dark:bg-gray-900 dark:text-[#c1c6cf]"
+                                />
+                            </div>
+
+                            <div className="mt-2 flex items-center justify-end gap-3">
+                                <button type="button" onClick={() => setIsSocialModalOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-[#23272E] hover:bg-gray-50 dark:border-gray-700 dark:text-[#c1c6cf] dark:hover:bg-gray-900">
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={isSaving} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-400">
+                                    {isSaving ? "Saving..." : "Save Links"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                
+            ) : null}
         </div>
     )
 }

@@ -4,6 +4,7 @@ import { FaRegEye, FaEyeSlash } from 'react-icons/fa';
 import { CircularProgress } from '@mui/material';
 import { alertBox } from '../../../shared/utils/alert';
 import { useAuth } from '../../../Context/auth/useAuth';
+import { changeProfilePassword } from '../ProfileAPI';
 
 const ChangePasswordCard = () => {
 
@@ -29,34 +30,52 @@ const ChangePasswordCard = () => {
         });
     }
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setIsLoading(true);
 
         if (formFields.currentPassword === "") {
-            setIsLoading(false);
             alertBox("error", "Please enter current password")
             return;
         }
         if (formFields.newPassword === "") {
-            setIsLoading(false);
             alertBox("error", "Please enter new password")
             return;
         }
         if (formFields.confirmPassword === "") {
-            setIsLoading(false);
             alertBox("error", "Please enter confirm password")
             return;
         }
 
         if (formFields.newPassword !== formFields.confirmPassword) {
-            setIsLoading(false);
             alertBox("error", "New and confirm password do not match")
             return;
         }
 
-        setIsLoading(false);
-        alertBox("Success", "Password changed successfully")
+        try {
+            setIsLoading(true);
+            const response = await changeProfilePassword({
+                oldPassword: formFields.currentPassword,
+                newPassword: formFields.newPassword,
+                confirmPassword: formFields.confirmPassword
+            });
+
+            if (response?.data?.error === false) {
+                setFormFields({
+                    email: userData.email,
+                    currentPassword: '',
+                    newPassword: '',
+                    confirmPassword: ''
+                });
+                alertBox("Success", response?.data?.message || "Password changed successfully")
+                return;
+            }
+
+            alertBox("error", response?.data?.message || "Failed to change password")
+        } catch (error) {
+            alertBox("error", error?.response?.data?.message || "Failed to change password")
+        } finally {
+            setIsLoading(false);
+        }
 
     };
 
@@ -69,10 +88,10 @@ const ChangePasswordCard = () => {
             </div>
             <form onSubmit={handleSubmit} >
                 <div className="relative flex flex-col gap-1 mb-2">
-                    <label className="text-[15px] font-medium text-gray-700">Current Password</label>
+                    <label className="text-[15px] font-medium text-[#23272E] dark:text-[#c1c6cf]">Current Password</label>
                     <input
                         type={currentPasswordShow === false ? "password" : "text"}
-                        className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
+                        className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] text-[#23272E] dark:text-[#c1c6cf] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
                         name='currentPassword'
                         value={formFields.currentPassword}
                         placeholder='Enter Current Password'
@@ -80,7 +99,7 @@ const ChangePasswordCard = () => {
                         disabled={isLoading === true ? true : false}
                         onChange={onChangeInput}
                     />
-                    <Button className='absolute! top-[32px] right-[5px] z-50 rounded-full! w-[35px]! h-[35px]! min-w-[35px]! text-gray-600!'
+                    <Button className='absolute! top-[32px] right-[5px] z-30 rounded-full! w-[35px]! h-[35px]! min-w-[35px]! text-gray-600!'
                         onClick={() => setcurrentPasswordShow(!currentPasswordShow)}
                     >
                         {
@@ -94,22 +113,22 @@ const ChangePasswordCard = () => {
                     <a href="#" className="text-sm text-[#6467F2] hover:underline mt-1">Forgot Current Password? Click here</a>
                 </div>
                 <div className="relative flex flex-col gap-1 mb-2">
-                    <label className="text-[15px] font-medium text-gray-700">New Password</label>
+                    <label className="text-[15px] font-medium text-[#23272E] dark:text-[#c1c6cf]">New Password</label>
                     <input
                         type={newPasswordShow === false ? "password" : "text"}
-                        className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
+                        className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] text-[#23272E] dark:text-[#c1c6cf] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
                         name='newPassword'
                         value={formFields.newPassword}
                         placeholder='Enter New Password'
                         disabled={isLoading === true ? true : false}
                         onChange={onChangeInput}
                     />
-                    <Button className='absolute! top-[32px] right-[5px] z-50 rounded-full! w-[35px]! h-[35px]! min-w-[35px]! text-gray-600!'
+                    <Button className='absolute! top-[32px] right-[5px] z-30 rounded-full! w-[35px]! h-[35px]! min-w-[35px]! text-gray-600!'
                         onClick={() => setnewPasswordShow(!newPasswordShow)}
                     >
                         {
                             newPasswordShow === false ? (
-                                <FaRegEye className='text-[18px]' />
+                                <FaRegEye className='text-[18px] z-10' />
                             ) : (
                                 <FaEyeSlash className='text-[18px]' />
                             )
@@ -117,17 +136,17 @@ const ChangePasswordCard = () => {
                     </Button>
                 </div>
                 <div className="relative flex flex-col gap-1 mb-2">
-                    <label className="text-[15px] font-medium text-gray-700">Re-enter Password</label>
+                    <label className="text-[15px] font-medium text-[#23272E] dark:text-[#c1c6cf]">Re-enter Password</label>
                     <input
                         type={confirmPasswordShow === false ? "password" : "text"}
-                        className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
+                        className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] text-[#23272E] dark:text-[#c1c6cf] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
                         name='confirmPassword'
                         value={formFields.confirmPassword}
                         placeholder='Enter Confirm Password'
                         disabled={isLoading === true ? true : false}
                         onChange={onChangeInput}
                     />
-                    <Button className='absolute! top-[32px] right-[5px] z-50 rounded-full! w-[35px]! h-[35px]! min-w-[35px]! text-gray-600!'
+                    <Button className='absolute! top-[32px] right-[5px] z-30 rounded-full! w-[35px]! h-[35px]! min-w-[35px]! text-gray-600!'
                         onClick={() => setconfirmPasswordShow(!confirmPasswordShow)}
                     >
                         {
@@ -139,10 +158,10 @@ const ChangePasswordCard = () => {
                         }
                     </Button>
                 </div>
-                <button 
-                type='submit'
-                disabled={isLoading === true ? true : false}
-                className="mt-2 mb-2 w-full cursor-pointer bg-green-500 text-white rounded px-4 py-2 hover:bg-green-600 transition font-semibold">
+                <button
+                    type='submit'
+                    disabled={isLoading === true ? true : false}
+                    className="mt-2 mb-2 w-full cursor-pointer bg-green-500 text-white rounded px-4 py-2 hover:bg-green-600 transition font-semibold">
                     {
                         isLoading === true ? <CircularProgress color='inherit' />
                             :
@@ -150,7 +169,7 @@ const ChangePasswordCard = () => {
                     }
                 </button>
             </form>
-            
+
         </div>
     )
 }
