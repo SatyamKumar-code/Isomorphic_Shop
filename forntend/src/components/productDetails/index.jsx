@@ -1,9 +1,48 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { useParams } from 'react-router-dom';
 import BackButton from '../backButton'
 import { FaCartArrowDown } from "react-icons/fa";
 import { FaHeart } from "react-icons/fa6";
+import { postData } from '../../utils/api';
+
+const getViewerKey = () => {
+    const storageKey = 'product-viewer-id';
+    const existingViewerKey = localStorage.getItem(storageKey);
+
+    if (existingViewerKey) {
+        return existingViewerKey;
+    }
+
+    const newViewerKey = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    localStorage.setItem(storageKey, newViewerKey);
+    return newViewerKey;
+};
+
+const getCountryCode = () => {
+    const language = navigator.language || navigator.languages?.[0] || '';
+    const regionMatch = language.match(/-([a-z]{2})$/i);
+
+    return regionMatch?.[1]?.toUpperCase() || '';
+};
 
 const ProductDetails = () => {
+    const { id } = useParams();
+
+    useEffect(() => {
+        if (!id) {
+            return;
+        }
+
+        postData('/api/dashboard/product-view', {
+            productId: id,
+            viewerKey: getViewerKey(),
+            countryCode: getCountryCode(),
+        });
+    }, [id]);
+
     return (
         <div className='relative w-full h-screen product-details-page'>
             <div className='absolute top-4 left-4'>

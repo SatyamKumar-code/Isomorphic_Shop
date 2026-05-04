@@ -6,10 +6,19 @@ import api from "../../services/api";
  * @param {string} params.period - '7days', 'daywise', or 'month'
  * @param {number} params.year - Year for filtering
  * @param {number} params.month - Month for filtering (1-12)
+ * @param {string} params.range - Weekly report range, for example 'This week' or 'Last week'
+ * @param {string} params.stat - Weekly report stat key, for example 'orders' or 'revenue'
  * @returns {Promise}
  */
 export const getDashboardPageData = (params = {}) =>
     api.get("/api/order/summary", { params });
+
+/**
+ * Fetch dashboard user report data for the last 30 minutes
+ * @returns {Promise}
+ */
+export const getDashboardUserReport = () =>
+    api.get("/api/dashboard/user-report");
 
 /**
  * Export CSV for a card's data

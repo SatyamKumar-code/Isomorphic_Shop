@@ -249,6 +249,150 @@ const formatChange = (current, previous, options = {}) => {
     };
 };
 
+const WEEKLY_REPORT_RANGE_OPTIONS = [
+    { label: "This week", value: "This week" },
+    { label: "Last week", value: "Last week" },
+];
+
+const WEEKLY_REPORT_STAT_OPTIONS = [
+    { key: "orders", label: "Orders" },
+    { key: "revenue", label: "Revenue" },
+    { key: "completedOrders", label: "Completed Orders" },
+    { key: "cancelledOrders", label: "Cancelled Orders" },
+    { key: "pendingOrders", label: "Pending Orders" },
+];
+
+const WEEKLY_REPORT_X_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const getWeeklyReportSafeRange = (range) => (
+    WEEKLY_REPORT_RANGE_OPTIONS.some((option) => option.value === range)
+        ? range
+        : WEEKLY_REPORT_RANGE_OPTIONS[0].value
+);
+
+const getWeeklyReportSafeStat = (stat) => (
+    WEEKLY_REPORT_STAT_OPTIONS.some((option) => option.key === stat)
+        ? stat
+        : WEEKLY_REPORT_STAT_OPTIONS[0].key
+);
+
+const buildWeeklyReportState = (orders, selectedRange, selectedStat, referenceDate = new Date()) => {
+    const now = new Date(referenceDate);
+    const currentWindowEnd = now;
+    const currentWindowStart = new Date(now);
+    currentWindowStart.setDate(currentWindowStart.getDate() - 7);
+    const previousWindowEnd = new Date(currentWindowStart);
+    const previousWindowStart = new Date(previousWindowEnd);
+    previousWindowStart.setDate(previousWindowStart.getDate() - 7);
+
+    const createEmptySeries = () => WEEKLY_REPORT_STAT_OPTIONS.reduce((accumulator, option) => {
+        accumulator[option.key] = Array.from({ length: 7 }, () => 0);
+        return accumulator;
+    }, {});
+
+    const createEmptyTotals = () => WEEKLY_REPORT_STAT_OPTIONS.reduce((accumulator, option) => {
+        accumulator[option.key] = 0;
+        return accumulator;
+    }, {});
+
+    const seriesByRange = {
+        "This week": createEmptySeries(),
+        "Last week": createEmptySeries(),
+    };
+
+    const totalsByRange = {
+        "This week": createEmptyTotals(),
+        "Last week": createEmptyTotals(),
+    };
+
+    const getRangeKey = (createdAt) => {
+        if (createdAt >= currentWindowStart && createdAt < currentWindowEnd) {
+            return "This week";
+        }
+
+        if (createdAt >= previousWindowStart && createdAt < previousWindowEnd) {
+            return "Last week";
+        }
+
+        return "";
+    };
+
+    const getDayIndex = (createdAt, rangeStart) => {
+        const diff = createdAt.getTime() - rangeStart.getTime();
+        const dayIndex = Math.floor(diff / (1000 * 60 * 60 * 24));
+        return dayIndex >= 0 && dayIndex < 7 ? dayIndex : -1;
+    };
+
+    orders.forEach((order) => {
+        const createdAt = new Date(order?.createdAt);
+        if (Number.isNaN(createdAt.getTime())) {
+            return;
+        }
+
+        const rangeKey = getRangeKey(createdAt);
+        if (!rangeKey) {
+            return;
+        }
+
+        const rangeStart = rangeKey === "This week" ? currentWindowStart : previousWindowStart;
+        const dayIndex = getDayIndex(createdAt, rangeStart);
+        if (dayIndex < 0) {
+            return;
+        }
+
+        const totalAmount = Number(order?.totalAmount || 0);
+        const status = String(order?.status || "").toLowerCase();
+
+        seriesByRange[rangeKey].orders[dayIndex] += 1;
+        seriesByRange[rangeKey].revenue[dayIndex] += totalAmount;
+        totalsByRange[rangeKey].orders += 1;
+        totalsByRange[rangeKey].revenue += totalAmount;
+
+        if (status === "delivered") {
+            seriesByRange[rangeKey].completedOrders[dayIndex] += 1;
+            totalsByRange[rangeKey].completedOrders += 1;
+        }
+
+        if (status === "cancelled") {
+            seriesByRange[rangeKey].cancelledOrders[dayIndex] += 1;
+            totalsByRange[rangeKey].cancelledOrders += 1;
+        }
+
+        if (status === "pending") {
+            seriesByRange[rangeKey].pendingOrders[dayIndex] += 1;
+            totalsByRange[rangeKey].pendingOrders += 1;
+        }
+    });
+
+    const hasRequestedRange = WEEKLY_REPORT_RANGE_OPTIONS.some((option) => option.value === selectedRange);
+    const safeStat = getWeeklyReportSafeStat(selectedStat);
+    const rangeScores = WEEKLY_REPORT_RANGE_OPTIONS.reduce((accumulator, option) => {
+        const rangeSeries = seriesByRange[option.value]?.[safeStat] || [];
+        accumulator[option.value] = rangeSeries.reduce((sum, value) => sum + Number(value || 0), 0);
+        return accumulator;
+    }, {});
+    const bestRange = WEEKLY_REPORT_RANGE_OPTIONS
+        .slice()
+        .sort((left, right) => (rangeScores[right.value] || 0) - (rangeScores[left.value] || 0))[0]?.value || WEEKLY_REPORT_RANGE_OPTIONS[0].value;
+    const safeRange = hasRequestedRange ? selectedRange : bestRange;
+
+    const stats = WEEKLY_REPORT_STAT_OPTIONS.map((option) => ({
+        key: option.key,
+        label: option.label,
+        value: Number(totalsByRange[safeRange][option.key] || 0).toLocaleString("en-IN"),
+    }));
+
+    return {
+        title: "Weekly Report",
+        ranges: WEEKLY_REPORT_RANGE_OPTIONS,
+        stats,
+        chartSeries: seriesByRange,
+        xLabels: WEEKLY_REPORT_X_LABELS,
+        activeRange: safeRange,
+        activeStat: safeStat,
+    };
+};
+
 export const getAdminOrderCustomerLookup = async (req, res) => {
     try {
         const adminId = req.userId;
@@ -1006,6 +1150,8 @@ export const getOrderSummary = async (req, res) => {
     try {
         const adminId = req.userId;
         const ownedProductIds = await getAdminOwnedProductIds(adminId);
+        const requestedWeeklyRange = String(req.query?.range || "").trim();
+        const requestedWeeklyStat = String(req.query?.stat || "").trim();
         if (!ownedProductIds.length) {
             return res.status(200).json({
                 message: "Order summary fetched successfully",
@@ -1035,6 +1181,7 @@ export const getOrderSummary = async (req, res) => {
                     selectedMonth: new Date().getMonth() + 1,
                     availableYears: [new Date().getFullYear()],
                     availableMonths: [new Date().getMonth() + 1],
+                    weeklyReport: buildWeeklyReportState([], requestedWeeklyRange, requestedWeeklyStat),
                 },
             });
         }
@@ -1257,6 +1404,27 @@ export const getOrderSummary = async (req, res) => {
             { label: "Cancelled", count: currentPeriodCancelled },
         ];
 
+        const latestOrder = await OrderModel.findOne(orderScope)
+            .sort({ createdAt: -1 })
+            .select("createdAt")
+            .lean();
+
+        const weeklyReportEnd = latestOrder?.createdAt ? new Date(latestOrder.createdAt) : new Date();
+        const weeklyReportStart = new Date(weeklyReportEnd);
+        weeklyReportStart.setDate(weeklyReportStart.getDate() - 14);
+
+        const weeklyReportOrders = await OrderModel.find({
+            ...orderScope,
+            createdAt: {
+                $gte: weeklyReportStart,
+                $lt: weeklyReportEnd,
+            },
+        })
+            .select("totalAmount status createdAt")
+            .lean();
+
+        const weeklyReport = buildWeeklyReportState(weeklyReportOrders, requestedWeeklyRange, requestedWeeklyStat, weeklyReportEnd);
+
         return res.status(200).json({
             message: "Order summary fetched successfully",
             error: false,
@@ -1271,6 +1439,7 @@ export const getOrderSummary = async (req, res) => {
                 selectedMonth,
                 availableYears,
                 availableMonths,
+                weeklyReport,
             },
         });
     } catch (error) {

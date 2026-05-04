@@ -486,7 +486,7 @@ const LineAreaChartCard = ({
                     {yLabels.length > 0 && (
                         <g>
                             {yLabels.map((label, index) => (
-                                <text key={label} x={resolvedYAxisLabelX} y={yPositions[index]} className={resolvedYAxisClassName}>
+                                <text key={`${label}-${index}`} x={resolvedYAxisLabelX} y={yPositions[index]} className={resolvedYAxisClassName}>
                                     {yAxisLabelValueFormatter ? yAxisLabelValueFormatter(label, index) : label}
                                 </text>
                             ))}

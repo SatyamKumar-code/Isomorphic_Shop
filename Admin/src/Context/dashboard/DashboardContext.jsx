@@ -1,40 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useEffect, useMemo, useState } from "react";
-import { getDashboardPageData } from "../../features/Dashboard/DashboardPageAPI";
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getDashboardPageData, getDashboardUserReport } from "../../features/Dashboard/DashboardPageAPI";
 
 export const DashboardContext = createContext();
-
-const defaultWeeklyReport = {
-    title: "Report for this week",
-    stats: [
-        { key: "customers", value: "52k", label: "Customers" },
-        { key: "totalProducts", value: "3.5k", label: "Total Products" },
-        { key: "stockProducts", value: "2.5k", label: "Stock Products" },
-        { key: "outOfStock", value: "0.5k", label: "Out of Stock" },
-        { key: "revenue", value: "250k", label: "Revenue" },
-    ],
-    ranges: [
-        { label: "This week", value: "This week" },
-        { label: "Last week", value: "Last week" },
-    ],
-    chartSeries: {
-        "This week": {
-            customers: [170000, 250000, 210090, 145000, 190080, 190000, 130000],
-            totalProducts: [12000, 16000, 18000, 17000, 22000, 20000, 19500],
-            stockProducts: [9000, 11000, 13000, 12500, 14500, 14100, 13800],
-            outOfStock: [1800, 2200, 2100, 2500, 2400, 2300, 2600],
-            revenue: [210000, 240000, 230000, 260000, 255000, 270000, 250000],
-        },
-        "Last week": {
-            customers: [14000, 21000, 19000, 12000, 16800, 16000, 11000],
-            totalProducts: [8000, 9500, 10200, 9800, 11100, 10900, 9300],
-            stockProducts: [6400, 7100, 7600, 7300, 8200, 7900, 7200],
-            outOfStock: [1300, 1500, 1450, 1600, 1700, 1680, 1550],
-            revenue: [120000, 138000, 131000, 146000, 149000, 142000, 135000],
-        },
-    },
-    xLabels: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-};
 
 const getSafeRange = (ranges) => {
     if (!Array.isArray(ranges) || !ranges.length) {
@@ -79,77 +47,176 @@ const hasSeriesForRangeAndStat = (chartSeries, range, stat) => {
     return false;
 };
 
+const normalizeMinuteSeries = (series) => {
+    const values = Array.isArray(series)
+        ? series.map((value) => Number(value || 0))
+        : [];
+
+    while (values.length < 30) {
+        values.unshift(0);
+    }
+
+    return values.slice(-30);
+};
+
+const normalizeCountryRows = (rows) => {
+    if (!Array.isArray(rows)) {
+        return [];
+    }
+
+    return rows.map((row) => ({
+        ...row,
+        viewCount: Number(row?.viewCount || 0),
+        percentageChange: Number(row?.percentageChange || 0),
+        progressPercent: Number(row?.progressPercent || 0),
+    }));
+};
+
 export const DashboardProvider = ({ children }) => {
-    const [weeklyReport, setWeeklyReport] = useState(defaultWeeklyReport);
-    const [activeRange, setActiveRange] = useState(getSafeRange(defaultWeeklyReport.ranges));
-    const [activeStat, setActiveStat] = useState(getSafeStat(defaultWeeklyReport.stats));
+    const [weeklyReport, setWeeklyReport] = useState(null);
+    const [userReport, setUserReport] = useState(null);
+    const [activeRange, setActiveRange] = useState("");
+    const [activeStat, setActiveStat] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isUserReportLoading, setIsUserReportLoading] = useState(false);
+    const latestWeeklyReportRequestRef = useRef(0);
+    const latestUserReportRequestRef = useRef(0);
+
+    const weeklyReportRequestParams = useMemo(() => ({
+        range: activeRange,
+        stat: activeStat,
+    }), [activeRange, activeStat]);
 
     const loadDashboardData = useCallback(async () => {
+        const requestId = latestWeeklyReportRequestRef.current + 1;
+        latestWeeklyReportRequestRef.current = requestId;
+
         try {
             setIsLoading(true);
-            const res = await getDashboardPageData();
+            const res = await getDashboardPageData(weeklyReportRequestParams);
             const data = res?.data?.data;
 
-            // Update weekly report if available
-            const apiWeeklyReport = data?.weeklyReport;
-            if (apiWeeklyReport && typeof apiWeeklyReport === "object") {
-                setWeeklyReport((prev) => ({
-                    ...prev,
-                    ...apiWeeklyReport,
-                    chartSeries: {
-                        ...prev.chartSeries,
-                        ...(apiWeeklyReport.chartSeries || {}),
-                    },
-                }));
+            if (requestId !== latestWeeklyReportRequestRef.current) {
+                return;
             }
 
+            const apiWeeklyReport = data?.weeklyReport;
+            if (apiWeeklyReport && typeof apiWeeklyReport === "object") {
+                setWeeklyReport(apiWeeklyReport);
+
+                if (typeof apiWeeklyReport.activeRange === "string") {
+                    setActiveRange(apiWeeklyReport.activeRange);
+                }
+
+                if (typeof apiWeeklyReport.activeStat === "string") {
+                    setActiveStat(apiWeeklyReport.activeStat);
+                }
+            }
         } catch (error) {
-            // Keep fallback dashboard data when API is unavailable.
             console.error("Error loading dashboard data:", error);
         } finally {
-            setIsLoading(false);
+            if (requestId === latestWeeklyReportRequestRef.current) {
+                setIsLoading(false);
+            }
+        }
+    }, [weeklyReportRequestParams]);
+
+    const loadUserReportData = useCallback(async () => {
+        const requestId = latestUserReportRequestRef.current + 1;
+        latestUserReportRequestRef.current = requestId;
+
+        try {
+            setIsUserReportLoading(true);
+            const res = await getDashboardUserReport();
+            const data = res?.data?.data;
+
+            if (requestId !== latestUserReportRequestRef.current) {
+                return;
+            }
+
+            if (data && typeof data === "object") {
+                setUserReport({
+                    totalProductViewersLast30Min: Number(data.totalProductViewersLast30Min || 0),
+                    productViewersPerMinute: normalizeMinuteSeries(data.productViewersPerMinute),
+                    viewsByCountry: normalizeCountryRows(data.viewsByCountry),
+                });
+            }
+        } catch (error) {
+            console.error("Error loading dashboard user report:", error);
+        } finally {
+            if (requestId === latestUserReportRequestRef.current) {
+                setIsUserReportLoading(false);
+            }
         }
     }, []);
 
-    // Initial load on mount
     useEffect(() => {
         loadDashboardData();
     }, [loadDashboardData]);
 
     useEffect(() => {
-        if (!hasSeriesForRangeAndStat(weeklyReport.chartSeries, activeRange, activeStat)) {
-            setActiveRange(getSafeRange(weeklyReport.ranges));
-        }
-    }, [weeklyReport, activeRange, activeStat]);
+        loadUserReportData();
+    }, [loadUserReportData]);
 
     useEffect(() => {
-        if (!activeStat || !hasSeriesForRangeAndStat(weeklyReport.chartSeries, activeRange, activeStat)) {
-            setActiveStat(getSafeStat(weeklyReport.stats));
+        if (!weeklyReport) {
+            return;
+        }
+
+        if (!hasSeriesForRangeAndStat(weeklyReport.chartSeries, activeRange, activeStat)) {
+            const nextRange = getSafeRange(weeklyReport.ranges);
+            const nextStat = getSafeStat(weeklyReport.stats);
+
+            if (nextRange !== activeRange) {
+                setActiveRange(nextRange);
+            }
+
+            if (nextStat !== activeStat) {
+                setActiveStat(nextStat);
+            }
         }
     }, [weeklyReport, activeRange, activeStat]);
 
-    const weeklyReportProps = useMemo(() => ({
-        ...weeklyReport,
-        activeRange,
-        onRangeChange: setActiveRange,
-        activeStat,
-        onStatChange: setActiveStat,
-    }), [weeklyReport, activeRange, activeStat]);
+    const weeklyReportProps = useMemo(() => {
+        if (!weeklyReport) {
+            return null;
+        }
+
+        return {
+            ...weeklyReport,
+            activeRange,
+            onRangeChange: setActiveRange,
+            activeStat,
+            onStatChange: setActiveStat,
+        };
+    }, [weeklyReport, activeRange, activeStat]);
+
+    const userReportProps = useMemo(() => {
+        if (!userReport) {
+            return null;
+        }
+
+        return {
+            totalProductViewersLast30Min: Number(userReport.totalProductViewersLast30Min || 0),
+            productViewersPerMinute: normalizeMinuteSeries(userReport.productViewersPerMinute),
+            viewsByCountry: normalizeCountryRows(userReport.viewsByCountry),
+        };
+    }, [userReport]);
 
     const value = useMemo(() => ({
-        // Weekly report
         weeklyReport,
         weeklyReportProps,
+        userReport,
+        userReportProps,
         activeRange,
         setActiveRange,
         activeStat,
         setActiveStat,
-
-        // Loading and reload
         isLoading,
+        isUserReportLoading,
         reloadDashboardData: loadDashboardData,
-    }), [weeklyReport, weeklyReportProps, activeRange, activeStat, isLoading, loadDashboardData]);
+        reloadUserReportData: loadUserReportData,
+    }), [weeklyReport, weeklyReportProps, userReport, userReportProps, activeRange, activeStat, isLoading, isUserReportLoading, loadDashboardData, loadUserReportData]);
 
     return (
         <DashboardContext.Provider value={value}>

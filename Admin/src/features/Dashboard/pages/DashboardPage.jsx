@@ -21,7 +21,7 @@ const Dashbord = () => {
       </div>
 
       <div className="flex w-full mb-5 gap-5">
-        <WeeklyReportCard {...weeklyReportProps} />
+        {weeklyReportProps ? <WeeklyReportCard {...weeklyReportProps} /> : null}
         <UserReport />
       </div>
 

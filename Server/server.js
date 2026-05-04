@@ -12,6 +12,7 @@ import addressRouter from './router/address.route.js';
 import orderRouter from './router/order.route.js';
 import reviewRouter from './router/review.route.js';
 import payoutRouter from './router/payout.route.js';
+import dashboardRouter from './router/dashboard.route.js';
 dotenv.config();
 
 const app = express();
@@ -42,6 +43,7 @@ app.use("/api/address", addressRouter);
 app.use("/api/order", orderRouter);
 app.use("/api/review", reviewRouter);
 app.use("/api/payout", payoutRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 
 connectDB().then(() => {
