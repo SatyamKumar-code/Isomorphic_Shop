@@ -1,4 +1,4 @@
-import api from '../../../services/api';
+import api from '../../services/api';
 
 export const getPayoutSettings = async () => {
     const res = await api.get('/api/payout/admin/settings');

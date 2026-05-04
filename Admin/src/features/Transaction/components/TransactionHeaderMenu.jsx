@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { HiDotsVertical } from "react-icons/hi";
-import PayoutSettingsPanel from "../../Dashboard/components/PayoutSettingsPanel";
+import PayoutSettingsPanel from "./PayoutSettingsPanel";
 import CsvExportDialog from "../../../shared/components/CsvExportDialog";
 import { useCsvExportDialog } from "../../../shared/hooks/useCsvExportDialog";
 import { useTransaction } from "../../../Context/transaction/useTransaction";
@@ -203,17 +203,17 @@ const TransactionHeaderMenu = () => {
                     >
                         Export transaction
                     </button>
-                    {isAdmin && 
-                    <button
-                        type="button"
-                        className="block w-full px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900"
-                        onClick={() => {
-                            setShowPayoutSettings(true);
-                            setIsMenuOpen(false);
-                        }}
-                    >
-                        Set Commission
-                    </button>
+                    {isAdmin &&
+                        <button
+                            type="button"
+                            className="block w-full px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900"
+                            onClick={() => {
+                                setShowPayoutSettings(true);
+                                setIsMenuOpen(false);
+                            }}
+                        >
+                            Set Commission
+                        </button>
                     }
                 </div>
             )}

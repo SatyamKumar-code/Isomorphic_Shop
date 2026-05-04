@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getPayoutSettings, updatePayoutSettings } from "../api/payoutSettingsApi";
+import { getPayoutSettings, updatePayoutSettings } from "../payoutSettingsApi";
 
 const PayoutSettingsPanel = () => {
     const [commissionRate, setCommissionRate] = useState("");
