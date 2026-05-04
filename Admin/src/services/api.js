@@ -34,13 +34,13 @@ api.interceptors.response.use(
                 const refreshToken = cookieStore.get("refreshToken");
                 if (!refreshToken) throw new Error("No refresh token");
                 // Call refresh token endpoint
-                const res = await axios.post(
+                const res = await api.post(
                     `${apiUrl}/api/user/refresh-token`,
-                    {},
-                    {
-                        headers: { Authorization: `Bearer ${refreshToken}` },
-                        withCredentials: true,
-                    }
+                    // {},
+                    // {
+                    //     headers: { Authorization: `Bearer ${refreshToken}` },
+                    //     withCredentials: true,
+                    // }
                 );
                 if (res.data?.data?.accessToken) {
                     cookieStore.set("accessToken", res.data.data.accessToken);
@@ -48,14 +48,9 @@ api.interceptors.response.use(
                     originalRequest.headers["Authorization"] = `Bearer ${res.data.data.accessToken}`;
                     return api(originalRequest);
                 } else {
-                    // If refresh fails, clear tokens and reload
-                    cookieStore.remove("accessToken");
-                    cookieStore.remove("refreshToken");
                     window.location.reload();
                 }
             } catch (refreshError) {
-                cookieStore.remove("accessToken");
-                cookieStore.remove("refreshToken");
                 window.location.reload();
             }
         }

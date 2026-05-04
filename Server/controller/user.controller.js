@@ -13,6 +13,7 @@ import sendEmailFun from '../config/sendEmail.js';
 import VerificationEmail from '../utils/verifyEmailTemplate.js';
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
+import { log } from 'console';
 
 cloudinary.config({
     cloud_name: process.env.cloudinary_Config_Cloud_Name,
@@ -1508,7 +1509,7 @@ export async function logoutController(req, res) {
 
 export const refreshTokenController = async (req, res) => {
     try {
-        const refreshToken = req.cookies.refreshToken || req?.headers?.authorization?.split(" ")[1];
+        const refreshToken = req.cookies.refreshToken;
 
         if (!refreshToken) {
             return res.status(401).json({
@@ -1522,21 +1523,26 @@ export const refreshTokenController = async (req, res) => {
 
         const user = await UserModel.findById(decoded.id).select("refresh_token role status");
 
-        if (!user || user.status !== "Active" || user.refresh_token !== refreshToken) {
-            return res.status(401).json({
-                message: "Invalid refresh token",
-                error: true,
-                success: false
-            });
-        }
-
-        const newAccessToken = await generateAccessToken(user._id, user.role);
-
         const cookiesOptions = {
             httpOnly: true,
             secure: true,
             sameSite: "None"
         };
+
+        if (!user || user.status !== "Active" || user.refresh_token !== refreshToken) {
+
+            res.clearCookie("accessToken", cookiesOptions);
+            res.clearCookie("refreshToken", cookiesOptions);
+
+            return res.status(401).json({
+                message: "Invalid refresh token",
+                error: true,
+                success: false,
+            });
+        }
+
+        const newAccessToken = await generateAccessToken(user._id, user.role);
+
         res.cookie('accessToken', newAccessToken, cookiesOptions);
 
         return res.status(200).json({
@@ -1549,10 +1555,20 @@ export const refreshTokenController = async (req, res) => {
         });
 
     } catch (error) {
+
+        const cookiesOptions = {
+            httpOnly: true,
+            secure: true,
+            sameSite: "None"
+        };
+
+        res.clearCookie("accessToken", cookiesOptions);
+        res.clearCookie("refreshToken", cookiesOptions);
+
         return res.status(401).json({
             message: "Invalid or expired refresh token. Please login again.",
             error: true,
-            success: false
+            success: false,
         });
     }
 }
