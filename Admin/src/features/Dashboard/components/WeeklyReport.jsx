@@ -52,38 +52,30 @@ const resolveSeriesData = (chartSeries, activeRange, activeStat) => {
     return [];
 };
 
-const formatAxisValue = (value) => {
-    const toSingleDecimal = (num) => Number(num.toFixed(1)).toString();
+const createYAxisLabels = (chartData) => {
+    if (!chartData.length) return ["0"];
 
-    if (value >= 1000) {
-        return `${toSingleDecimal(value / 1000)}k`;
+    const rawMax = Math.max(...chartData);
+    if (rawMax === 0) return ["0"];
+
+    const maxY = Math.ceil(rawMax * 1.3);
+    const step = Math.ceil(maxY / 5) || 1;
+
+    // If values are small (below 1000) show raw numbers, otherwise show K units
+    if (maxY < 1000) {
+        return Array.from({ length: 6 }, (_, index) => String(step * index));
     }
 
-    if (!Number.isInteger(value)) {
-        return toSingleDecimal(value);
-    }
-
-    return `${value}`;
+    return Array.from({ length: 6 }, (_, index) => {
+        const value = Math.round(step * index);
+        return `${Math.round(value / 1000)}K`;
+    });
 };
 
-const createYAxisMeta = (chartData) => {
-    if (!chartData.length) {
-        return {
-            labels: ["0"],
-            min: 0,
-            max: 0,
-        };
-    }
-
-    const maxValue = Math.max(...chartData);
-    const step = Math.ceil((maxValue * 1.25) / 5);
-    const domainMax = step * 5;
-
-    return {
-        labels: Array.from({ length: 6 }, (_, index) => formatAxisValue(step * index)),
-        min: 0,
-        max: domainMax,
-    };
+const createYAxisDomainMax = (chartData) => {
+    if (!chartData.length) return 0;
+    const rawMax = Math.max(...chartData);
+    return Math.ceil(rawMax * 1.3);
 };
 
 const WeeklyReportCard = ({
@@ -99,7 +91,7 @@ const WeeklyReportCard = ({
 }) => {
     const { cardSettings, availableYears, availableMonths, updateCardSettings } = useDashboardCardData();
     const selectedChartData = resolveSeriesData(chartSeries, activeRange, activeStat);
-    const axisYMeta = createYAxisMeta(selectedChartData);
+    const yDomainMax = createYAxisDomainMax(selectedChartData);
 
     // dashboard card settings and export handled by DashboardCardMenu
 
@@ -136,9 +128,9 @@ const WeeklyReportCard = ({
                     onStatChange={onStatChange}
                     chartData={selectedChartData}
                     xLabels={xLabels}
-                    yLabels={axisYMeta.labels}
-                    yDomainMin={axisYMeta.min}
-                    yDomainMax={axisYMeta.max}
+                    yLabels={createYAxisLabels(selectedChartData)}
+                    yDomainMin={0}
+                    yDomainMax={yDomainMax}
                     showMoreIcon={false}
                 />
             </div>

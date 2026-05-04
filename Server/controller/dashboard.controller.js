@@ -1,5 +1,6 @@
 import ProductModel from "../models/product.model.js";
 import ProductViewModel from "../models/productView.model.js";
+import OrderModel from "../models/order.model.js";
 
 const MINUTE_MS = 60 * 1000;
 const REPORT_WINDOW_MINUTES = 30;
@@ -263,6 +264,96 @@ export const getUserReportController = async (req, res) => {
     } catch (error) {
         return res.status(500).json({
             message: "Error fetching user report: " + error.message,
+            error: true,
+            success: false,
+        });
+    }
+};
+
+export const getTransactionsController = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 5;
+        const isAdmin = req.userRole === "admin";
+        const userId = req.userId;
+
+        // Build filter based on user role
+        let filter = {};
+        if (!isAdmin) {
+            // For sellers, filter by orders containing their products
+            filter = { "products.productId": { $in: [] } };
+        }
+
+        let orders;
+        if (isAdmin) {
+            // For admin: get all transactions with limit
+            orders = await OrderModel.find()
+                .populate({
+                    path: "products.productId",
+                    select: "createdBy"
+                })
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .lean();
+        } else {
+            // For seller: get only their products' orders
+            const sellerProducts = await ProductModel.find({ createdBy: userId }).select("_id").lean();
+            const productIds = sellerProducts.map(p => p._id);
+
+            orders = await OrderModel.find({
+                "products.productId": { $in: productIds }
+            })
+                .populate({
+                    path: "products.productId",
+                    select: "createdBy"
+                })
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .lean();
+        }
+
+        // Transform transactions for response
+        const transactions = orders.map((order, index) => {
+            // Get seller IDs from products in this order (only for admin)
+            let sellerIds = [];
+            if (isAdmin) {
+                sellerIds = [...new Set(
+                    order.products
+                        .map(p => p.productId?.createdBy)
+                        .filter(Boolean)
+                        .map(id => id.toString())
+                )];
+            }
+
+            return {
+                id: order._id.toString(),
+                no: index + 1,
+                orderId: order._id.toString().substring(0, 6).toUpperCase(),
+                customerId: order.userId.toString().substring(0, 6).toUpperCase(),
+                date: new Date(order.createdAt).toLocaleString("en-US", {
+                    month: "2-digit",
+                    day: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: true
+                }),
+                status: order.paymentStatus || order.status,
+                amount: `₹${order.totalAmount}`,
+                sellerId: sellerIds.length > 0 ? sellerIds[0].substring(0, 6).toUpperCase() : null,
+                sellerIds: sellerIds
+            };
+        });
+
+        return res.status(200).json({
+            message: "Transactions fetched successfully",
+            error: false,
+            success: true,
+            data: transactions,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error fetching transactions: " + error.message,
             error: true,
             success: false,
         });

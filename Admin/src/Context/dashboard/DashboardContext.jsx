@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getDashboardPageData, getDashboardUserReport } from "../../features/Dashboard/DashboardPageAPI";
+import { getDashboardPageData, getDashboardUserReport, getTransactions } from "../../features/Dashboard/DashboardPageAPI";
 
 export const DashboardContext = createContext();
 
@@ -75,12 +75,15 @@ const normalizeCountryRows = (rows) => {
 export const DashboardProvider = ({ children }) => {
     const [weeklyReport, setWeeklyReport] = useState(null);
     const [userReport, setUserReport] = useState(null);
+    const [transactions, setTransactions] = useState(null);
     const [activeRange, setActiveRange] = useState("");
     const [activeStat, setActiveStat] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isUserReportLoading, setIsUserReportLoading] = useState(false);
+    const [isTransactionsLoading, setIsTransactionsLoading] = useState(false);
     const latestWeeklyReportRequestRef = useRef(0);
     const latestUserReportRequestRef = useRef(0);
+    const latestTransactionsRequestRef = useRef(0);
 
     const weeklyReportRequestParams = useMemo(() => ({
         range: activeRange,
@@ -150,6 +153,31 @@ export const DashboardProvider = ({ children }) => {
         }
     }, []);
 
+    const loadTransactionsData = useCallback(async () => {
+        const requestId = latestTransactionsRequestRef.current + 1;
+        latestTransactionsRequestRef.current = requestId;
+
+        try {
+            setIsTransactionsLoading(true);
+            const res = await getTransactions(7);
+            const data = res?.data?.data;
+
+            if (requestId !== latestTransactionsRequestRef.current) {
+                return;
+            }
+
+            if (Array.isArray(data)) {
+                setTransactions(data);
+            }
+        } catch (error) {
+            console.error("Error loading transactions:", error);
+        } finally {
+            if (requestId === latestTransactionsRequestRef.current) {
+                setIsTransactionsLoading(false);
+            }
+        }
+    }, []);
+
     useEffect(() => {
         loadDashboardData();
     }, [loadDashboardData]);
@@ -157,6 +185,10 @@ export const DashboardProvider = ({ children }) => {
     useEffect(() => {
         loadUserReportData();
     }, [loadUserReportData]);
+
+    useEffect(() => {
+        loadTransactionsData();
+    }, [loadTransactionsData]);
 
     useEffect(() => {
         if (!weeklyReport) {
@@ -208,15 +240,18 @@ export const DashboardProvider = ({ children }) => {
         weeklyReportProps,
         userReport,
         userReportProps,
+        transactions,
         activeRange,
         setActiveRange,
         activeStat,
         setActiveStat,
         isLoading,
         isUserReportLoading,
+        isTransactionsLoading,
         reloadDashboardData: loadDashboardData,
         reloadUserReportData: loadUserReportData,
-    }), [weeklyReport, weeklyReportProps, userReport, userReportProps, activeRange, activeStat, isLoading, isUserReportLoading, loadDashboardData, loadUserReportData]);
+        reloadTransactions: loadTransactionsData,
+    }), [weeklyReport, weeklyReportProps, userReport, userReportProps, transactions, activeRange, activeStat, isLoading, isUserReportLoading, isTransactionsLoading, loadDashboardData, loadUserReportData, loadTransactionsData]);
 
     return (
         <DashboardContext.Provider value={value}>

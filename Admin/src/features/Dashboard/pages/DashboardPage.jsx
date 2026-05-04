@@ -35,10 +35,6 @@ const Dashbord = () => {
         <BestSelingProductTable />
         <AddProductSidebar />
       </div>
-
-      {/* <div className="flex w-full mb-5 gap-5">
-        <PayoutSettingsPanel />
-      </div> */}
     </div>
   )
 }

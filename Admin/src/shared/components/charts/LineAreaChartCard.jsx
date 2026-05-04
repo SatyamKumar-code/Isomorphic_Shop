@@ -126,7 +126,7 @@ const STYLE_PRESETS = {
         inactiveStatItemClassName: "border-transparent ",
         statValueClassName: "text-6 font-bold text-[#23272E] dark:text-[#c1c6cf]",
         statLabelClassName: "text-[#8B909A] text-[13px] font-medium leading-4.5 tracking-[-0.02em]",
-        chartContainerClassName: "relative my-5 w-full min-h-[210px]",
+        chartContainerClassName: "relative my-1 w-full min-h-[210px]",
         chartBackgroundClassName: "rounded-xl bg-white dark:bg-gray-950",
         chartClassName: "h-[265px] w-[104%] -ml-2.5",
         yAxisClassName: "text-[10px] fill-[#8B909A] dark:fill-[#c1c6cf]",

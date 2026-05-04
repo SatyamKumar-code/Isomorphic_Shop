@@ -21,6 +21,14 @@ export const getDashboardUserReport = () =>
     api.get("/api/dashboard/user-report");
 
 /**
+ * Fetch recent transactions for the dashboard
+ * @param {number} limit - Number of transactions to fetch (default 7)
+ * @returns {Promise}
+ */
+export const getTransactions = (limit = 7) =>
+    api.get("/api/dashboard/transactions", { params: { limit } });
+
+/**
  * Export CSV for a card's data
  * @param {Object} data - Card data including title, value, change, period
  */
