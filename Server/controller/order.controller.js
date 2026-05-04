@@ -1102,6 +1102,12 @@ export const getOrderSummary = async (req, res) => {
             previousPeriodCompleted,
             currentPeriodCancelled,
             previousPeriodCancelled,
+            currentPeriodConfirmed,
+            currentPeriodPacked,
+            currentPeriodShipped,
+            currentPeriodOutForDelivery,
+            currentPeriodDelivered,
+            currentPeriodPending,
         ] = await Promise.all([
             OrderModel.aggregate([
                 {
@@ -1186,6 +1192,12 @@ export const getOrderSummary = async (req, res) => {
             OrderModel.countDocuments({ ...orderScope, status: "delivered", createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
             OrderModel.countDocuments({ ...orderScope, status: "cancelled", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
             OrderModel.countDocuments({ ...orderScope, status: "cancelled", createdAt: { $gte: previousWindowStart, $lt: previousWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "confirmed", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "packed", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "shipped", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "out_for_delivery", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "delivered", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
+            OrderModel.countDocuments({ ...orderScope, status: "pending", createdAt: { $gte: currentWindowStart, $lt: currentWindowEnd } }),
         ]);
 
         const availableYears = availableYearsAgg
@@ -1204,6 +1216,7 @@ export const getOrderSummary = async (req, res) => {
             title: "Total Sales",
             value: Number(totalSalesValue || 0).toLocaleString("en-IN"),
             ...formatChange(currentPeriodSalesValue, previousPeriodSalesValue),
+            previousValue: Number(previousPeriodSalesValue || 0).toLocaleString("en-IN"),
         };
 
         const summaryCards = [
@@ -1211,33 +1224,37 @@ export const getOrderSummary = async (req, res) => {
                 title: "Total Orders",
                 value: Number(totalOrders || 0).toLocaleString("en-IN"),
                 ...formatChange(currentPeriodTotal, previousPeriodTotal),
+                previousValue: Number(previousPeriodTotal || 0).toLocaleString("en-IN"),
             },
             {
                 title: "New Orders",
                 value: Number(currentPeriodTotal || 0).toLocaleString("en-IN"),
                 ...formatChange(currentPeriodTotal, previousPeriodTotal),
+                previousValue: Number(previousPeriodTotal || 0).toLocaleString("en-IN"),
             },
             {
                 title: "Completed Orders",
                 value: Number(currentPeriodCompleted || 0).toLocaleString("en-IN"),
                 ...formatChange(currentPeriodCompleted, previousPeriodCompleted),
+                previousValue: Number(previousPeriodCompleted || 0).toLocaleString("en-IN"),
             },
             {
                 title: "Canceled Orders",
                 value: Number(currentPeriodCancelled || 0).toLocaleString("en-IN"),
                 ...formatChange(currentPeriodCancelled, previousPeriodCancelled, { invertPositiveColor: true }),
+                previousValue: Number(previousPeriodCancelled || 0).toLocaleString("en-IN"),
             },
         ];
 
         const tabs = [
-            { label: "All order", count: totalOrders },
-            { label: "Pending", count: pendingTotal },
-            { label: "Confirmed", count: confirmedTotal },
-            { label: "Packed", count: packedTotal },
-            { label: "Shipped", count: shippedTotal },
-            { label: "Out For Delivery", count: outForDeliveryTotal },
-            { label: "Delivered", count: deliveredTotal },
-            { label: "Cancelled", count: cancelledTotal },
+            { label: "All order", count: currentPeriodTotal },
+            { label: "Pending", count: currentPeriodPending },
+            { label: "Confirmed", count: currentPeriodConfirmed },
+            { label: "Packed", count: currentPeriodPacked },
+            { label: "Shipped", count: currentPeriodShipped },
+            { label: "Out For Delivery", count: currentPeriodOutForDelivery },
+            { label: "Delivered", count: currentPeriodDelivered },
+            { label: "Cancelled", count: currentPeriodCancelled },
         ];
 
         return res.status(200).json({

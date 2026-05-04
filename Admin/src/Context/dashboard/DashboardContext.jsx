@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import { getDashboardPageData } from "../../features/Dashboard/DashboardPageAPI";
 
@@ -88,8 +89,10 @@ export const DashboardProvider = ({ children }) => {
         try {
             setIsLoading(true);
             const res = await getDashboardPageData();
-            const apiWeeklyReport = res?.data?.data?.weeklyReport;
+            const data = res?.data?.data;
 
+            // Update weekly report if available
+            const apiWeeklyReport = data?.weeklyReport;
             if (apiWeeklyReport && typeof apiWeeklyReport === "object") {
                 setWeeklyReport((prev) => ({
                     ...prev,
@@ -100,13 +103,16 @@ export const DashboardProvider = ({ children }) => {
                     },
                 }));
             }
+
         } catch (error) {
             // Keep fallback dashboard data when API is unavailable.
+            console.error("Error loading dashboard data:", error);
         } finally {
             setIsLoading(false);
         }
     }, []);
 
+    // Initial load on mount
     useEffect(() => {
         loadDashboardData();
     }, [loadDashboardData]);
@@ -132,12 +138,15 @@ export const DashboardProvider = ({ children }) => {
     }), [weeklyReport, activeRange, activeStat]);
 
     const value = useMemo(() => ({
+        // Weekly report
         weeklyReport,
         weeklyReportProps,
         activeRange,
         setActiveRange,
         activeStat,
         setActiveStat,
+
+        // Loading and reload
         isLoading,
         reloadDashboardData: loadDashboardData,
     }), [weeklyReport, weeklyReportProps, activeRange, activeStat, isLoading, loadDashboardData]);
