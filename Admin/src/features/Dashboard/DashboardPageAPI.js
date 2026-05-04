@@ -29,6 +29,16 @@ export const getTransactions = (limit = 7) =>
     api.get("/api/dashboard/transactions", { params: { limit } });
 
 /**
+ * Fetch top products for the dashboard
+ * @param {Object} params - Query parameters
+ * @param {number} params.limit - Number of products to fetch
+ * @param {string} params.search - Search term for name/category
+ * @returns {Promise}
+ */
+export const getTopProducts = (params = {}) =>
+    api.get("/api/dashboard/top-products", { params });
+
+/**
  * Export CSV for a card's data
  * @param {Object} data - Card data including title, value, change, period
  */

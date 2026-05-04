@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getDashboardPageData, getDashboardUserReport, getTransactions } from "../../features/Dashboard/DashboardPageAPI";
+import { getDashboardPageData, getDashboardUserReport, getTopProducts, getTransactions } from "../../features/Dashboard/DashboardPageAPI";
 
 export const DashboardContext = createContext();
 
@@ -72,18 +72,36 @@ const normalizeCountryRows = (rows) => {
     }));
 };
 
+const normalizeTopProducts = (items) => {
+    if (!Array.isArray(items)) {
+        return [];
+    }
+
+    return items.map((item) => ({
+        ...item,
+        id: item?._id || item?.id,
+        image: item?.images?.[0] || item?.image || "",
+        categoryName: item?.category?.catName || item?.categoryName || "",
+        price: Number(item?.price || 0),
+        sales: Number(item?.sales || 0),
+    }));
+};
+
 export const DashboardProvider = ({ children }) => {
     const [weeklyReport, setWeeklyReport] = useState(null);
     const [userReport, setUserReport] = useState(null);
     const [transactions, setTransactions] = useState(null);
+    const [topProducts, setTopProducts] = useState([]);
     const [activeRange, setActiveRange] = useState("");
     const [activeStat, setActiveStat] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isUserReportLoading, setIsUserReportLoading] = useState(false);
     const [isTransactionsLoading, setIsTransactionsLoading] = useState(false);
+    const [isTopProductsLoading, setIsTopProductsLoading] = useState(false);
     const latestWeeklyReportRequestRef = useRef(0);
     const latestUserReportRequestRef = useRef(0);
     const latestTransactionsRequestRef = useRef(0);
+    const latestTopProductsRequestRef = useRef(0);
 
     const weeklyReportRequestParams = useMemo(() => ({
         range: activeRange,
@@ -178,6 +196,32 @@ export const DashboardProvider = ({ children }) => {
         }
     }, []);
 
+    const loadTopProductsData = useCallback(async (search = "") => {
+        const requestId = latestTopProductsRequestRef.current + 1;
+        latestTopProductsRequestRef.current = requestId;
+
+        try {
+            setIsTopProductsLoading(true);
+            const res = await getTopProducts({ limit: 15, search });
+            const data = res?.data?.data;
+
+            if (requestId !== latestTopProductsRequestRef.current) {
+                return;
+            }
+
+            setTopProducts(normalizeTopProducts(data?.topProducts));
+        } catch (error) {
+            console.error("Error loading top products:", error);
+            if (requestId === latestTopProductsRequestRef.current) {
+                setTopProducts([]);
+            }
+        } finally {
+            if (requestId === latestTopProductsRequestRef.current) {
+                setIsTopProductsLoading(false);
+            }
+        }
+    }, []);
+
     useEffect(() => {
         loadDashboardData();
     }, [loadDashboardData]);
@@ -189,6 +233,10 @@ export const DashboardProvider = ({ children }) => {
     useEffect(() => {
         loadTransactionsData();
     }, [loadTransactionsData]);
+
+    useEffect(() => {
+        loadTopProductsData();
+    }, [loadTopProductsData]);
 
     useEffect(() => {
         if (!weeklyReport) {
@@ -241,6 +289,7 @@ export const DashboardProvider = ({ children }) => {
         userReport,
         userReportProps,
         transactions,
+        topProducts,
         activeRange,
         setActiveRange,
         activeStat,
@@ -248,10 +297,12 @@ export const DashboardProvider = ({ children }) => {
         isLoading,
         isUserReportLoading,
         isTransactionsLoading,
+        isTopProductsLoading,
         reloadDashboardData: loadDashboardData,
         reloadUserReportData: loadUserReportData,
         reloadTransactions: loadTransactionsData,
-    }), [weeklyReport, weeklyReportProps, userReport, userReportProps, transactions, activeRange, activeStat, isLoading, isUserReportLoading, isTransactionsLoading, loadDashboardData, loadUserReportData, loadTransactionsData]);
+        reloadTopProducts: loadTopProductsData,
+    }), [weeklyReport, weeklyReportProps, userReport, userReportProps, transactions, topProducts, activeRange, activeStat, isLoading, isUserReportLoading, isTransactionsLoading, isTopProductsLoading, loadDashboardData, loadUserReportData, loadTransactionsData, loadTopProductsData]);
 
     return (
         <DashboardContext.Provider value={value}>

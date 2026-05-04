@@ -1,6 +1,7 @@
 import ProductModel from "../models/product.model.js";
 import ProductViewModel from "../models/productView.model.js";
 import OrderModel from "../models/order.model.js";
+import mongoose from "mongoose";
 
 const MINUTE_MS = 60 * 1000;
 const REPORT_WINDOW_MINUTES = 30;
@@ -114,6 +115,84 @@ const getProductScopeFilter = async (req) => {
     }
 
     return { productOwnerId: req.userId };
+};
+
+const escapeRegex = (value) => String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export const getTopProductsController = async (req, res) => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 15, 1), 20);
+        const search = String(req.query.search || "").trim();
+        const pipeline = [];
+
+        if (req.userRole === "seller") {
+            pipeline.push({
+                $match: {
+                    createdBy: mongoose.Types.ObjectId.isValid(req.userId)
+                        ? new mongoose.Types.ObjectId(req.userId)
+                        : req.userId,
+                },
+            });
+        }
+
+        pipeline.push(
+            {
+                $lookup: {
+                    from: "categories",
+                    localField: "category",
+                    foreignField: "_id",
+                    as: "category",
+                    pipeline: [{ $project: { catName: 1, image: 1 } }],
+                },
+            },
+            { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } }
+        );
+
+        if (search) {
+            const searchRegex = new RegExp(escapeRegex(search), "i");
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { productName: searchRegex },
+                        { "category.catName": searchRegex },
+                    ],
+                },
+            });
+        }
+
+        pipeline.push(
+            { $sort: { sales: -1, createdAt: -1, _id: -1 } },
+            { $limit: limit },
+            {
+                $project: {
+                    productName: 1,
+                    price: 1,
+                    images: 1,
+                    sales: 1,
+                    category: 1,
+                    brand: 1,
+                    createdBy: 1,
+                },
+            }
+        );
+
+        const topProducts = await ProductModel.aggregate(pipeline);
+
+        return res.status(200).json({
+            message: "Top products fetched successfully",
+            error: false,
+            success: true,
+            data: {
+                topProducts,
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error fetching top products: " + error.message,
+            error: true,
+            success: false,
+        });
+    }
 };
 
 export const recordProductViewController = async (req, res) => {
