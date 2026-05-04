@@ -117,7 +117,21 @@ const getProductScopeFilter = async (req) => {
     return { productOwnerId: req.userId };
 };
 
+const SETTLED_REFUND_STATUSES = new Set(["approved", "pickup_completed", "initiated", "processed"]);
+
 const escapeRegex = (value) => String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const resolveSellerObjectId = (sellerId) => {
+    const trimmedSellerId = String(sellerId || "").trim();
+
+    if (!trimmedSellerId) {
+        return null;
+    }
+
+    return mongoose.Types.ObjectId.isValid(trimmedSellerId)
+        ? new mongoose.Types.ObjectId(trimmedSellerId)
+        : trimmedSellerId;
+};
 
 export const getTopProductsController = async (req, res) => {
     try {
@@ -189,6 +203,184 @@ export const getTopProductsController = async (req, res) => {
     } catch (error) {
         return res.status(500).json({
             message: "Error fetching top products: " + error.message,
+            error: true,
+            success: false,
+        });
+    }
+};
+
+export const getBestSellingProductsController = async (req, res) => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
+        const requestedSellerId = String(req.query.sellerId || "").trim();
+        const isAdmin = req.userRole === "admin";
+        const isSeller = req.userRole === "seller";
+
+        if (requestedSellerId && !isAdmin) {
+            return res.status(403).json({
+                message: "Only admins can filter best selling products by seller",
+                error: true,
+                success: false,
+            });
+        }
+
+        const sellerObjectId = isSeller
+            ? resolveSellerObjectId(req.userId)
+            : resolveSellerObjectId(requestedSellerId);
+
+        if (requestedSellerId && isAdmin && !sellerObjectId) {
+            return res.status(400).json({
+                message: "Invalid sellerId",
+                error: true,
+                success: false,
+            });
+        }
+
+        const pipeline = [
+            {
+                $match: {
+                    status: { $ne: "cancelled" },
+                    refundStatus: { $nin: Array.from(SETTLED_REFUND_STATUSES) },
+                },
+            },
+            {
+                $unwind: "$products",
+            },
+            {
+                $lookup: {
+                    from: "products",
+                    localField: "products.productId",
+                    foreignField: "_id",
+                    as: "product",
+                    pipeline: [
+                        {
+                            $project: {
+                                productName: 1,
+                                price: 1,
+                                images: 1,
+                                stock: 1,
+                                createdBy: 1,
+                            },
+                        },
+                    ],
+                },
+            },
+            {
+                $unwind: "$product",
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "product.createdBy",
+                    foreignField: "_id",
+                    as: "seller",
+                    pipeline: [
+                        {
+                            $project: {
+                                name: 1,
+                            },
+                        },
+                    ],
+                },
+            },
+            {
+                $unwind: {
+                    path: "$seller",
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+        ];
+
+        if (sellerObjectId) {
+            pipeline.push({
+                $match: {
+                    "product.createdBy": sellerObjectId,
+                },
+            });
+        }
+
+        pipeline.push(
+            {
+                $group: {
+                    _id: {
+                        productId: "$product._id",
+                        orderId: "$_id",
+                    },
+                    productId: { $first: "$product._id" },
+                    productName: { $first: "$product.productName" },
+                    image: {
+                        $first: {
+                            $ifNull: [{ $arrayElemAt: ["$product.images", 0] }, ""],
+                        },
+                    },
+                    price: { $first: "$product.price" },
+                    stock: { $first: "$product.stock" },
+                    sellerId: { $first: "$product.createdBy" },
+                    sellerName: { $first: "$seller.name" },
+                    orderStatus: { $first: "$status" },
+                    quantity: { $first: "$products.quantity" },
+                },
+            },
+            {
+                $group: {
+                    _id: "$productId",
+                    productName: { $first: "$productName" },
+                    image: { $first: "$image" },
+                    price: { $first: "$price" },
+                    stock: { $first: "$stock" },
+                    sellerId: { $first: "$sellerId" },
+                    totalOrders: { $sum: 1 },
+                    totalSales: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ["$orderStatus", "delivered"] },
+                                "$quantity",
+                                0,
+                            ],
+                        },
+                    },
+                },
+            },
+            {
+                $match: {
+                    totalSales: { $gt: 0 },
+                },
+            },
+            {
+                $sort: {
+                    totalSales: -1,
+                    totalOrders: -1,
+                    productName: 1,
+                },
+            },
+            {
+                $limit: limit,
+            }
+        );
+
+        const bestSellingProducts = await OrderModel.aggregate(pipeline);
+
+        return res.status(200).json({
+            message: "Best selling products fetched successfully",
+            error: false,
+            success: true,
+            data: {
+                bestSellingProducts: bestSellingProducts.map((product) => ({
+                    id: product._id?.toString?.() || String(product._id || ""),
+                    product: product.productName || "Unknown Product",
+                    img: product.image || "",
+                    sellerName: product.sellerName || "Unknown Seller",
+                    totalSales: Number(product.totalSales || 0),
+                    totalOrder: Number(product.totalOrders || 0),
+                    status: Number(product.stock || 0) > 0 ? "Stock" : "Stock out",
+                    price: `₹${Number(product.price || 0).toLocaleString("en-IN")}`,
+                    sellerId: product.sellerId ? String(product.sellerId) : "",
+                })),
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error fetching best selling products: " + error.message,
             error: true,
             success: false,
         });

@@ -39,6 +39,16 @@ export const getTopProducts = (params = {}) =>
     api.get("/api/dashboard/top-products", { params });
 
 /**
+ * Fetch best selling products for the dashboard
+ * @param {Object} params - Query parameters
+ * @param {number} params.limit - Number of products to fetch
+ * @param {string} params.sellerId - Seller ID filter for admin users
+ * @returns {Promise}
+ */
+export const getBestSellingProducts = (params = {}) =>
+    api.get("/api/dashboard/best-selling-products", { params });
+
+/**
  * Export CSV for a card's data
  * @param {Object} data - Card data including title, value, change, period
  */
