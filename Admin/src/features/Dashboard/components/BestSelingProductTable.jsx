@@ -147,7 +147,15 @@ export default function BestSelingProductTable() {
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <div className="truncate text-xs font-medium">{t.product}</div>
-                                            <div className="truncate text-[11px] text-[#6A717F] dark:text-[#9CA3AF]">{t.sellerName || "Unknown Seller"}</div>
+                                            <div className="truncate text-[11px] text-[#6A717F] dark:text-[#9CA3AF]">
+                                                {(
+                                                    t.sellerName && t.sellerName !== "Unknown Seller"
+                                                ) ? (
+                                                    t.sellerName
+                                                ) : (
+                                                    sellerOptions.find((s) => String(s.id) === String(t.sellerId))?.name || "Unknown Seller"
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </td>

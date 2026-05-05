@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiTrash2 } from 'react-icons/fi';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import AddProductActionBar from '../components/AddProductActionBar';
 import BasicDetailsCard from '../components/BasicDetailsCard';
 import ProductMediaCard from '../components/ProductMediaCard';
@@ -8,6 +8,7 @@ import { useAddProduct } from '../../../Context/addProduct/useAddProduct';
 
 const AddProductPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
     const editId = searchParams.get('edit');
     const {
@@ -22,7 +23,17 @@ const AddProductPage = () => {
         shouldNavigateToProductList,
         clearProductListNavigation,
         pageTitle,
+        updateField,
     } = useAddProduct();
+
+    // Auto-populate category and subcategory from navigation state
+    React.useEffect(() => {
+        const state = location.state;
+        if (state?.selectedCategory && state?.selectedSubCategory && !editId) {
+            updateField('category', state.selectedCategory);
+            updateField('subCategory', state.selectedSubCategory);
+        }
+    }, [location.state, editId, updateField]);
 
     React.useEffect(() => {
         if (editId && typeof beginEditProduct === 'function') {
