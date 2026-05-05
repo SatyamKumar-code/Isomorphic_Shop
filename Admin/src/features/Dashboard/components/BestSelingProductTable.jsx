@@ -148,12 +148,15 @@ export default function BestSelingProductTable() {
                                         <div className="min-w-0 flex-1">
                                             <div className="truncate text-xs font-medium">{t.product}</div>
                                             <div className="truncate text-[11px] text-[#6A717F] dark:text-[#9CA3AF]">
-                                                {(
-                                                    t.sellerName && t.sellerName !== "Unknown Seller"
-                                                ) ? (
-                                                    t.sellerName
+                                                {typeof t.rating !== 'undefined' && t.rating !== null && t.rating !== '' ? (
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-yellow-400">
+                                                            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" fill="currentColor" />
+                                                        </svg>
+                                                        <span className="text-[11px]">{Number(t.rating).toFixed(1)}</span>
+                                                    </span>
                                                 ) : (
-                                                    sellerOptions.find((s) => String(s.id) === String(t.sellerId))?.name || "Unknown Seller"
+                                                    <span className="text-[11px]">No rating</span>
                                                 )}
                                             </div>
                                         </div>

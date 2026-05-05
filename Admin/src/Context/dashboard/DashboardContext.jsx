@@ -104,6 +104,7 @@ const normalizeBestSellingProducts = (items) => {
         totalOrder: Number(item?.totalOrder || 0),
         status: item?.status || (Number(item?.stock || 0) > 0 ? "Stock" : "Stock out"),
         price: item?.price || `₹${Number(item?.priceValue || item?.priceNumber || 0)}`,
+        rating: typeof item?.rating !== 'undefined' && item?.rating !== null ? Number(item.rating) : null,
         sellerId: item?.sellerId || "",
     }));
 };

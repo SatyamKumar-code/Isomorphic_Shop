@@ -186,6 +186,8 @@ export const getTopProductsController = async (req, res) => {
                     category: 1,
                     brand: 1,
                     createdBy: 1,
+                    rating: 1,
+                    stock: 1,
                 },
             }
         );
@@ -260,6 +262,7 @@ export const getBestSellingProductsController = async (req, res) => {
                                 images: 1,
                                 stock: 1,
                                 createdBy: 1,
+                                rating: 1,
                             },
                         },
                     ],
@@ -315,6 +318,7 @@ export const getBestSellingProductsController = async (req, res) => {
                     },
                     price: { $first: "$product.price" },
                     stock: { $first: "$product.stock" },
+                    rating: { $first: "$product.rating" },
                     sellerId: { $first: "$product.createdBy" },
                     sellerName: { $first: "$seller.name" },
                     orderStatus: { $first: "$status" },
@@ -328,6 +332,7 @@ export const getBestSellingProductsController = async (req, res) => {
                     image: { $first: "$image" },
                     price: { $first: "$price" },
                     stock: { $first: "$stock" },
+                    rating: { $first: "$rating" },
                     sellerId: { $first: "$sellerId" },
                     totalOrders: { $sum: 1 },
                     totalSales: {
@@ -369,6 +374,7 @@ export const getBestSellingProductsController = async (req, res) => {
                     id: product._id?.toString?.() || String(product._id || ""),
                     product: product.productName || "Unknown Product",
                     img: product.image || "",
+                    rating: typeof product.rating !== 'undefined' ? Number(product.rating) : null,
                     sellerName: product.sellerName || "Unknown Seller",
                     totalSales: Number(product.totalSales || 0),
                     totalOrder: Number(product.totalOrders || 0),
