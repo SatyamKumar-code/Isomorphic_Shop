@@ -19,6 +19,7 @@ const TransactionPage = lazy(() => import("../features/Transaction/pages/Transac
 const RevenueOverviewPage = lazy(() => import("../features/Transaction/pages/RevenueOverviewPage"));
 const ProfileSettings = lazy(() => import("../features/profile/pages/ProfileSettings"));
 const NotificationsPage = lazy(() => import("../features/notifications/pages/NotificationsPage"));
+const SearchResultPage = lazy(() => import("../features/SearchResult/pages/SearchResultPage"));
 
 
 
@@ -163,6 +164,20 @@ const AppRoutes = () => {
                 <ProtectedRoute allowedRoles={["admin", "seller"]}>
                     <MainLayout title="Notifications">
                         <NotificationsPage />
+                    </MainLayout>
+                </ProtectedRoute>
+            )
+        },
+
+        {
+            path: '/search-result',
+            exact: true,
+            element: (
+                <ProtectedRoute allowedRoles={["admin", "seller"]}>
+                    <MainLayout title="Search Result">
+                        <div className="w-full h-[calc(100vh-6.3rem)] overflow-y-auto scrollbarNone">
+                            <SearchResultPage />
+                        </div>
                     </MainLayout>
                 </ProtectedRoute>
             )

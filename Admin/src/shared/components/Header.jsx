@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Badge from '@mui/material/Badge';
 import Avatar from '@mui/material/Avatar';
 import IconButton from '@mui/material/IconButton';
@@ -6,7 +6,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Divider from '@mui/material/Divider';
 import ListItemIcon from '@mui/material/ListItemIcon';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import DarkModeToggle from './DarkModeToggelButton';
 import { useAuth } from '../../Context/auth/useAuth';
 import useNotifications from '../../shared/hooks/useNotifications';
@@ -15,9 +15,11 @@ const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, 
   const { userData, logout } = useAuth();
   const { notifications, unreadCount, isLoading, isMarkingRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
+  const location = useLocation();
   const [anchorEl, setAnchorEl] = useState(null);
   const [notificationAnchorEl, setNotificationAnchorEl] = useState(null);
   const [visibleNotifications, setVisibleNotifications] = useState([]);
+  const [searchValue, setSearchValue] = useState('');
   const menuOpen = Boolean(anchorEl);
   const notificationMenuOpen = Boolean(notificationAnchorEl);
   const avatarSrc = userData?.avatar || '/user.png';
@@ -65,18 +67,50 @@ const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, 
     navigate('/login');
   };
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const query = params.get('q') || '';
+
+    if (location.pathname === '/search-result') {
+      setSearchValue(query);
+    }
+  }, [location.pathname, location.search]);
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault();
+    const query = searchValue.trim();
+    const params = new URLSearchParams();
+
+    if (query) {
+      params.set('q', query);
+    }
+
+    navigate({
+      pathname: '/search-result',
+      search: params.toString(),
+    });
+  };
+
   return (
     <div>
       <header className='header h-24 ml-65 w-[calc(100%-217px)] flex items-center justify-between pl-5 pr-11 py-3 bg-white dark:bg-gray-950 dark:shadow-md  shadow-md shadow-gray-300 dark:shadow-gray-700' >
         <h2 className='font-bold text-black dark:text-white'>{title}</h2>
 
         <div className='flex items-center md:gap-4 lg:gap-8'>
-          <div className='p-1.5 flex items-center justify-between pr-4 pl-6 lg:w-101.75  h-12 rounded-full bg-[#e7e8e8] dark:bg-[#f7fafa52] focus:outline-none focus:ring-2 focus:ring-blue-500'>
-            <input type='text' placeholder={searchPlaceholder} className='bg-transparent w-full text-[#4B5563] dark:text-white border-none focus:outline-none' />
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M15.3269 14.44L18.8 17.8M17.68 8.84C17.68 13.1699 14.1699 16.68 9.84 16.68C5.51009 16.68 2 13.1699 2 8.84C2 4.51009 5.51009 1 9.84 1C14.1699 1 17.68 4.51009 17.68 8.84Z" stroke-width="2" stroke-linecap="round" className='stroke-[#4B5563] dark:stroke-white' />
-            </svg>
-          </div>
+          <form onSubmit={handleSearchSubmit} className='p-1.5 flex items-center justify-between pr-4 pl-6 lg:w-101.75 h-12 rounded-full bg-[#e7e8e8] dark:bg-[#f7fafa52] focus-within:ring-2 focus-within:ring-blue-500'>
+            <input
+              type='text'
+              placeholder={searchPlaceholder}
+              className='bg-transparent w-full text-[#4B5563] dark:text-white border-none focus:outline-none'
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+            />
+            <button type='submit' className='cursor-pointer' aria-label='Search globally'>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15.3269 14.44L18.8 17.8M17.68 8.84C17.68 13.1699 14.1699 16.68 9.84 16.68C5.51009 16.68 2 13.1699 2 8.84C2 4.51009 5.51009 1 9.84 1C14.1699 1 17.68 4.51009 17.68 8.84Z" stroke-width="2" stroke-linecap="round" className='stroke-[#4B5563] dark:stroke-white' />
+              </svg>
+            </button>
+          </form>
           <Badge color="error" badgeContent={unreadCount} max={99} invisible={unreadCount <= 0} overlap="circular">
             <IconButton
               type='button'
