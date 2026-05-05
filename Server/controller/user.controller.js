@@ -508,6 +508,7 @@ const isCustomerRelatedToAdmin = async (adminId, customerId) => {
 const registerAccount = async (req, res, { role, sellerApprovalStatus, successMessage }) => {
     const { name, email, password } = req.body;
     const normalizedRole = role === "seller" ? "seller" : "user";
+    const normalizedSellerNameKey = String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
 
     if (!name || !email || !password) {
         return res.status(400).json({
@@ -525,6 +526,21 @@ const registerAccount = async (req, res, { role, sellerApprovalStatus, successMe
             error: true,
             success: false
         });
+    }
+
+    if (normalizedRole === "seller") {
+        const existingSellerName = await UserModel.findOne({
+            role: "seller",
+            sellerNameKey: normalizedSellerNameKey,
+        }).select("_id").lean();
+
+        if (existingSellerName) {
+            return res.status(400).json({
+                message: "Seller name already exists",
+                error: true,
+                success: false,
+            });
+        }
     }
 
     const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -2113,8 +2129,42 @@ export const updateUserDetails = async (req, res) => {
         }
 
         if (name) {
+            if (user.role === 'seller') {
+                const nextSellerNameKey = String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
+                const existingSellerName = await UserModel.findOne({
+                    role: "seller",
+                    sellerNameKey: nextSellerNameKey,
+                    _id: { $ne: userId },
+                }).select("_id").lean();
+
+                if (existingSellerName) {
+                    return res.status(400).json({
+                        message: "Seller name already exists",
+                        error: true,
+                        success: false,
+                    });
+                }
+            }
+
             user.name = name;
         } else if (firstName || lastName) {
+            if (user.role === 'seller') {
+                const nextSellerNameKey = String(`${firstName || ""} ${lastName || ""}`).trim().toLowerCase().replace(/\s+/g, " ");
+                const existingSellerName = await UserModel.findOne({
+                    role: "seller",
+                    sellerNameKey: nextSellerNameKey,
+                    _id: { $ne: userId },
+                }).select("_id").lean();
+
+                if (existingSellerName) {
+                    return res.status(400).json({
+                        message: "Seller name already exists",
+                        error: true,
+                        success: false,
+                    });
+                }
+            }
+
             user.name = `${firstName || ""} ${lastName || ""}`.trim();
         }
 

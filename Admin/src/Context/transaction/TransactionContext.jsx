@@ -8,6 +8,7 @@ import {
     getSellerPayoutPreview,
     updateSellerPaidAmount,
 } from '../../features/Transaction/TransactionAPI';
+import { getCustomersAnalytics } from '../../features/customers/CustomersAPI';
 
 export const TransactionContext = createContext();
 
@@ -162,13 +163,30 @@ export const TransactionProvider = ({ children }) => {
     const loadSellerDirectory = useCallback(async () => {
         if (!isAdmin) {
             setAdminTotals(DEFAULT_ADMIN_TOTALS);
+            setSellerOptions([]);
             return;
         }
 
-        const response = await getPayoutDashboard();
-        const payload = response?.data?.data || {};
-        const sellerWise = Array.isArray(payload?.sellerWise) ? payload.sellerWise : [];
-        const totals = payload?.totals || {};
+        const [sellerResponse, payoutResponse] = await Promise.all([
+            getCustomersAnalytics({
+                role: 'seller',
+                page: 1,
+                limit: 1000,
+            }),
+            getPayoutDashboard(),
+        ]);
+
+        const sellerPayload = sellerResponse?.data?.data || {};
+        const sellerRecords = Array.isArray(sellerPayload?.allCustomers)
+            ? sellerPayload.allCustomers
+            : Array.isArray(sellerPayload?.customers)
+                ? sellerPayload.customers
+                : [];
+
+        const payoutPayload = payoutResponse?.data?.data || {};
+        const sellerWise = Array.isArray(payoutPayload?.sellerWise) ? payoutPayload.sellerWise : [];
+        const totals = payoutPayload?.totals || {};
+
         setSellerWiseSummaries(sellerWise);
         setAdminTotals({
             grossSales: Number(totals?.grossSales || 0),
@@ -178,14 +196,15 @@ export const TransactionProvider = ({ children }) => {
             payoutDue: Number(totals?.payoutDue || 0),
         });
 
-        const options = sellerWise.map((item) => ({
-            id: String(item.sellerId || ''),
-            name: item.sellerName || 'Unknown Seller',
+        const options = sellerRecords.map((seller) => ({
+            id: String(seller?.uid || seller?._id || ''),
+            name: seller?.name || 'Unknown Seller',
         })).filter((item) => item.id);
 
         setSellerOptions(options);
 
-        if (!selectedSellerId && options.length > 0) {
+        const hasSelectedSeller = options.some((seller) => seller.id === selectedSellerId);
+        if (options.length > 0 && !hasSelectedSeller) {
             setSelectedSellerId(options[0].id);
         }
     }, [isAdmin, selectedSellerId]);

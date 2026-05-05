@@ -5,6 +5,11 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    sellerNameKey: {
+        type: String,
+        default: null,
+        select: false,
+    },
     avatar: {
         type: String,
         default: null
@@ -128,6 +133,23 @@ userSchema.index({ role: 1, createdAt: -1 });
 userSchema.index({ role: 1, mobile: 1 });
 userSchema.index({ name: 1 });
 userSchema.index({ mobile: 1 });
+userSchema.index(
+    { sellerNameKey: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { role: "seller" },
+    }
+);
+
+const normalizeSellerNameKey = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+userSchema.pre("save", function sellerNameSync() {
+    if (this.role === "seller") {
+        this.sellerNameKey = normalizeSellerNameKey(this.name);
+    } else {
+        this.sellerNameKey = null;
+    }
+});
 
 const UserModel = mongoose.model('User', userSchema);
 
