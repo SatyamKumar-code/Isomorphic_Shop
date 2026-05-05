@@ -18,6 +18,7 @@ const ProductReviewsPage = lazy(() => import("../features/productReviews/pages/P
 const TransactionPage = lazy(() => import("../features/Transaction/pages/TransactionPage"));
 const RevenueOverviewPage = lazy(() => import("../features/Transaction/pages/RevenueOverviewPage"));
 const ProfileSettings = lazy(() => import("../features/profile/pages/ProfileSettings"));
+const NotificationsPage = lazy(() => import("../features/notifications/pages/NotificationsPage"));
 
 
 
@@ -150,6 +151,18 @@ const AppRoutes = () => {
                 <ProtectedRoute allowedRoles={["admin", "seller"]}>
                     <MainLayout title="Profile Settings">
                         <ProfileSettings />
+                    </MainLayout>
+                </ProtectedRoute>
+            )
+        },
+
+        {
+            path: '/notifications',
+            exact: true,
+            element: (
+                <ProtectedRoute allowedRoles={["admin", "seller"]}>
+                    <MainLayout title="Notifications">
+                        <NotificationsPage />
                     </MainLayout>
                 </ProtectedRoute>
             )

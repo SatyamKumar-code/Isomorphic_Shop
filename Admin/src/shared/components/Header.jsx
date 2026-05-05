@@ -9,12 +9,17 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import { useNavigate } from 'react-router-dom';
 import DarkModeToggle from './DarkModeToggelButton';
 import { useAuth } from '../../Context/auth/useAuth';
+import useNotifications from '../../shared/hooks/useNotifications';
 
 const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, or reports' }) => {
   const { userData, logout } = useAuth();
+  const { notifications, unreadCount, isLoading, isMarkingRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
+  const [notificationAnchorEl, setNotificationAnchorEl] = useState(null);
+  const [visibleNotifications, setVisibleNotifications] = useState([]);
   const menuOpen = Boolean(anchorEl);
+  const notificationMenuOpen = Boolean(notificationAnchorEl);
   const avatarSrc = userData?.avatar || '/user.png';
   const avatarLabel = userData?.name || 'User';
 
@@ -24,6 +29,29 @@ const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, 
 
   const handleMenuClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleNotificationMenuOpen = async (event) => {
+    setNotificationAnchorEl(event.currentTarget);
+    setVisibleNotifications(notifications.filter((notification) => !notification.isRead));
+    await markAllAsRead();
+  };
+
+  const handleNotificationMenuClose = () => {
+    setNotificationAnchorEl(null);
+    setVisibleNotifications([]);
+  };
+
+  const handleNotificationClick = (notification) => {
+    handleNotificationMenuClose();
+    if (notification?.link) {
+      navigate(notification.link);
+    }
+  };
+
+  const handleViewAllNotifications = () => {
+    handleNotificationMenuClose();
+    navigate('/notifications');
   };
 
   const handleProfileClick = () => {
@@ -49,13 +77,78 @@ const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, 
               <path d="M15.3269 14.44L18.8 17.8M17.68 8.84C17.68 13.1699 14.1699 16.68 9.84 16.68C5.51009 16.68 2 13.1699 2 8.84C2 4.51009 5.51009 1 9.84 1C14.1699 1 17.68 4.51009 17.68 8.84Z" stroke-width="2" stroke-linecap="round" className='stroke-[#4B5563] dark:stroke-white' />
             </svg>
           </div>
-          <Badge color="error" badgeContent=" " variant="dot" overlap="circular" className='cursor-pointer'>
-            <svg width="24" height="24" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M8.33333 17.5H11.6667C11.6667 18.4166 10.9167 19.1666 10 19.1666C9.08333 19.1666 8.33333 18.4166 8.33333 17.5ZM17.5 15.8333V16.6666H2.5V15.8333L4.16667 14.1666V9.16663C4.16667 6.58329 5.83333 4.33329 8.33333 3.58329V3.33329C8.33333 2.41663 9.08333 1.66663 10 1.66663C10.9167 1.66663 11.6667 2.41663 11.6667 3.33329V3.58329C14.1667 4.33329 15.8333 6.58329 15.8333 9.16663V14.1666L17.5 15.8333ZM14.1667 9.16663C14.1667 6.83329 12.3333 4.99996 10 4.99996C7.66667 4.99996 5.83333 6.83329 5.83333 9.16663V15H14.1667V9.16663Z" className='fill-[#4B5563] dark:fill-white' />
-            </svg>
+          <Badge color="error" badgeContent={unreadCount} max={99} invisible={unreadCount <= 0} overlap="circular">
+            <IconButton
+              type='button'
+              onClick={handleNotificationMenuOpen}
+              className='p-0 text-[#4B5563] dark:text-white'
+              aria-label='Open notifications'
+              aria-controls={notificationMenuOpen ? 'header-notification-menu' : undefined}
+              aria-haspopup='true'
+              aria-expanded={notificationMenuOpen ? 'true' : undefined}
+            >
+              <svg width="24" height="24" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8.33333 17.5H11.6667C11.6667 18.4166 10.9167 19.1666 10 19.1666C9.08333 19.1666 8.33333 18.4166 8.33333 17.5ZM17.5 15.8333V16.6666H2.5V15.8333L4.16667 14.1666V9.16663C4.16667 6.58329 5.83333 4.33329 8.33333 3.58329V3.33329C8.33333 2.41663 9.08333 1.66663 10 1.66663C10.9167 1.66663 11.6667 2.41663 11.6667 3.33329V3.58329C14.1667 4.33329 15.8333 6.58329 15.8333 9.16663V14.1666L17.5 15.8333ZM14.1667 9.16663C14.1667 6.83329 12.3333 4.99996 10 4.99996C7.66667 4.99996 5.83333 6.83329 5.83333 9.16663V15H14.1667V9.16663Z" className='fill-[#4B5563] dark:fill-white' />
+              </svg>
+            </IconButton>
           </Badge>
 
           <DarkModeToggle />
+
+          <Menu
+            id='header-notification-menu'
+            anchorEl={notificationAnchorEl}
+            open={notificationMenuOpen}
+            onClose={handleNotificationMenuClose}
+            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            MenuListProps={{ className: 'p-0' }}
+            PaperProps={{
+              className: 'mt-2 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-800 dark:bg-gray-950!',
+            }}
+          >
+            <div className='flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-950'>
+              <div>
+                <p className='text-sm font-semibold text-gray-900 dark:text-gray-100'>Notifications</p>
+                <p className='text-xs text-gray-500 dark:text-gray-400'>
+                  {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                </p>
+              </div>
+              {isMarkingRead ? <span className='text-[11px] font-medium text-gray-400'>Updating</span> : null}
+            </div>
+            <Divider className='border-gray-200 dark:border-gray-600!' />
+            <div className='max-h-96 overflow-y-auto'>
+              {isLoading ? (
+                <div className='px-4 py-6 text-sm text-gray-500 dark:text-gray-400'>Loading notifications...</div>
+              ) : visibleNotifications.length ? (
+                visibleNotifications.map((notification) => (
+                  <MenuItem
+                    key={notification._id}
+                    onClick={() => handleNotificationClick(notification)}
+                    className='flex w-full items-start gap-3 px-4 py-3 text-left text-sm text-gray-900 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-900'
+                  >
+                    <span className='mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500' />
+                    <div className='min-w-0 flex-1'>
+                      <p className='truncate font-semibold text-gray-900 dark:text-gray-100'>{notification.title}</p>
+                      <p className='mt-0.5 text-xs text-gray-500 dark:text-gray-400'>
+                        {notification.message}
+                      </p>
+                    </div>
+                  </MenuItem>
+                ))
+              ) : (
+                <div className='px-4 py-6 text-sm text-gray-500 dark:text-gray-400'>No unread notifications</div>
+              )}
+            </div>
+            <Divider className='border-gray-200 dark:border-gray-600!' />
+            <button
+              type='button'
+              onClick={handleViewAllNotifications}
+              className='block w-full px-4 py-3 text-left text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30'
+            >
+              View all notifications
+            </button>
+          </Menu>
 
           <Badge
             overlap="circular"
@@ -91,13 +184,13 @@ const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, 
               className: 'mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white dark:bg-gray-950! dark:border-gray-800 dark:bg-gray-950',
             }}
           >
-            <div className='px-4 py-3 bg-white dark:bg-gray-950'>
+            <div className='px-4 pb-1 bg-white dark:bg-gray-950'>
               <p className='text-sm font-semibold text-gray-900 dark:text-gray-100'>{avatarLabel}</p>
               <p className='text-xs text-gray-500 dark:text-gray-400'>
                 {userData?.email || 'Signed in account'}
               </p>
             </div>
-            <Divider className='border-gray-200 dark:border-gray-800' />
+            <Divider className='border-gray-200 dark:border-gray-600!' />
             <MenuItem onClick={handleProfileClick} className='flex w-full gap-1 px-4 py-2.5 text-sm text-gray-900 transition-colors hover:bg-gray-100 dark:text-gray-200! dark:hover:bg-gray-900'>
               <ListItemIcon className='min-w-0 text-inherit'>
                 <svg width='18' height='18' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'>

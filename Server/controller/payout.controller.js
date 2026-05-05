@@ -5,6 +5,7 @@ import UserModel from "../models/user.model.js";
 import ProductModel from "../models/product.model.js";
 import OrderModel from "../models/order.model.js";
 import SettingsModel from "../models/settings.model.js";
+import { notifySellerPayoutUpdate } from "../utils/notificationService.js";
 
 const toTwoDecimals = (value) => Number(Number(value || 0).toFixed(2));
 const FALLBACK_COMMISSION_RATE = 10;
@@ -909,6 +910,19 @@ export const updateSellerPaidAmountController = async (req, res) => {
                 adminEmail: processor?.email || "",
             },
         });
+
+        await notifySellerPayoutUpdate({
+            sellerId: targetSellerId,
+            type: "payout_updated",
+            title: "Payout updated",
+            message: `Your payout has been updated by admin. Current paid amount is Rs ${toTwoDecimals(nextPaidAmount).toLocaleString("en-IN")}.`,
+            link: "/transaction",
+            meta: {
+                sellerId: String(targetSellerId),
+                deltaAmount,
+                paidAmount: toTwoDecimals(nextPaidAmount),
+            },
+        }).catch(() => null);
 
         return res.status(200).json({
             message: "Seller paid amount updated successfully",

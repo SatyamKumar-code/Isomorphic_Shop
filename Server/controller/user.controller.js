@@ -11,6 +11,7 @@ import generateAccessToken from '../utils/generateAccessToken.js';
 import generateRefreshToken from '../utils/generateRefreshToken.js';
 import sendEmailFun from '../config/sendEmail.js';
 import VerificationEmail from '../utils/verifyEmailTemplate.js';
+import { createNotification } from "../utils/notificationService.js";
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import { log } from 'console';
@@ -2289,6 +2290,19 @@ export async function updateSellerApprovalStatus(req, res) {
                 success: false,
             });
         }
+
+        await createNotification({
+            recipientRole: "seller",
+            recipientId: updatedSeller._id,
+            type: "seller_approval_updated",
+            title: "Seller approval status changed",
+            message: `Your seller account status is now ${normalizedStatus.toLowerCase()}.`,
+            link: "/profile-settings",
+            meta: {
+                sellerId: String(updatedSeller._id),
+                sellerApprovalStatus: normalizedStatus,
+            },
+        }).catch(() => null);
 
         return res.status(200).json({
             error: false,

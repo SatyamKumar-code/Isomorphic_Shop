@@ -5,6 +5,7 @@ import ProductModel from "../models/product.model.js";
 import UserModel from "../models/user.model.js";
 import AddressModel from "../models/address.model.js";
 import razorpay from "../config/razorpay.js";
+import { notifyOrderParticipants } from "../utils/notificationService.js";
 
 
 // Helper to validate, decrement stock, and clear cart atomically, returning a deep clone of products
@@ -729,6 +730,15 @@ export const createOrderByAdmin = async (req, res) => {
             .populate("products.productId")
             .populate("delivery_address");
 
+        await notifyOrderParticipants({
+            orderDoc: order || createdOrderDoc,
+            type: "order_created",
+            title: "New order placed",
+            message: `Order ${String(createdOrderDoc._id).slice(-8).toUpperCase()} has been placed successfully.`,
+            link: "/order-management",
+            notifyAdmin: false,
+        }).catch(() => null);
+
         return res.status(201).json({
             message: "Order created successfully by admin",
             error: false,
@@ -793,6 +803,15 @@ export const createOrderWithCOD = async (req, res) => {
             totalAmount: sutotalAmount
         });
         await order.save();
+
+        await notifyOrderParticipants({
+            orderDoc: order,
+            type: "order_created",
+            title: "New order placed",
+            message: `Order ${String(order._id).slice(-8).toUpperCase()} has been placed successfully.`,
+            link: "/order-management",
+            notifyAdmin: true,
+        }).catch(() => null);
 
         return res.status(201).json({
             message: "Order created successfully",
@@ -879,6 +898,15 @@ export const createOrderWithRazorpay = async (req, res) => {
             paymentStatus: paymentStatusFetched === "captured" ? "completed" : "pending"
         });
         await order.save();
+
+        await notifyOrderParticipants({
+            orderDoc: order,
+            type: "order_created",
+            title: "New order placed",
+            message: `Order ${String(order._id).slice(-8).toUpperCase()} has been placed successfully.`,
+            link: "/order-management",
+            notifyAdmin: true,
+        }).catch(() => null);
 
         return res.status(201).json({
             message: "Order created successfully",
@@ -1578,6 +1606,14 @@ export const updateOrderStatus = async (req, res) => {
             }
         }
 
+        await notifyOrderParticipants({
+            orderDoc: updatedStatus,
+            type: "order_status_updated",
+            title: "Order status updated",
+            message: `Order ${String(updatedStatus._id).slice(-8).toUpperCase()} status changed to ${normalizedIncomingStatus.replace(/_/g, " ")}.`,
+            link: "/order-management",
+        }).catch(() => null);
+
         return res.status(200).json({
             message: "Order status updated successfully",
             error: false,
@@ -1738,6 +1774,14 @@ export const updateOrderRefundStatus = async (req, res) => {
         }
 
         await order.save();
+
+        await notifyOrderParticipants({
+            orderDoc: order,
+            type: "order_refund_updated",
+            title: "Refund status updated",
+            message: `Order ${String(order._id).slice(-8).toUpperCase()} refund status changed to ${normalizedIncomingRefundStatus.replace(/_/g, " ")}.`,
+            link: "/order-management",
+        }).catch(() => null);
 
         return res.status(200).json({
             message: "Order refund status updated successfully",
