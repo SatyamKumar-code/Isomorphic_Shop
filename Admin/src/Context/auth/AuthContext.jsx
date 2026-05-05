@@ -1,5 +1,5 @@
 import { createContext, useCallback, useMemo, useState, useEffect } from "react";
-import { loginUser, logoutUser, getProfile } from "../../features/auth/authAPI";
+import { loginUser, logoutUser, getProfile } from "../../features/auth/authAPI.js";
 import { alertBox } from "../../shared/utils/alert";
 
 export const AuthContext = createContext();

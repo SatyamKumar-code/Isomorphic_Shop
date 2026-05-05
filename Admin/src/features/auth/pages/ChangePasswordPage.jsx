@@ -71,7 +71,7 @@ const ChangePassword = () => {
         <header className='w-full static lg:fixed top-0 left-0 px-4 py-3 flex items-center justify-center sm:justify-between z-50'>
             <Link to="/">
                 <img src="/logo1.svg" alt="Logo"
-                className='w-[150px]!'/>
+                className='w-37.5!'/>
             </Link>
 
 
@@ -92,12 +92,12 @@ const ChangePassword = () => {
              <img src="https://t3.ftcdn.net/jpg/05/88/24/10/360_F_588241010_cdQJ2QTsyDtt36jZsAFR45aAXICnPAzR.jpg" 
         className='w-full fixed top-0 left-0 opacity-20'/>
 
-        <div className='loginBox card md:w-[600px] w-full h-auto px-3 pb-20 mx-auto pt-5 lg:pt-20 relative z-50'>
+        <div className='loginBox card md:w-150 w-full h-auto px-3 pb-20 mx-auto pt-5 lg:pt-20 relative z-50'>
             <div className='text-center'>
                 <img src="/logo.svg"  className='m-auto'/>
             </div>
 
-            <h1 className='text-center text-[18px] sm:text-[35px] font-[800] mt-4'>
+            <h1 className='text-center text-[18px] sm:text-[35px] font-extrabold mt-4'>
                 Welcome Back
                 !<br />
                 You can change your password from here.
@@ -109,19 +109,19 @@ const ChangePassword = () => {
             <form className='w-full px-3 sm:px-8 mt-3' onSubmit={handleSubmit}>
 
                 <div className='form-group mb-4 w-full'>
-                    <h4 className='text-[14px] font-[500] mb-1'>
+                    <h4 className='text-[14px] font-medium mb-1'>
                        New Password
                     </h4>
                     <div className='relative w-full'>
                         <input
                             type={ isPasswordShow===false ? "password" : "text" }
-                            className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
+                            className='w-full h-12.5 border-2 border-[rgba(0,0,0,0.1)] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
                             name='newPassword'
                             value={formFields.newPassword}
                            disabled={isLoading===true ? true : false}
                            onChange={onChangeInput}
                         />
-                        <Button className='absolute! top-[7px] right-[10px] z-50 rounded-full! w-[35px]! h-[35px]! min-w-[35px]! text-gray-600!'
+                        <Button className='absolute! top-1.75 right-2.5 z-50 rounded-full! w-8.75! h-8.75! min-w-8.75! text-gray-600!'
                             onClick={() => setisPasswordShow(!isPasswordShow)}
                         >
                             {
@@ -137,19 +137,19 @@ const ChangePassword = () => {
                 </div>
 
                 <div className='form-group mb-4 w-full'>
-                    <h4 className='text-[14px] font-[500] mb-1'>
+                    <h4 className='text-[14px] font-medium mb-1'>
                        Confirm Password
                     </h4>
                     <div className='relative w-full'>
                         <input
                             type={ isPasswordShow2===false ? "password" : "text" }
-                            className='w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
+                            className='w-full h-12.5 border-2 border-[rgba(0,0,0,0.1)] rounded-md focus:border-[rgba(0,0,0,0.7)] focus:outline-none px-3'
                              name='confirmPassword'
                            value={formFields.confirmPassword}
                            disabled={isLoading===true ? true : false}
                             onChange={onChangeInput}
                         />
-                        <Button className='absolute! top-[7px] right-[10px] z-50 rounded-full! w-[35px]! h-[35px]! min-w-[35px]! text-gray-600!'
+                        <Button className='absolute! top-1.75 right-2.5 z-50 rounded-full! w-8.75! h-8.75! min-w-8.75! text-gray-600!'
                             onClick={() => setisPasswordShow2(!isPasswordShow2)}
                         >
                             {

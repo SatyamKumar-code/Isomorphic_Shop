@@ -1,10 +1,41 @@
-import React from 'react'
+import React, { useState } from 'react'
 import Badge from '@mui/material/Badge';
+import Avatar from '@mui/material/Avatar';
+import IconButton from '@mui/material/IconButton';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import Divider from '@mui/material/Divider';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import { useNavigate } from 'react-router-dom';
 import DarkModeToggle from './DarkModeToggelButton';
 import { useAuth } from '../../Context/auth/useAuth';
 
 const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, or reports' }) => {
-  const { userData } = useAuth();  
+  const { userData, logout } = useAuth();
+  const navigate = useNavigate();
+  const [anchorEl, setAnchorEl] = useState(null);
+  const menuOpen = Boolean(anchorEl);
+  const avatarSrc = userData?.avatar || '/user.png';
+  const avatarLabel = userData?.name || 'User';
+
+  const handleMenuOpen = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleProfileClick = () => {
+    handleMenuClose();
+    navigate('/profile-settings');
+  };
+
+  const handleLogoutClick = async () => {
+    handleMenuClose();
+    await logout?.();
+    navigate('/login');
+  };
 
   return (
     <div>
@@ -26,7 +57,66 @@ const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, 
 
           <DarkModeToggle />
 
-          <img src="user.png" alt="" className='w-10 h-10' />
+          <Badge
+            overlap="circular"
+            color="success"
+            variant="dot"
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          >
+            <IconButton
+              onClick={handleMenuOpen}
+              className='p-0'
+              aria-controls={menuOpen ? 'header-user-menu' : undefined}
+              aria-haspopup='true'
+              aria-expanded={menuOpen ? 'true' : undefined}
+            >
+              <Avatar
+                src={avatarSrc}
+                alt={avatarLabel}
+                className='w-10 h-10 border border-gray-200 dark:border-gray-700'
+              />
+            </IconButton>
+          </Badge>
+
+          <Menu
+            id='header-user-menu'
+            anchorEl={anchorEl}
+            open={menuOpen}
+            onClose={handleMenuClose}
+            onClick={handleMenuClose}
+            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            MenuListProps={{ className: 'p-0' }}
+            PaperProps={{
+              className: 'mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white dark:bg-gray-950! dark:border-gray-800 dark:bg-gray-950',
+            }}
+          >
+            <div className='px-4 py-3 bg-white dark:bg-gray-950'>
+              <p className='text-sm font-semibold text-gray-900 dark:text-gray-100'>{avatarLabel}</p>
+              <p className='text-xs text-gray-500 dark:text-gray-400'>
+                {userData?.email || 'Signed in account'}
+              </p>
+            </div>
+            <Divider className='border-gray-200 dark:border-gray-800' />
+            <MenuItem onClick={handleProfileClick} className='flex w-full gap-1 px-4 py-2.5 text-sm text-gray-900 transition-colors hover:bg-gray-100 dark:text-gray-200! dark:hover:bg-gray-900'>
+              <ListItemIcon className='min-w-0 text-inherit'>
+                <svg width='18' height='18' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'>
+                  <path d='M10 10C12.3012 10 14.1667 8.13452 14.1667 5.83333C14.1667 3.53215 12.3012 1.66667 10 1.66667C7.69881 1.66667 5.83333 3.53215 5.83333 5.83333C5.83333 8.13452 7.69881 10 10 10Z' stroke='#6A717F' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' />
+                  <path d='M3.33331 17.5C3.33331 14.5717 6.30981 12.5 10 12.5C13.6902 12.5 16.6666 14.5717 16.6666 17.5' stroke='#6A717F' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' />
+                </svg>
+              </ListItemIcon>
+              View Profile
+            </MenuItem>
+            <MenuItem onClick={handleLogoutClick} className='flex w-full gap-1 px-4 py-2.5 text-sm text-red-600! transition-colors hover:bg-red-50 dark:text-red-400! dark:hover:bg-red-950/30'>
+              <ListItemIcon className='min-w-0 text-inherit'>
+                <svg width='18' height='18' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'>
+                  <path d='M7.5 17.5H5.83333C5.39131 17.5 4.96936 17.3244 4.6568 17.0118C4.34424 16.6993 4.16666 16.2774 4.16666 15.8333V4.16667C4.16666 3.72464 4.34424 3.30271 4.6568 2.99015C4.96936 2.67759 5.39131 2.5 5.83333 2.5H7.5' stroke='#6A717F' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' />
+                  <path d='M12.5 14.1667L15.8333 10M15.8333 10L12.5 5.83333M15.8333 10H7.5' stroke='#6A717F' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' />
+                </svg>
+              </ListItemIcon>
+              Logout
+            </MenuItem>
+          </Menu>
         </div>
 
       </header>

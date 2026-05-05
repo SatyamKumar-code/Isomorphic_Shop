@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { useCustomers } from "../../../Context/customers/useCustomers";
 import { useAuth } from "../../../Context/auth/useAuth";
-import { forceCustomerLogout, sendCustomerResetPasswordLink, updateCustomerNote, updateCustomerStatus } from "../CustomersAPI";
+import { forceCustomerLogout, sendCustomerResetPasswordLink, updateCustomerNote, updateCustomerStatus, updateSellerApprovalStatus } from "../CustomersAPI";
 import CsvExportDialog from "../../../shared/components/CsvExportDialog";
 import { useCsvExportDialog } from "../../../shared/hooks/useCsvExportDialog";
 
@@ -49,6 +49,12 @@ const StatusPill = ({ status, color }) => (
         {status}
     </span>
 );
+
+const approvalStatusColors = {
+    Approved: "#16A34A",
+    Pending: "#D97706",
+    Rejected: "#DC2626",
+};
 
 const parseRegistrationDate = (value) => {
     if (!value) return null;
@@ -271,6 +277,29 @@ const CustomersTable = () => {
         const nextStatus = customer.status === "Blocked" ? "Active" : "Blocked";
         await handleStatusChange(customer, nextStatus);
         setActiveRowActionId("");
+    };
+
+    const handleSellerApproval = async (customer, nextApprovalStatus) => {
+        if (!canRunSensitiveCustomerActions || !isSellerView) {
+            toast.error("You are not allowed to perform this action");
+            return;
+        }
+
+        if (!customer?.uid || !nextApprovalStatus || nextApprovalStatus === customer.sellerApprovalStatus) {
+            return;
+        }
+
+        try {
+            setUpdatingCustomerId(customer.uid);
+            await updateSellerApprovalStatus(customer.uid, nextApprovalStatus);
+            toast.success("Seller approval updated");
+            reloadCustomers();
+        } catch {
+            toast.error("Failed to update seller approval");
+        } finally {
+            setUpdatingCustomerId("");
+            setActiveRowActionId("");
+        }
     };
 
     const handleQuickNote = (customer) => {
@@ -605,6 +634,7 @@ const CustomersTable = () => {
                             {isSellerView ? <th className="px-4 py-3">Net Payout</th> : null}
                             {isSellerView ? <th className="px-4 py-3">Already Paid</th> : null}
                             <th className="px-4 py-3">Status</th>
+                            {isSellerView ? <th className="px-4 py-3">Seller Approval</th> : null}
                             <th className="rounded-r-lg px-4 py-3">Action</th>
                         </tr>
                     </thead>
@@ -635,6 +665,14 @@ const CustomersTable = () => {
                                     {isSellerView ? <td className="px-4 py-4">{formatAmount(Number(customer.payoutAmount || 0))}</td> : null}
                                     {isSellerView ? <td className="px-4 py-4">{formatAmount(Number(customer.paidAmount || 0))}</td> : null}
                                     <td className="px-4 py-4"><StatusPill status={customer.status} color={statusColors[customer.status]} /></td>
+                                    {isSellerView ? (
+                                        <td className="px-4 py-4">
+                                            <StatusPill
+                                                status={customer.sellerApprovalStatus || "Pending"}
+                                                color={approvalStatusColors[customer.sellerApprovalStatus] || approvalStatusColors.Pending}
+                                            />
+                                        </td>
+                                    ) : null}
                                     <td className="px-4 py-4">
                                         <div className="relative">
                                             <button
@@ -671,7 +709,7 @@ const CustomersTable = () => {
 
                         {!isLoading && !customers.length ? (
                             <tr>
-                                <td colSpan={isSellerView ? 9 : 7} className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                                <td colSpan={isSellerView ? 10 : 7} className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
                                     {errorMessage || (isSellerView ? "No sellers found" : "No customers found for this search.")}
                                 </td>
                             </tr>
@@ -693,6 +731,12 @@ const CustomersTable = () => {
                             <button type="button" className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900" onClick={() => handleSendResetLink(activeRowCustomer)}>Send Reset Password Link</button>
                             {!isSellerView ? <button type="button" className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900" onClick={() => handleForceLogout(activeRowCustomer)}>Force Logout User</button> : null}
                             {!isSellerView ? <button type="button" className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900" onClick={() => handleVipToggle(activeRowCustomer)}>{activeRowCustomer.status === "VIP" ? "Remove VIP" : "Mark as VIP"}</button> : null}
+                            {isSellerView && activeRowCustomer.sellerApprovalStatus !== "Approved" ? (
+                                <button type="button" className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900" onClick={() => handleSellerApproval(activeRowCustomer, "Approved")}>Approve Seller</button>
+                            ) : null}
+                            {isSellerView && activeRowCustomer.sellerApprovalStatus === "Approved" ? (
+                                <button type="button" className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900" onClick={() => handleSellerApproval(activeRowCustomer, "Pending")}>Mark Pending</button>
+                            ) : null}
                             <button type="button" className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900" onClick={() => handleLastActivityView(activeRowCustomer)}>Last Activity View</button>
                             <button type="button" className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-gray-900" onClick={() => handleSoftBlockToggle(activeRowCustomer)}>{activeRowCustomer.status === "Blocked" ? `Unblock ${isSellerView ? "Seller" : "User"}` : `Block ${isSellerView ? "Seller" : "User"}`}</button>
                         </>

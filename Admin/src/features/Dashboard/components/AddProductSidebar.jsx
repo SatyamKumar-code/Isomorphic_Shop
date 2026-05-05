@@ -36,9 +36,6 @@ const AddProductSidebar = () => {
                 getSubCategories(),
             ]);
 
-            console.log('Category Response:', catRes?.data);
-            console.log('SubCategory Response:', subCatRes?.data);
-
             // Handle categories response
             let allCategoriesFormatted = [];
             if (catRes?.data?.categories) {
@@ -76,7 +73,6 @@ const AddProductSidebar = () => {
                     : [];
 
                 setAllSubCategories(formattedSubCats);
-                console.log('All SubCategories:', formattedSubCats);
             }
         } catch (error) {
             console.error('Error loading sidebar data:', error);
@@ -196,7 +192,7 @@ const AddProductSidebar = () => {
 
     return (
         <>
-            <div className="add-product-card min-w-81 w-143 h-[600px] flex flex-col shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg">
+            <div className="add-product-card min-w-81 w-143 h-150 flex flex-col shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg">
                 {/* Header */}
                 <div className="px-5 pt-5 pb-1 border-b border-gray-200 dark:border-gray-800">
                     <div className="flex items-center justify-between">
@@ -237,7 +233,7 @@ const AddProductSidebar = () => {
                                             }`}
                                         key={cat.id}
                                     >
-                                        <div className="w-10 flex items-center justify-center h-10 bg-[#f7f7fa] dark:bg-gray-800 rounded-sm flex-shrink-0">
+                                        <div className="w-10 flex items-center justify-center h-10 bg-[#f7f7fa] dark:bg-gray-800 rounded-sm shrink-0">
                                             <img src={cat.img} alt={cat.name} className="w-6 h-6" />
                                         </div>
                                         <span className="category-name text-[12px] text-[#23272E] dark:text-[#c1c6cf] truncate flex-1">{cat.name}</span>
@@ -268,7 +264,7 @@ const AddProductSidebar = () => {
                                         key={subCat.id}
                                     >
                                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                                            <div className="w-10 flex items-center justify-center h-10 bg-[#f7f7fa] dark:bg-gray-800 rounded-sm flex-shrink-0">
+                                            <div className="w-10 flex items-center justify-center h-10 bg-[#f7f7fa] dark:bg-gray-800 rounded-sm shrink-0">
                                                 <img src={subCat.parentImg} alt={subCat.parentName} className="w-6 h-6" />
                                             </div>
                                             <div className="min-w-0 flex-1">
@@ -278,7 +274,7 @@ const AddProductSidebar = () => {
                                         {!isAdmin && (
                                             <button
                                                 onClick={() => handleAddProduct(subCat.id, subCat.parentId)}
-                                                className="add-btn bg-[#4EA674] rounded-full min-w-[62px] min-h-[28px] flex items-center justify-center text-[12px] text-[#FFFFFF] pl-2 pr-3 gap-1"
+                                                className="add-btn bg-[#4EA674] rounded-full min-w-15.5 min-h-7 flex items-center justify-center text-[12px] text-[#FFFFFF] pl-2 pr-3 gap-1"
                                                 title="Add product"
                                             >
                                                 <svg width="12" height="12" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

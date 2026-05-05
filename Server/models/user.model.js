@@ -23,6 +23,11 @@ const userSchema = new mongoose.Schema({
         enum: ['user', 'seller', 'admin'],
         default: 'user'
     },
+    sellerApprovalStatus: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected'],
+        default: 'Approved'
+    },
     mobile: {
         type: Number,
         default: null,

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginUserController, registerUserController, verifyEmailController, refreshTokenController, userAvatarController, adminAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController, adminSendResetPasswordLinkController, adminForceLogoutUserController, adminUpdateCustomerNoteController, getAdminAccessModeController, adminChangePasswordController } from "../controller/user.controller.js";
+import { loginUserController, registerUserController, registerSellerController, verifyEmailController, refreshTokenController, userAvatarController, adminAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, updateSellerApprovalStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController, adminSendResetPasswordLinkController, adminForceLogoutUserController, adminUpdateCustomerNoteController, getAdminAccessModeController, adminChangePasswordController, socialLoginController } from "../controller/user.controller.js";
 import upload from "../middlewares/multer.js";
 import userMiddleware from "../middlewares/userMiddleware.js";
 import adminMiddleware from "../middlewares/adminMiddleware.js";
@@ -8,6 +8,8 @@ import adminMiddleware from "../middlewares/adminMiddleware.js";
 const userRouter = Router();
 
 userRouter.post("/register", registerUserController);
+userRouter.post("/register-seller", registerSellerController);
+userRouter.post("/social-login", socialLoginController);
 userRouter.post("/verify-email", verifyEmailController);
 userRouter.post("/login", loginUserController);
 userRouter.get("/logout", userMiddleware, logoutController);
@@ -24,6 +26,7 @@ userRouter.put("/admin/user-avatar", adminMiddleware, upload.array('avatar'), ad
 userRouter.delete("/deleteImage", userMiddleware, removeImageFromCloudinary);
 userRouter.put("/", userMiddleware, updateUserDetails);
 userRouter.put("/updateUserStatus/:id", adminMiddleware, updateUserStatus);
+userRouter.put("/admin/sellers/:id/approval", adminMiddleware, updateSellerApprovalStatus);
 userRouter.post("/admin/send-reset-link/:id", adminMiddleware, adminSendResetPasswordLinkController);
 userRouter.post("/admin/force-logout/:id", adminMiddleware, adminForceLogoutUserController);
 userRouter.put("/admin/customer-note/:id", adminMiddleware, adminUpdateCustomerNoteController);

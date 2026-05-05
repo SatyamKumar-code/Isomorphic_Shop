@@ -130,6 +130,16 @@ export async function removeImageFromCloudinary(request, response) {
 export const createProductController = async (req, res) => {
     try {
         const adminId = req.userId;
+        const currentUser = await UserModel.findById(adminId).select("role sellerApprovalStatus").lean();
+
+        if (currentUser?.role === "seller" && String(currentUser.sellerApprovalStatus || "Pending") !== "Approved") {
+            return res.status(403).json({
+                message: "Your seller account is waiting for admin approval",
+                success: false,
+                error: true
+            });
+        }
+
         const {
             productName,
             price,

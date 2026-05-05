@@ -4,6 +4,7 @@ import ProtectedRoute from "./ProtectedRoute";
 import MainLayout from "../layouts/MainLayout";
 import Dashbord from "../features/Dashboard/pages/DashboardPage";
 import Login from "../features/auth/pages/LoginPage";
+import RegisterPage from "../features/auth/pages/RegisterPage";
 import ForgotPasswordPage from "../features/auth/pages/ForgotPasswordPage";
 import VerifyAccountPage from "../features/auth/pages/VerifyAccountPage";
 import ChangePasswordPage from "../features/auth/pages/ChangePasswordPage";
@@ -160,6 +161,16 @@ const AppRoutes = () => {
             element: (
                 <>
                     <Login />
+                </>
+            ),
+        },
+
+        {
+            path: '/sign-up',
+            exact: true,
+            element: (
+                <>
+                    <RegisterPage />
                 </>
             ),
         },

@@ -421,6 +421,14 @@ const getAccessModeFromRole = (role) => {
     return "user";
 };
 
+const getSellerApprovalStatus = (user) => {
+    if (user?.role !== "seller") {
+        return "Approved";
+    }
+
+    return user?.sellerApprovalStatus || "Pending";
+};
+
 const getSellerLocation = async (userId, role) => {
     if (!['admin', 'seller'].includes(role)) {
         return '';
@@ -455,6 +463,7 @@ const buildUserResponse = async (user) => ({
     location: await getSellerLocation(user._id, user.role),
     socialLinks: await getSellerSocialLinks(user._id, user.role),
     accessMode: getAccessModeFromRole(user.role),
+    sellerApprovalStatus: getSellerApprovalStatus(user),
 });
 
 const hasGlobalAdminAccess = async (adminId) => {
@@ -493,6 +502,74 @@ const isCustomerRelatedToAdmin = async (adminId, customerId) => {
     });
 
     return relatedOrderCount > 0;
+};
+
+const registerAccount = async (req, res, { role, sellerApprovalStatus, successMessage }) => {
+    const { name, email, password } = req.body;
+    const normalizedRole = role === "seller" ? "seller" : "user";
+
+    if (!name || !email || !password) {
+        return res.status(400).json({
+            message: "All fields are required",
+            error: true,
+            success: false
+        });
+    }
+
+    const existingUser = await UserModel.findOne({ email });
+
+    if (existingUser) {
+        return res.status(400).json({
+            message: "User already Registered with this email",
+            error: true,
+            success: false
+        });
+    }
+
+    const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const sendEmai = await sendEmailFun({
+        to: email,
+        subject: "Verify email from Classyshop App",
+        text: "",
+        html: VerificationEmail(name, verifyCode)
+    });
+
+    if (!sendEmai) {
+        return res.status(500).json({
+            message: "Failed to send verification email",
+            error: true,
+            success: false
+        });
+    }
+
+    const newUser = new UserModel({
+        name,
+        email,
+        password: hashedPassword,
+        role: normalizedRole,
+        sellerApprovalStatus: normalizedRole === "seller" ? (sellerApprovalStatus || "Pending") : "Approved",
+        otp: verifyCode,
+        otp_expiry: Date.now() + 10 * 60 * 1000
+    });
+
+    await newUser.save();
+
+    const token = jwt.sign(
+        { id: newUser._id, email: newUser.email, role: newUser.role },
+        process.env.SECRET_KEY_ACCESS_TOKEN,
+        { expiresIn: '7d' }
+    );
+
+    return res.status(201).json({
+        message: successMessage,
+        error: false,
+        success: true,
+        token
+    });
 };
 
 export const getCustomersController = async (req, res) => {
@@ -862,6 +939,7 @@ export const getCustomersController = async (req, res) => {
                 commissionRate: resolvedCommissionRate,
                 commissionAmount: resolvedCommissionAmount,
                 netPayout: resolvedNetPayout,
+                sellerApprovalStatus: getSellerApprovalStatus(user),
                 supportNote: user.support_note || "",
                 supportNoteUpdatedAt: user.support_note_updated_at || null,
                 supportNoteUpdatedBy: user.support_note_updated_by
@@ -1198,72 +1276,27 @@ export const getCustomersController = async (req, res) => {
 
 export const registerUserController = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
-
-        if (!name || !email || !password) {
-            return res.status(400).json({
-                message: "All fields are required",
-                error: true,
-                success: false
-            })
-        }
-
-        const existingUser = await UserModel.findOne({ email });
-
-        if (existingUser) {
-            return res.status(400).json({
-                message: "User already Registered with this email",
-                error: true,
-                success: false
-            })
-        }
-
-        const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        const sendEmai = await sendEmailFun({
-            to: email,
-            subject: "Verify email from Classyshop App",
-            text: "",
-            html: VerificationEmail(name, verifyCode)
-        })
-
-        if (!sendEmai) {
-            return res.status(500).json({
-                message: "Failed to send verification email",
-                error: true,
-                success: false
-            })
-        }
-
-        const newUser = new UserModel({
-            name,
-            email,
-            password: hashedPassword,
-            otp: verifyCode,
-            otp_expiry: Date.now() + 10 * 60 * 1000 // 10 minutes from now
+        return registerAccount(req, res, {
+            role: "user",
+            sellerApprovalStatus: "Approved",
+            successMessage: "User registered successfully! Please verify your email.",
         });
-
-        await newUser.save();
-
-
-
-        const token = jwt.sign(
-            { id: newUser._id, email: newUser.email, role: newUser.role },
-            process.env.SECRET_KEY_ACCESS_TOKEN,
-            { expiresIn: '7d' }
-        );
-
-        return res.status(201).json({
-            message: "User registered successfully! Please verify your email.",
-            error: false,
-            success: true,
-            token
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal Server Error",
+            error: error.message,
+            success: false
         });
+    }
+}
 
-
+export const registerSellerController = async (req, res) => {
+    try {
+        return registerAccount(req, res, {
+            role: "seller",
+            sellerApprovalStatus: "Pending",
+            successMessage: "Seller registered successfully! Please verify your email. Your account is waiting for admin approval.",
+        });
     } catch (error) {
         return res.status(500).json({
             message: "Internal Server Error",
@@ -1372,6 +1405,7 @@ export const loginUserController = async (req, res) => {
 
         const accessToken = await generateAccessToken(user._id, user.role);
         const refreshToken = await generateRefreshToken(user._id, user.role);
+        const userResponse = await buildUserResponse(user);
 
         await UserModel.findByIdAndUpdate(user?._id, {
             last_login_date: Date.now()
@@ -1386,10 +1420,13 @@ export const loginUserController = async (req, res) => {
         res.cookie('refreshToken', refreshToken, cookiesOptions)
 
         return res.status(200).json({
-            message: "Login successful",
+            message: user.role === "seller" && getSellerApprovalStatus(user) !== "Approved"
+                ? "Login successful. Your seller account is waiting for admin approval."
+                : "Login successful",
             error: false,
             success: true,
             data: {
+                ...userResponse,
                 accessToken,
                 refreshToken,
                 role: user?.role
@@ -1472,6 +1509,68 @@ export const getAdminAccessModeController = async (req, res) => {
         });
     }
 };
+
+export const socialLoginController = async (req, res) => {
+    try {
+        const { name, email, avatar, role } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required', error: true, success: false });
+        }
+
+        const normalizedRole = role === 'seller' ? 'seller' : 'user';
+
+        let user = await UserModel.findOne({ email });
+
+        if (user) {
+            if (!["Active", "VIP"].includes(user.status)) {
+                return res.status(403).json({ message: "Contact to Admin, Your Account is Blocked", error: true, success: false });
+            }
+
+            // Issue tokens
+            const accessToken = await generateAccessToken(user._id, user.role);
+            const refreshToken = await generateRefreshToken(user._id, user.role);
+            const userResponse = await buildUserResponse(user);
+
+            await UserModel.findByIdAndUpdate(user._id, { last_login_date: Date.now() });
+
+            const cookiesOptions = { httpOnly: true, secure: true, sameSite: "None" };
+            res.cookie('accessToken', accessToken, cookiesOptions);
+            res.cookie('refreshToken', refreshToken, cookiesOptions);
+
+            return res.status(200).json({ message: "Login successful", error: false, success: true, data: { ...userResponse, accessToken, refreshToken, role: user.role } });
+        }
+
+        // Create new user for social login
+        const randomPassword = Math.random().toString(36).slice(-12);
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(randomPassword, salt);
+
+        const newUser = new UserModel({
+            name: name || '',
+            email,
+            password: hashedPassword,
+            avatar: avatar || null,
+            role: normalizedRole,
+            sellerApprovalStatus: normalizedRole === 'seller' ? 'Pending' : 'Approved',
+            emailVerified: true,
+        });
+
+        await newUser.save();
+
+        const accessToken = await generateAccessToken(newUser._id, newUser.role);
+        const refreshToken = await generateRefreshToken(newUser._id, newUser.role);
+        const userResponse = await buildUserResponse(newUser);
+
+        const cookiesOptions = { httpOnly: true, secure: true, sameSite: "None" };
+        res.cookie('accessToken', accessToken, cookiesOptions);
+        res.cookie('refreshToken', refreshToken, cookiesOptions);
+
+        return res.status(201).json({ message: "Login successful", error: false, success: true, data: { ...userResponse, accessToken, refreshToken, role: newUser.role } });
+    } catch (error) {
+        return res.status(500).json({ message: "Internal Server Error", error: error.message, success: false });
+    }
+}
 
 
 export async function logoutController(req, res) {
@@ -2144,6 +2243,62 @@ export async function updateUserStatus(req, res) {
             message: "User status updated",
             user: updatedUserStatus
         })
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message || error,
+            error: true,
+            success: false
+        })
+    }
+}
+
+export async function updateSellerApprovalStatus(req, res) {
+    try {
+        const adminId = req.userId;
+        const { id } = req.params;
+        const { sellerApprovalStatus } = req.body;
+
+        const isGlobalAdmin = await hasGlobalAdminAccess(adminId);
+        if (!isGlobalAdmin) {
+            return res.status(403).json({
+                message: "Only admin can approve sellers",
+                error: true,
+                success: false,
+            });
+        }
+
+        const normalizedStatus = String(sellerApprovalStatus || "").trim();
+        if (!["Pending", "Approved", "Rejected"].includes(normalizedStatus)) {
+            return res.status(400).json({
+                message: "Invalid seller approval status",
+                error: true,
+                success: false,
+            });
+        }
+
+        const updatedSeller = await UserModel.findOneAndUpdate(
+            { _id: id, role: "seller" },
+            { sellerApprovalStatus: normalizedStatus },
+            { new: true }
+        ).select("-password -refresh_token -otp -otp_expiry");
+
+        if (!updatedSeller) {
+            return res.status(404).json({
+                message: "Seller not found",
+                error: true,
+                success: false,
+            });
+        }
+
+        return res.status(200).json({
+            error: false,
+            success: true,
+            message: "Seller approval status updated",
+            user: {
+                ...updatedSeller.toObject(),
+                sellerApprovalStatus: getSellerApprovalStatus(updatedSeller),
+            }
+        });
     } catch (error) {
         return res.status(500).json({
             message: error.message || error,

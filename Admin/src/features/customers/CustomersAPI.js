@@ -8,6 +8,10 @@ export const updateCustomerStatus = (id, status) => {
     return api.put(`/api/user/updateUserStatus/${id}`, { status });
 };
 
+export const updateSellerApprovalStatus = (id, sellerApprovalStatus) => {
+    return api.put(`/api/user/admin/sellers/${id}/approval`, { sellerApprovalStatus });
+};
+
 export const sendCustomerResetPasswordLink = (id) => {
     return api.post(`/api/user/admin/send-reset-link/${id}`);
 };
