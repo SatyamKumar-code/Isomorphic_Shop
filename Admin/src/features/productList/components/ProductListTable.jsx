@@ -31,6 +31,7 @@ const ProductListTable = ({ rows = [], isLoading = false, currentPage = 1, pageS
                     <tr className="rounded-lg bg-[#EAF8E7] text-[12px] font-semibold text-slate-600">
                         <th className="rounded-l-lg px-4 py-3">Order</th>
                         <th className="px-4 py-3">Product</th>
+                        <th className="px-4 py-3">Price</th>
                         {showSellerColumn ? <th className="px-4 py-3">Seller</th> : null}
                         <th className="px-4 py-3">Brand</th>
                         <th className="px-4 py-3">Cat</th>
@@ -45,7 +46,7 @@ const ProductListTable = ({ rows = [], isLoading = false, currentPage = 1, pageS
                 <tbody>
                     {!rows.length ? (
                         <tr>
-                            <td className="px-4 py-8 text-center text-sm text-slate-500" colSpan={(showActions ? 9 : 8) + (showSellerColumn ? 1 : 0)}>
+                            <td className="px-4 py-8 text-center text-sm text-slate-500" colSpan={(showActions ? 10 : 9) + (showSellerColumn ? 1 : 0)}>
                                 No records found.
                             </td>
                         </tr>
@@ -82,8 +83,21 @@ const ProductListTable = ({ rows = [], isLoading = false, currentPage = 1, pageS
                                                 getInitials(item.product)
                                             )}
                                         </div>
-                                        <span className="whitespace-normal leading-5 text-slate-700 dark:text-slate-200">{item.product}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div
+                                                className="text-slate-700 dark:text-slate-200 truncate"
+                                                title={item.product}
+                                            >
+                                                {item.product}
+                                            </div>
+                                            <div className="text-[12px] text-slate-600 dark:text-slate-400 mt-0.5">
+                                                ⭐ {item.rating.toFixed(1)}
+                                            </div>
+                                        </div>
                                     </div>
+                                </td>
+                                <td className="px-4 py-4 font-semibold text-slate-700 dark:text-slate-200">
+                                    ₹{item.price.toLocaleString()}
                                 </td>
                                 {showSellerColumn ? <td className="px-4 py-4">{item.sellerName || '-'}</td> : null}
                                 <td className="px-4 py-4">{item.brand || '-'}</td>

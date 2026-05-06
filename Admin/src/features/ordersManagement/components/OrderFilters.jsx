@@ -171,6 +171,10 @@ const OrderFilters = ({ activeTab, onTabChange }) => {
           {tabs.map((tab) => {
             const isActive = activeTab === tab.label;
 
+            const displayCount = (tab.count !== null && tab.count !== undefined && !Number.isNaN(Number(tab.count)))
+              ? ` (${Number(tab.count)})`
+              : '';
+
             return (
               <button
                 key={tab.label}
@@ -178,7 +182,7 @@ const OrderFilters = ({ activeTab, onTabChange }) => {
                 className={`rounded-lg px-3 py-1.5 transition ${isActive ? 'bg-white text-[#4EA674] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 onClick={() => onTabChange(tab.label)}
               >
-                {tab.label}{typeof tab.count === 'number' ? ` (${tab.count})` : ''}
+                {tab.label}{displayCount}
               </button>
             );
           })}

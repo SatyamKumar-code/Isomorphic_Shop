@@ -1,15 +1,96 @@
 import React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { createSearchParams, useNavigate, useSearchParams } from 'react-router-dom';
 import SearchResultSection from '../components/SearchResultSection';
 import { useGlobalSearch } from '../hooks/useGlobalSearch';
 import { useAuth } from '../../../Context/auth/useAuth';
 
 const SearchResultPage = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const query = (searchParams.get('q') || '').trim();
     const { userData } = useAuth();
     const isAdmin = userData?.role === 'admin';
     const { isLoading, errorMessage, results } = useGlobalSearch(query, { includeSellers: isAdmin });
+
+    const buildTarget = React.useCallback((title, item) => {
+        const routeValue = String(item?.routeValue || item?.name || item?.id || '').trim();
+        const itemId = String(item?.id || '').trim();
+
+        switch (title) {
+            case 'Products':
+                return { pathname: '/product-list', search: createSearchParams(routeValue ? { search: routeValue } : {}).toString() };
+            case 'Orders':
+                return {
+                    pathname: '/order-management',
+                    search: createSearchParams({
+                        search: routeValue || itemId,
+                        focusOrder: itemId || routeValue,
+                    }).toString(),
+                };
+            case 'Customers':
+                return {
+                    pathname: '/customers',
+                    search: createSearchParams({
+                        search: routeValue,
+                        customerId: itemId,
+                    }).toString(),
+                };
+            case 'Sellers':
+                return {
+                    pathname: '/seller',
+                    search: createSearchParams({
+                        search: routeValue,
+                        customerId: itemId,
+                    }).toString(),
+                };
+            case 'Payouts':
+                return {
+                    pathname: '/transaction',
+                    search: createSearchParams({
+                        ...(isAdmin && itemId ? { sellerId: itemId } : {}),
+                        ...(routeValue ? { searchTerm: routeValue } : {}),
+                    }).toString(),
+                };
+            case 'Categories':
+                return isAdmin
+                    ? {
+                        pathname: '/categories',
+                        search: createSearchParams(routeValue ? { search: routeValue } : {}).toString(),
+                    }
+                    : {
+                        pathname: '/add-products',
+                        search: createSearchParams({
+                            ...(itemId ? { prefillCategoryId: itemId } : {}),
+                        }).toString(),
+                    };
+            case 'Sub Categories':
+                return isAdmin
+                    ? {
+                        pathname: '/categories',
+                        search: createSearchParams(routeValue ? { search: routeValue } : {}).toString(),
+                    }
+                    : {
+                        pathname: '/add-products',
+                        search: createSearchParams({
+                            ...(item?.parentCategoryId ? { prefillCategoryId: String(item.parentCategoryId) } : {}),
+                            ...(itemId ? { prefillSubCategoryId: itemId } : {}),
+                        }).toString(),
+                    };
+            default:
+                return null;
+        }
+    }, [isAdmin]);
+
+    const handleItemClick = React.useCallback((title, item) => {
+        const target = buildTarget(title, item);
+
+        if (!target) {
+            return;
+        }
+
+        navigate({ pathname: target.pathname, search: target.search ? `?${target.search}` : '' });
+    }, [buildTarget, navigate]);
+
     const visibleSections = [
         { title: 'Products', items: results.products },
         { title: 'Orders', items: results.orders },
@@ -38,7 +119,13 @@ const SearchResultPage = () => {
             {!isLoading && query ? (
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                     {visibleSections.map((section) => (
-                        <SearchResultSection key={section.title} title={section.title} items={section.items} />
+                        <SearchResultSection
+                            key={section.title}
+                            title={section.title}
+                            items={section.items}
+                            isAdmin={isAdmin}
+                            onItemClick={(item) => handleItemClick(section.title, item)}
+                        />
                     ))}
                 </div>
             ) : null}

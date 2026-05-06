@@ -12,6 +12,8 @@ const AddProductPage = () => {
     const location = useLocation();
     const [searchParams] = useSearchParams();
     const editId = searchParams.get('edit');
+    const prefillCategoryId = (searchParams.get('prefillCategoryId') || '').trim();
+    const prefillSubCategoryId = (searchParams.get('prefillSubCategoryId') || '').trim();
     const { userData } = useAuth();
     const {
         isLoadingCategories,
@@ -26,18 +28,53 @@ const AddProductPage = () => {
         clearProductListNavigation,
         pageTitle,
         updateField,
+        onCategoryChange,
     } = useAddProduct();
+    const prefillAppliedRef = React.useRef('');
+    const showPrefillNotice = !editId && Boolean(
+        prefillCategoryId
+        || prefillSubCategoryId
+        || location.state?.selectedCategory
+        || location.state?.selectedSubCategory,
+    );
 
     const isSellerApproved = userData?.role !== 'seller' || userData?.sellerApprovalStatus === 'Approved';
 
-    // Auto-populate category and subcategory from navigation state
+    // Auto-populate category/subcategory from search-result redirect state or query params.
     React.useEffect(() => {
-        const state = location.state;
-        if (state?.selectedCategory && state?.selectedSubCategory && !editId) {
-            updateField('category', state.selectedCategory);
-            updateField('subCategory', state.selectedSubCategory);
+        if (editId) {
+            return;
         }
-    }, [location.state, editId, updateField]);
+
+        const state = location.state;
+        const stateCategoryId = String(state?.selectedCategory || '').trim();
+        const stateSubCategoryId = String(state?.selectedSubCategory || '').trim();
+        const targetCategoryId = prefillCategoryId || stateCategoryId;
+        const targetSubCategoryId = prefillSubCategoryId || stateSubCategoryId;
+
+        if (!targetCategoryId && !targetSubCategoryId) {
+            return;
+        }
+
+        const prefillKey = `${targetCategoryId}|${targetSubCategoryId}`;
+        if (prefillAppliedRef.current === prefillKey) {
+            return;
+        }
+
+        const applyPrefill = async () => {
+            if (targetCategoryId) {
+                await onCategoryChange(targetCategoryId);
+            }
+
+            if (targetSubCategoryId) {
+                updateField('subCategory', targetSubCategoryId);
+            }
+
+            prefillAppliedRef.current = prefillKey;
+        };
+
+        applyPrefill();
+    }, [location.state, editId, onCategoryChange, prefillCategoryId, prefillSubCategoryId, updateField]);
 
     React.useEffect(() => {
         if (editId && typeof beginEditProduct === 'function') {
@@ -69,6 +106,14 @@ const AddProductPage = () => {
                 <h2 className="text-[22px] font-bold leading-[1.2] text-slate-900 dark:text-slate-100">{pageTitle}</h2>
                 <AddProductActionBar />
             </div>
+
+            {showPrefillNotice ? (
+                <div className="mb-3 rounded-lg border border-[#b8dfc7] bg-[#edf7f1] px-3.5 py-2 text-xs font-medium text-[#2f6f4a] dark:border-[#28543b] dark:bg-[#123122] dark:text-[#b8e4cc]">
+                    {prefillSubCategoryId || location.state?.selectedSubCategory
+                        ? 'Category and sub category were auto-selected from search result.'
+                        : 'Category was auto-selected from search result.'}
+                </div>
+            ) : null}
 
             {!isSellerApproved ? null : (
                 <>

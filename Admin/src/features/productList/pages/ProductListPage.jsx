@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useProductList } from '../../../Context/productList/useProductList';
 import ProductListFilters from '../components/ProductListFilters';
 import ProductListHeader from '../components/ProductListHeader';
@@ -9,10 +9,13 @@ import { useAuth } from '../../../Context/auth/useAuth';
 
 const ProductListPage = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const searchTextFromUrl = (searchParams.get('search') || '').trim();
     const { userData } = useAuth();
     const {
         rows,
         totalCount,
+        setSearchText,
         currentPage,
         pageSize,
         isLoading,
@@ -22,6 +25,10 @@ const ProductListPage = () => {
     } = useProductList();
     const canManageProductActions = userData?.role === 'seller';
     const showSellerColumn = userData?.role === 'admin';
+
+    React.useEffect(() => {
+        setSearchText(searchTextFromUrl);
+    }, [searchTextFromUrl, setSearchText]);
 
     return (
         <div className="w-full overflow-x-auto scrollbarNone px-5 pb-6 pt-4">

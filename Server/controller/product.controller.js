@@ -233,6 +233,7 @@ export const createProductController = async (req, res) => {
 export const getAdminProductsController = async (req, res) => {
     try {
         const adminId = req.userId;
+        const requesterRole = String(req.userRole || '').toLowerCase();
         if (!adminId) {
             return res.status(401).json({
                 message: "Unauthorized access",
@@ -243,7 +244,9 @@ export const getAdminProductsController = async (req, res) => {
 
         const globalAccess = await hasGlobalAdminAccess(adminId);
         const previousCreatedBy = req.query.createdBy;
-        req.query.createdBy = globalAccess ? "" : String(adminId);
+        req.query.createdBy = requesterRole === "seller"
+            ? String(adminId)
+            : (globalAccess ? "" : String(adminId));
         await getAllProductsController(req, res);
         req.query.createdBy = previousCreatedBy;
     } catch (error) {
@@ -258,7 +261,10 @@ export const getAdminProductsController = async (req, res) => {
 export const getAllProductsController = async (req, res) => {
     try {
         const sortBy = req.query.sortBy;
-        const createdBy = String(req.query.createdBy || "").trim();
+        const requesterRole = String(req.userRole || '').toLowerCase();
+        const requesterId = String(req.userId || '').trim();
+        const requestedCreatedBy = String(req.query.createdBy || "").trim();
+        const createdBy = requesterRole === 'seller' && requesterId ? requesterId : requestedCreatedBy;
         const rawPage = Number(req.query.page || 1);
         const rawLimit = Number(req.query.limit || 10);
         const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
@@ -827,6 +833,8 @@ export const getLatestProductsController = async (req, res) => {
 export const searchProductsController = async (req, res) => {
     try {
         const searchTerm = req.query.q;
+        const requesterRole = String(req.userRole || '').toLowerCase();
+        const requesterId = String(req.userId || '').trim();
         if (!searchTerm) {
             return res.status(400).json({
                 message: "Search term is required",
@@ -876,9 +884,15 @@ export const searchProductsController = async (req, res) => {
             default: sortOption = {};
         }
 
-        const products = await ProductModel.find({ $or: searchConditions })
+        const searchQuery = { $or: searchConditions };
+        if (requesterRole === 'seller' && mongoose.Types.ObjectId.isValid(requesterId)) {
+            searchQuery.createdBy = new mongoose.Types.ObjectId(requesterId);
+        }
+
+        const products = await ProductModel.find(searchQuery)
             .populate("category", "catName")
             .populate("subCategory", "subCatName")
+            .populate("createdBy", "name email")
             .sort(sortOption);
 
         return res.status(200).json({

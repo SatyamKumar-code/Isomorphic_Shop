@@ -1,4 +1,5 @@
 import React from "react";
+import { useSearchParams } from "react-router-dom";
 import SummaryCards from "../components/SummaryCards";
 import OverviewChart from "../components/OverviewChart";
 import CustomersTable from "../components/CustomersTable";
@@ -8,7 +9,15 @@ import SellerLeaderboardCard from "../components/SellerLeaderboardCard";
 import { useCustomers } from "../../../Context/customers/useCustomers";
 
 const CustomersPage = () => {
-    const { overviewStats, weekSeries, rangeOptions, activeRange, setActiveRange, activeStat, setActiveStat, selectedCustomer, isSellerView } = useCustomers();
+    const [searchParams] = useSearchParams();
+    const searchTextFromUrl = (searchParams.get("search") || "").trim();
+    const selectedCustomerIdFromUrl = (searchParams.get("customerId") || "").trim();
+    const { overviewStats, weekSeries, rangeOptions, activeRange, setActiveRange, activeStat, setActiveStat, selectedCustomer, isSellerView, setCustomerSearch, setSelectedCustomerId } = useCustomers();
+
+    React.useEffect(() => {
+        setCustomerSearch(searchTextFromUrl);
+        setSelectedCustomerId(selectedCustomerIdFromUrl || null);
+    }, [searchTextFromUrl, selectedCustomerIdFromUrl, setCustomerSearch, setSelectedCustomerId]);
 
     const overviewChartProps = !isSellerView
         ? {

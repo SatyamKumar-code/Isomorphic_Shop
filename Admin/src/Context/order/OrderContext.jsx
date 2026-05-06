@@ -158,12 +158,30 @@ export const OrderProvider = ({ children }) => {
             if (res?.data?.data?.dashboardSalesCard && typeof res.data.data.dashboardSalesCard === "object") {
                 setDashboardSalesCard(res.data.data.dashboardSalesCard);
             }
-            if (Array.isArray(res?.data?.data?.tabs)) {
-                setTabs(res.data.data.tabs);
-            }
 
-            setAvailableSummaryYears(Array.isArray(payload.availableYears) ? payload.availableYears : []);
-            setAvailableSummaryMonths(Array.isArray(payload.availableMonths) ? payload.availableMonths : []);
+            const normalizedAvailableYears = Array.isArray(payload.availableYears)
+                ? payload.availableYears
+                    .map((year) => Number(year))
+                    .filter((year) => Number.isInteger(year))
+                : [];
+
+            const normalizedAvailableMonths = Array.isArray(payload.availableMonths)
+                ? payload.availableMonths
+                    .map((month) => Number(month))
+                    .filter((month) => Number.isInteger(month) && month >= 1 && month <= 12)
+                : [];
+
+            setAvailableSummaryYears(normalizedAvailableYears);
+            setAvailableSummaryMonths(normalizedAvailableMonths);
+
+            if (Array.isArray(res?.data?.data?.tabs)) {
+                const normalizedTabs = res.data.data.tabs.map((tab) => ({
+                    label: String(tab.label || "").trim(),
+                    count: Number(tab.count) || 0,
+                }));
+
+                setTabs(normalizedTabs);
+            }
 
             if (typeof payload.period === 'string') {
                 setSummaryPeriod(payload.period);

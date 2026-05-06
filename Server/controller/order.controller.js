@@ -1422,14 +1422,14 @@ export const getOrderSummary = async (req, res) => {
         ];
 
         const tabs = [
-            { label: "All order", count: currentPeriodTotal },
-            { label: "Pending", count: currentPeriodPending },
-            { label: "Confirmed", count: currentPeriodConfirmed },
-            { label: "Packed", count: currentPeriodPacked },
-            { label: "Shipped", count: currentPeriodShipped },
-            { label: "Out For Delivery", count: currentPeriodOutForDelivery },
-            { label: "Delivered", count: currentPeriodDelivered },
-            { label: "Cancelled", count: currentPeriodCancelled },
+            { label: "All order", count: totalOrders },
+            { label: "Pending", count: pendingTotal },
+            { label: "Confirmed", count: confirmedTotal },
+            { label: "Packed", count: packedTotal },
+            { label: "Shipped", count: shippedTotal },
+            { label: "Out For Delivery", count: outForDeliveryTotal },
+            { label: "Delivered", count: deliveredTotal },
+            { label: "Cancelled", count: cancelledTotal },
         ];
 
         const latestOrder = await OrderModel.findOne(orderScope)

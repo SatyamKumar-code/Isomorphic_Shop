@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useCategories } from '../../../Context/categories/useCategories';
 import CategoriesDiscover from '../components/CategoriesDiscover';
 import CategoriesFilters from '../components/CategoriesFilters';
@@ -8,7 +9,13 @@ import { createCategory, createSubCategory, getAllSubCategories, deleteSubCatego
 import CategoriesAddModal from '../components/CategoriesAddModal';
 
 const CategoriesPage = () => {
-    const { discoverCategories, reloadCategoriesData, searchText } = useCategories();
+    const [searchParams] = useSearchParams();
+    const searchTextFromUrl = (searchParams.get('search') || '').trim();
+    const { discoverCategories, reloadCategoriesData, searchText, setSearchText } = useCategories();
+
+    useEffect(() => {
+        setSearchText(searchTextFromUrl);
+    }, [searchTextFromUrl, setSearchText]);
 
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [subCategories, setSubCategories] = useState([]);

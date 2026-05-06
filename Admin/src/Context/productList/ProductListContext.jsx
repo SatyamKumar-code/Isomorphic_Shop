@@ -44,6 +44,8 @@ const normalizeProducts = (items = []) => {
         brand: item?.brand || '-',
         category: item?.category?.catName || '-',
         subCategory: item?.subCategory?.subCatName || '-',
+        price: Number(item?.price || 0),
+        rating: Number(item?.rating || 0),
     }));
 };
 
@@ -74,15 +76,10 @@ export const ProductListProvider = ({ children }) => {
             const items = response?.data?.products;
             const pagination = response?.data?.pagination;
             const normalizedItems = Array.isArray(items) ? normalizeProducts(items) : [];
-            const isSeller = userData?.role === 'seller';
-            const currentUserId = String(userData?._id || userData?.id || '');
-            const visibleItems = isSeller && currentUserId
-                ? normalizedItems.filter((item) => String(item.createdBy || '') === currentUserId)
-                : normalizedItems;
 
-            setProducts(visibleItems);
-            setTotalCount(isSeller ? visibleItems.length : Number(pagination?.totalCount || 0));
-            setTotalPages(isSeller ? Math.max(1, Math.ceil(visibleItems.length / pageSize)) : Math.max(1, Number(pagination?.totalPages || 1)));
+            setProducts(normalizedItems);
+            setTotalCount(Number(pagination?.totalCount || 0));
+            setTotalPages(Math.max(1, Number(pagination?.totalPages || 1)));
         } catch (error) {
             setProducts([]);
             setTotalCount(0);
@@ -91,7 +88,7 @@ export const ProductListProvider = ({ children }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [currentPage, debouncedSearchText, sortBy, pageSize, userData]);
+    }, [currentPage, debouncedSearchText, sortBy, pageSize]);
 
     useEffect(() => {
         const timer = setTimeout(() => {

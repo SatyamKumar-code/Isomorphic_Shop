@@ -35,6 +35,7 @@ productRouter.get("/top-rated", getTopRatedProductsController);
 productRouter.get("/latest", getLatestProductsController);
 
 // Search & Filter
+productRouter.get("/search/admin", adminAuth, searchProductsController);
 productRouter.get("/search", searchProductsController);
 productRouter.get("/filter", filterProductsController);
 

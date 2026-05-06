@@ -1,7 +1,7 @@
 import api from '../../services/api';
 
 export const searchProductsGlobal = (query) =>
-    api.get('/api/product/search', {
+    api.get('/api/product/search/admin', {
         params: { q: query },
     });
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import TransactionHeader from '../components/TransactionHeader';
 import TransactionStats from '../components/TransactionStats';
 import TransactionFilters from '../components/TransactionFilters';
@@ -10,7 +11,19 @@ import PeriodAnalyticsSection from '../components/PeriodAnalyticsSection';
 import { useTransaction } from '../../../Context/transaction/useTransaction';
 
 const TransactionPage = () => {
-    const { selectedSellerId, isAdmin } = useTransaction();
+    const [searchParams] = useSearchParams();
+    const searchTermFromUrl = (searchParams.get('searchTerm') || searchParams.get('search') || '').trim();
+    const sellerIdFromUrl = (searchParams.get('sellerId') || '').trim();
+    const { selectedSellerId, isAdmin, setFilterData, setSelectedSellerId } = useTransaction();
+
+    React.useEffect(() => {
+        setFilterData((current) => ({
+            ...current,
+            searchTerm: searchTermFromUrl,
+        }));
+
+        setSelectedSellerId(isAdmin ? sellerIdFromUrl : '');
+    }, [isAdmin, searchTermFromUrl, sellerIdFromUrl, setFilterData, setSelectedSellerId]);
 
     return (
         <div className="w-full overflow-x-auto px-5 pb-6 pt-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
@@ -27,7 +40,7 @@ const TransactionPage = () => {
 
                 <TransactionPagination />
 
-                
+
             </div>
             <PayoutHistoryTable />
         </div>

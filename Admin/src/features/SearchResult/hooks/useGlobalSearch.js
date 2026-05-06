@@ -9,41 +9,104 @@ import {
     searchSubCategoriesGlobal,
 } from '../SearchResultAPI';
 
-const normalizeProduct = (item) => ({
-    id: item?._id || '',
-    name: item?.productName || 'Untitled Product',
-    meta: item?.category?.catName || item?.subCategory?.subCatName || '-',
-});
+const formatProductPrice = (item) => {
+    const salePrice = Number(item?.price || 0);
+    const basePrice = Number(item?.oldPrice || item?.mrp || item?.basePrice || salePrice || 0);
 
-const normalizeOrder = (item) => ({
-    id: item?._id || item?.id || '',
-    name: item?.orderId ? `Order #${item.orderId}` : `Order ${item?._id?.slice(-6) || ''}`,
-    meta: item?.customerId?.name || item?.customerName || item?.status || '-',
-});
+    return {
+        salePrice,
+        basePrice,
+        priceLabel: `Rs ${salePrice.toLocaleString('en-IN')}`,
+        basePriceLabel: `Rs ${basePrice.toLocaleString('en-IN')}`,
+    };
+};
+
+const normalizeProduct = (item) => {
+    const { salePrice, basePrice, priceLabel, basePriceLabel } = formatProductPrice(item);
+    const normalizedRating = Number(item?.rating ?? item?.avgRating ?? item?.averageRating ?? item?.productRating ?? 0);
+
+    return {
+        id: item?._id || '',
+        name: item?.productName || 'Untitled Product',
+        meta: item?.category?.catName || item?.subCategory?.subCatName || '-',
+        routeValue: item?.productName || '',
+        image: item?.images?.[0] || item?.image || '',
+        rating: Number.isFinite(normalizedRating) ? Number(normalizedRating.toFixed(1)) : 0,
+        salePrice,
+        basePrice,
+        priceLabel,
+        basePriceLabel,
+        sellerName: item?.createdBy?.name || item?.sellerId?.name || item?.sellerName || '',
+    };
+};
+
+const formatOrderDate = (value) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const normalizeOrder = (item) => {
+    const customerName = item?.customer?.name || item?.customerId?.name || item?.customerName || item?.userId?.name || '';
+    const productName = item?.product || item?.productName || (item?.products?.[0]?.productId?.productName) || '';
+    const amountValue = Number(item?.amountValue ?? item?.totalAmount ?? item?.price ?? 0);
+
+    return {
+        id: item?._id || item?.id || '',
+        name: item?.orderId ? `${item.orderId}` : `${item?._id?.slice(-6) || ''}`,
+        meta: customerName || '-',
+        productName: productName || '-',
+        routeValue: item?.orderId || item?._id || '',
+        totalAmount: amountValue,
+        amountLabel: `Rs ${amountValue.toLocaleString('en-IN')}`,
+        status: (item?.rawStatus || item?.status || 'pending').toString().toLowerCase(),
+        createdAt: item?.createdAt || null,
+        dateLabel: formatOrderDate(item?.createdAt),
+    };
+};
 
 const normalizeCustomer = (item) => ({
     id: item?._id || item?.id || '',
     name: item?.name || 'Unknown customer',
     meta: item?.email || item?.phone || '-',
+    routeValue: item?.name || '',
+    totalSpend: Number(item?.totalSpend || item?.totalSales || 0),
+    spendLabel: `Rs ${Number(item?.totalSpend || item?.totalSales || 0).toLocaleString('en-IN')}`,
 });
 
 const normalizeSeller = (item) => ({
     id: item?._id || item?.id || '',
     name: item?.name || 'Unknown seller',
     meta: item?.email || item?.phone || '-',
+    routeValue: item?.name || '',
 });
 
 const normalizeCategory = (item) => ({
     id: item?._id || '',
     name: item?.catName || 'Unnamed category',
     meta: 'Category',
+    routeValue: item?.catName || '',
+    categoryId: item?._id || '',
 });
 
-const normalizeSubCategory = (item) => ({
-    id: item?._id || '',
-    name: item?.subCatName || 'Unnamed subcategory',
-    meta: item?.categoryId?.catName || 'Subcategory',
-});
+const normalizeSubCategory = (item) => {
+    const parentCategoryId = typeof item?.categoryId === 'object'
+        ? item?.categoryId?._id || ''
+        : item?.categoryId || '';
+    const parentCategoryName = typeof item?.categoryId === 'object'
+        ? item?.categoryId?.catName || ''
+        : '';
+
+    return {
+        id: item?._id || '',
+        name: item?.subCatName || 'Unnamed subcategory',
+        meta: parentCategoryName || 'Subcategory',
+        routeValue: item?.subCatName || '',
+        parentCategoryId,
+        parentCategoryName,
+    };
+};
 
 const formatAmount = (value) => `Rs ${Number(value || 0).toLocaleString('en-IN')}`;
 
@@ -51,12 +114,14 @@ const normalizeAdminPayoutRow = (item) => ({
     id: item?.sellerId || '',
     name: item?.sellerName || 'Unknown seller',
     meta: `${item?.sellerEmail || '-'} | Due: ${formatAmount(item?.payoutDue)} | Paid: ${formatAmount(item?.paidAmount)}`,
+    routeValue: item?.sellerName || '',
 });
 
 const normalizeSellerPayout = (payload) => ({
     id: payload?.seller?.id || '',
     name: payload?.seller?.name || 'My payout',
     meta: `${payload?.seller?.email || '-'} | Due: ${formatAmount(payload?.summary?.payoutDue)} | Paid: ${formatAmount(payload?.summary?.paidAmount)}`,
+    routeValue: payload?.seller?.name || '',
 });
 
 export const useGlobalSearch = (searchText, options = {}) => {
@@ -110,16 +175,20 @@ export const useGlobalSearch = (searchText, options = {}) => {
             const orders = ordersRes.status === 'fulfilled'
                 ? (Array.isArray(ordersRes.value?.data?.orders) ? ordersRes.value.data.orders.map(normalizeOrder) : [])
                 : [];
-            const customers = customersRes.status === 'fulfilled'
-                ? (Array.isArray(customersRes.value?.data?.data?.customers)
-                    ? customersRes.value.data.data.customers.map(normalizeCustomer)
-                    : [])
+            const rawCustomers = customersRes.status === 'fulfilled'
+                ? (customersRes.value?.data?.data?.customers || customersRes.value?.data?.customers || customersRes.value?.data?.data?.allCustomers || [])
                 : [];
-            const sellers = sellersRes.status === 'fulfilled'
-                ? (Array.isArray(sellersRes.value?.data?.data?.customers)
-                    ? sellersRes.value.data.data.customers.map(normalizeSeller)
-                    : [])
+            if ((!Array.isArray(rawCustomers) || rawCustomers.length === 0) && customersRes.status === 'fulfilled') {
+                // Debug: log the raw response to diagnose missing fields
+                // Remove this log after debugging
+                // eslint-disable-next-line no-console
+                console.debug('searchCustomersGlobal response:', customersRes.value?.data || customersRes.value);
+            }
+            const customers = Array.isArray(rawCustomers) ? rawCustomers.map(normalizeCustomer) : [];
+            const rawSellers = sellersRes.status === 'fulfilled'
+                ? (sellersRes.value?.data?.data?.customers || sellersRes.value?.data?.customers || [])
                 : [];
+            const sellers = Array.isArray(rawSellers) ? rawSellers.map(normalizeSeller) : [];
             const payoutPayload = payoutRes.status === 'fulfilled' ? payoutRes.value?.data?.data : null;
             const payouts = Array.isArray(payoutPayload?.sellerWise)
                 ? payoutPayload.sellerWise
