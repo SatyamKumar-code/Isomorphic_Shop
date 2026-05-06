@@ -51,8 +51,7 @@ const Login = () => {
       if (res.error === false) {
         context.alertBox("Success", res.message);
         setIsLoading(false);
-        localStorage.setItem("accessToken", res?.user?.accessToken);
-        localStorage.setItem("refreshToken", res?.user?.refreshToken);
+        // tokens are stored as httpOnly cookies by the server
         context?.setIsLoggedIn(true);
         navigate('/');
         return true;
@@ -66,7 +65,7 @@ const Login = () => {
       setIsLoading(false);
       return false;
     });
-    
+
   }
 
   return (

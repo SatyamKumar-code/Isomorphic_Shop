@@ -65,6 +65,7 @@ export const AddToCartController = async (req, res) => {
         console.error("Error adding to cart:", error);
         return res.status(500).json({
             message: "Error adding to cart",
+            error: true,
             success: false
         })
     }
@@ -132,13 +133,25 @@ export const getCartDetailsController = async (req, res) => {
         }
         const cartDetails = {
             products: cart.products
-                .filter(product => product.productId) // Exclude entries with missing product
-                .map((product) => ({
-                    productId: product.productId._id,
-                    name: product.productId.name,
-                    price: product.productId.price,
-                    quantity: product.quantity
-                }))
+                .filter(product => product.productId) // Ensure product exists
+                .map((product) => {
+                    try {
+                        return {
+                            quantity: product.quantity,
+                            productId: {
+                                _id: product.productId._id,
+                                productName: product.productId.productName || 'Unknown Product',
+                                price: product.productId.price || 0,
+                                images: product.productId.images || [],
+                                brand: product.productId.brand || 'Unknown Brand'
+                            }
+                        };
+                    } catch (e) {
+                        console.warn("Error mapping product:", e.message);
+                        return null;
+                    }
+                })
+                .filter(p => p !== null) // Remove any failed mappings
         };
 
         return res.status(200).json({
@@ -149,9 +162,10 @@ export const getCartDetailsController = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Error fetching cart details:", error.message);
         return res.status(500).json({
-            message: "Error fetching cart details" + error.message,
-            error: error,
+            message: "Error fetching cart details",
+            error: true,
             success: false
         })
     }
@@ -200,9 +214,10 @@ export const removeFromCartController = async (req, res) => {
 
 
     } catch (error) {
+        console.error("Error removing from cart:", error);
         return res.status(500).json({
-            message: "Error removing from cart" + error.message,
-            error: error,
+            message: "Error removing from cart",
+            error: true,
             success: false
         })
     }
@@ -239,9 +254,10 @@ export const clearCartController = async (req, res) => {
             success: true
         });
     } catch (error) {
+        console.error("Error clearing cart:", error);
         return res.status(500).json({
-            message: "Error clearing cart" + error.message,
-            error: error,
+            message: "Error clearing cart",
+            error: true,
             success: false
         })
     }
@@ -250,11 +266,28 @@ export const clearCartController = async (req, res) => {
 export const updateCartController = async (req, res) => {
     try {
         const userId = req.userId;
-        const { productId } = req.body;
+        const { productId, quantity } = req.body;
 
         if (!userId) {
             return res.status(401).json({
                 message: "Unauthorized access",
+                error: true,
+                success: false
+            });
+        }
+
+        if (!productId || quantity === undefined) {
+            return res.status(400).json({
+                message: "Product ID and quantity are required",
+                error: true,
+                success: false
+            });
+        }
+
+        const parsedQuantity = Number(quantity);
+        if (isNaN(parsedQuantity) || !Number.isInteger(parsedQuantity) || parsedQuantity < 0) {
+            return res.status(400).json({
+                message: "Quantity must be a non-negative integer",
                 error: true,
                 success: false
             });
@@ -301,12 +334,12 @@ export const updateCartController = async (req, res) => {
             });
         }
     } catch (error) {
+        console.error("Error updating cart:", error);
         return res.status(500).json({
-            message: "Error updating cart" + error.message,
-            error: error,
+            message: "Error updating cart",
+            error: true,
             success: false
         })
-
     }
 }
 
@@ -342,9 +375,10 @@ export const getCartItemCountController = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Error fetching cart item count:", error);
         return res.status(500).json({
-            message: "Error fetching cart item count" + error.message,
-            error: error,
+            message: "Error fetching cart item count",
+            error: true,
             success: false
         })
     }
@@ -373,9 +407,16 @@ export const getCartTotalAmountController = async (req, res) => {
         }
 
         const totalAmount = cart.products.reduce((total, product) => {
-            // Use populated productId to access price, guard against missing product
-            const price = product.productId && product.productId.price ? product.productId.price : 0;
-            return total + (price * product.quantity);
+            try {
+                // Safely access productId and price, with fallbacks
+                if (!product.productId) return total;
+                const price = product.productId.price ? Number(product.productId.price) : 0;
+                const quantity = product.quantity ? Number(product.quantity) : 0;
+                return total + (price * quantity);
+            } catch (e) {
+                console.warn("Error calculating product total:", e.message);
+                return total;
+            }
         }, 0);
 
         return res.status(200).json({
@@ -386,9 +427,10 @@ export const getCartTotalAmountController = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Error fetching cart total amount:", error.message);
         return res.status(500).json({
-            message: "Error fetching cart total amount" + error.message,
-            error: error,
+            message: "Error fetching cart total amount",
+            error: true,
             success: false
         })
     }

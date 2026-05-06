@@ -1,4 +1,4 @@
-import React, { useContext, useEffect} from 'react'
+import React, { useContext, useEffect } from 'react'
 import { FaBell } from "react-icons/fa";
 import Banner from '../components/Banner/baner';
 import Product from '../components/product';
@@ -14,11 +14,15 @@ const Home = () => {
 
 
     useEffect(() => {
+        if (!context?.isLoggedIn) {
+            return;
+        }
+
         fetchDataFromApi("/api/user/userData").then((res) => {
-            context?.setUserData(res?.user);
+            context?.setUserData(res?.data || null);
         });
 
-    }, [context.setUserData]);
+    }, [context?.isLoggedIn, context?.setUserData]);
 
 
     return (
@@ -38,8 +42,8 @@ const Home = () => {
                                 <FaBell className='text-lg text-gray-500' />
                             </div>
                         </>
-                    ) 
-                        
+                    )
+
                 }
 
             </div>
@@ -54,7 +58,7 @@ const Home = () => {
                         See All
                     </Link>
                 </div>
-                <Product />
+                <Product endpoint="/api/product/latest" />
             </div>
 
             <div className='mt-4'>
@@ -64,7 +68,7 @@ const Home = () => {
                         See All
                     </Link>
                 </div>
-                <Product />
+                <Product endpoint="/api/product/top-rated" />
             </div>
             <Footer />
         </div>

@@ -1,21 +1,21 @@
 import mongoose from "mongoose";
 
 const cartSchema = new mongoose.Schema({
-    userId : {
-        type : mongoose.Schema.Types.ObjectId,
-        ref : "User",
-        required : true
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
     },
-    products : [
+    products: [
         {
-            productId : {
-                type : mongoose.Schema.Types.ObjectId,
-                ref : "Product",
-                required : true
+            productId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "product",
+                required: true
             },
-            quantity : {
-                type : Number,
-                default : 1,
+            quantity: {
+                type: Number,
+                default: 1,
                 min: [1, 'Quantity must be at least 1'],
                 validate: {
                     validator: Number.isInteger,
@@ -24,14 +24,14 @@ const cartSchema = new mongoose.Schema({
             }
         }
     ],
-    totalAmount : {
-        type : Number,
-        required : true,
-        default : 0,
-        min : [0, 'Total amount cannot be negative']
+    totalAmount: {
+        type: Number,
+        required: true,
+        default: 0,
+        min: [0, 'Total amount cannot be negative']
     },
-} , { timestamps : true });
+}, { timestamps: true });
 
-const CartModel = mongoose.model("Cart" , cartSchema);
+const CartModel = mongoose.model("Cart", cartSchema);
 
 export default CartModel;

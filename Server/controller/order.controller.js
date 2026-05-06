@@ -759,7 +759,7 @@ export const createOrderByAdmin = async (req, res) => {
 export const createOrderWithCOD = async (req, res) => {
     try {
         const userId = req.userId;
-        const { delivery_address } = req.body;
+        const { delivery_address, products } = req.body;
 
         if (!delivery_address) {
             return res.status(400).json({
@@ -769,55 +769,138 @@ export const createOrderWithCOD = async (req, res) => {
             });
         }
 
-        const poductInCart = await CartModel.findOne({ userId }).populate("products.productId");
+        const directItems = Array.isArray(products)
+            ? products
+                .map((item) => ({
+                    productId: String(item?.productId || "").trim(),
+                    quantity: Number(item?.quantity || 0),
+                }))
+                .filter((item) => item.productId && Number.isFinite(item.quantity) && item.quantity > 0)
+            : [];
 
-        if (!poductInCart) {
+        let orderItems = [];
+        let cartToClear = null;
+
+        if (directItems.length > 0) {
+            const invalidProductId = directItems.find((item) => !mongoose.Types.ObjectId.isValid(item.productId));
+
+            if (invalidProductId) {
+                return res.status(400).json({
+                    message: "Invalid product ID provided",
+                    error: true,
+                    success: false,
+                });
+            }
+
+            const productIds = directItems.map((item) => new mongoose.Types.ObjectId(item.productId));
+            const quantityMap = new Map(directItems.map((item) => [item.productId, item.quantity]));
+            const productDocs = await ProductModel.find({ _id: { $in: productIds } }).session(null);
+
+            if (productDocs.length !== productIds.length) {
+                return res.status(404).json({
+                    message: "One or more products were not found",
+                    error: true,
+                    success: false,
+                });
+            }
+
+            orderItems = productDocs.map((productDoc) => ({
+                productId: productDoc,
+                quantity: quantityMap.get(String(productDoc._id)) || 0,
+            })).filter((item) => item.quantity > 0);
+        } else {
+            const poductInCart = await CartModel.findOne({ userId }).populate("products.productId");
+
+            if (!poductInCart || !poductInCart.products.length) {
+                return res.status(404).json({
+                    message: "Cart is empty",
+                    error: true,
+                    success: false
+                });
+            }
+
+            orderItems = poductInCart.products
+                .filter((item) => item?.productId)
+                .map((item) => ({
+                    productId: item.productId,
+                    quantity: Number(item.quantity || 0),
+                }))
+                .filter((item) => item.quantity > 0);
+            cartToClear = poductInCart;
+        }
+
+        if (!orderItems.length) {
             return res.status(404).json({
-                message: "Product not found in cart",
+                message: "No valid products found for checkout",
                 error: true,
                 success: false
             });
         }
 
-        const sutotalAmount = poductInCart.products.reduce((total, product) => {
-            return total + (product.productId.price * product.quantity);
-        }, 0);
+        // Validate stock for all items first
+        for (const item of orderItems) {
+            const product = item.productId;
+            if (product.stock < item.quantity) {
+                return res.status(400).json({
+                    message: `Insufficient stock for product: ${product.productName}`,
+                    error: true,
+                    success: false
+                });
+            }
+        }
 
+        // Create separate order for each product in cart
+        const createdOrders = [];
+        const session = await mongoose.startSession();
 
-        // Validate, decrement stock, and clear cart, and get order products
-        let orderProducts;
         try {
-            orderProducts = await processCartItemsAndClearCart(poductInCart);
-        } catch (err) {
-            return res.status(400).json({
-                message: err.message,
-                error: true,
-                success: false
+            await session.withTransaction(async () => {
+                for (const item of orderItems) {
+                    const product = item.productId;
+                    const orderAmount = product.price * item.quantity;
+
+                    // Create order for this single product
+                    const order = new OrderModel({
+                        userId,
+                        products: [{ productId: product._id, quantity: item.quantity }],
+                        delivery_address,
+                        totalAmount: orderAmount
+                    });
+                    await order.save({ session });
+                    createdOrders.push(order);
+
+                    // Decrement stock for this product
+                    product.stock -= item.quantity;
+                    await product.save({ session });
+                }
+
+                if (cartToClear) {
+                    // Clear entire cart only for cart-based checkout
+                    cartToClear.products = [];
+                    await cartToClear.save({ session });
+                }
             });
+        } finally {
+            session.endSession();
         }
 
-        const order = new OrderModel({
-            userId,
-            products: orderProducts,
-            delivery_address,
-            totalAmount: sutotalAmount
-        });
-        await order.save();
-
-        await notifyOrderParticipants({
-            orderDoc: order,
-            type: "order_created",
-            title: "New order placed",
-            message: `Order ${String(order._id).slice(-8).toUpperCase()} has been placed successfully.`,
-            link: "/order-management",
-            notifyAdmin: true,
-        }).catch(() => null);
+        // Notify for each created order
+        for (const order of createdOrders) {
+            await notifyOrderParticipants({
+                orderDoc: order,
+                type: "order_created",
+                title: "New order placed",
+                message: `Order ${String(order._id).slice(-8).toUpperCase()} has been placed successfully.`,
+                link: "/order-management",
+                notifyAdmin: true,
+            }).catch(() => null);
+        }
 
         return res.status(201).json({
-            message: "Order created successfully",
+            message: `${createdOrders.length} order(s) created successfully`,
             error: false,
             success: true,
-            order
+            orders: createdOrders
         });
 
     } catch (error) {
@@ -852,10 +935,6 @@ export const createOrderWithRazorpay = async (req, res) => {
             });
         }
 
-        const sutotalAmount = poductInCart.products.reduce((total, product) => {
-            return total + (Number(product?.productId?.price || 0) * Number(product?.quantity || 0));
-        }, 0);
-
         let paymentVerified = false;
         let paymentStatusFetched = "pending";
 
@@ -875,44 +954,71 @@ export const createOrderWithRazorpay = async (req, res) => {
             });
         }
 
-
-        // Validate, decrement stock, and clear cart, and get order products
-        let orderProducts;
-        try {
-            orderProducts = await processCartItemsAndClearCart(poductInCart);
-        } catch (err) {
-            return res.status(400).json({
-                message: err.message,
-                error: true,
-                success: false
-            });
+        // Validate stock for all items first
+        for (const item of poductInCart.products) {
+            const product = item.productId;
+            if (product.stock < item.quantity) {
+                return res.status(400).json({
+                    message: `Insufficient stock for product: ${product.productName}`,
+                    error: true,
+                    success: false
+                });
+            }
         }
 
-        const order = new OrderModel({
-            userId,
-            products: orderProducts,
-            delivery_address,
-            totalAmount: sutotalAmount,
-            paymentMethod: "Razorpay",
-            paymentId,
-            paymentStatus: paymentStatusFetched === "captured" ? "completed" : "pending"
-        });
-        await order.save();
+        // Create separate order for each product in cart
+        const createdOrders = [];
+        const session = await mongoose.startSession();
 
-        await notifyOrderParticipants({
-            orderDoc: order,
-            type: "order_created",
-            title: "New order placed",
-            message: `Order ${String(order._id).slice(-8).toUpperCase()} has been placed successfully.`,
-            link: "/order-management",
-            notifyAdmin: true,
-        }).catch(() => null);
+        try {
+            await session.withTransaction(async () => {
+                for (const item of poductInCart.products) {
+                    const product = item.productId;
+                    const orderAmount = product.price * item.quantity;
+
+                    // Create order for this single product
+                    const order = new OrderModel({
+                        userId,
+                        products: [{ productId: product._id, quantity: item.quantity }],
+                        delivery_address,
+                        totalAmount: orderAmount,
+                        paymentMethod: "Razorpay",
+                        paymentId,
+                        paymentStatus: paymentStatusFetched === "captured" ? "completed" : "pending"
+                    });
+                    await order.save({ session });
+                    createdOrders.push(order);
+
+                    // Decrement stock for this product
+                    product.stock -= item.quantity;
+                    await product.save({ session });
+                }
+
+                // Clear entire cart after all orders created
+                poductInCart.products = [];
+                await poductInCart.save({ session });
+            });
+        } finally {
+            session.endSession();
+        }
+
+        // Notify for each created order
+        for (const order of createdOrders) {
+            await notifyOrderParticipants({
+                orderDoc: order,
+                type: "order_created",
+                title: "New order placed",
+                message: `Order ${String(order._id).slice(-8).toUpperCase()} has been placed successfully.`,
+                link: "/order-management",
+                notifyAdmin: true,
+            }).catch(() => null);
+        }
 
         return res.status(201).json({
-            message: "Order created successfully",
+            message: `${createdOrders.length} order(s) created successfully`,
             error: false,
             success: true,
-            order
+            orders: createdOrders
         });
 
     } catch (error) {

@@ -14,6 +14,8 @@ import ProductDetails from './components/productDetails';
 import Cart from './pages/cart';
 import CheckOut from './pages/checkOut';
 import Order from './pages/order';
+import Products from './pages/products';
+import Addresses from './pages/addresses';
 
 const MyContext = createContext();
 
@@ -32,16 +34,10 @@ const App = () => {
   }
 
   const checkUserLoggedIn = async () => {
-    const accessToken = localStorage.getItem("accessToken");
-    if (!accessToken) {
-      setIsLoggedIn(false);
-      return;
-    }
-
     try {
       const res = await fetchDataFromApi("/api/user/userData");
       if (res?.error === false) {
-        setUserData(res?.user);
+        setUserData(res?.data || null);
         setIsLoggedIn(true);
       } else {
         setIsLoggedIn(false);
@@ -73,6 +69,8 @@ const App = () => {
             <Route path='/register' exact={true} element={<SingUp />} />
             <Route path='/verify-email' exact={true} element={<VerifyEmail />} />
             <Route path='/search' exact={true} element={<Search />} />
+            <Route path='/addresses' exact={true} element={<Addresses />} />
+            <Route path='/products' exact={true} element={<Products />} />
             <Route path='/profile' exact={true} element={<Profile />} />
             <Route path='/setting' exact={true} element={<Setting />} />
             <Route path='/product/:id' exact={true} element={<ProductDetails />} />

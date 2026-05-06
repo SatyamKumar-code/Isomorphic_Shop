@@ -9,6 +9,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { MyContext } from '../App';
 import Footer from '../components/footer';
 import { MdShoppingBag } from 'react-icons/md'
+import { fetchDataFromApi } from '../utils/api';
 
 const Profile = () => {
 
@@ -17,11 +18,12 @@ const Profile = () => {
 
 
     const handleLogout = () => {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        context.setUserData(null);
-        context.setIsLoggedIn(false);
-        navigate("/login");
+        fetchDataFromApi("/api/user/logout").finally(() => {
+            // server clears auth cookies on logout
+            context.setUserData(null);
+            context.setIsLoggedIn(false);
+            navigate("/login");
+        });
     }
 
     useEffect(() => {
@@ -34,9 +36,9 @@ const Profile = () => {
         context?.isLoggedIn === true && (
             <div className='profile-container w-full mt-15 h-screen'>
                 <div className='profile mb-5  justify-items-center'>
-                    <img src="profile.png" className='w-22 h-22 rounded-full' />
-                    <h1 className='text-3xl font-bold'>Satyam kumar</h1>
-                    <p className='text-gray-600'>Satyamkumar@gmail.com</p>
+                    <img src={context?.userData?.avatar || "profile.png"} className='w-22 h-22 rounded-full object-cover' />
+                    <h1 className='text-3xl font-bold'>{context?.userData?.name || 'User'}</h1>
+                    <p className='text-gray-600'>{context?.userData?.email || ''}</p>
                 </div>
                 <div className='relative flex mt-3   w-full justify-start items-center gap-3 bg-gray-100 p-3 rounded-lg'>
                     <FaUser className='text-xl text-gray-700' />

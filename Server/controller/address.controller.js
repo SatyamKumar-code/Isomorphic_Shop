@@ -2,15 +2,20 @@ import AddressModel from "../models/address.model.js";
 
 export const AddAddressesController = async (req, res) => {
     try {
-        const { address_line1, city, state, pincode, country, mobile, landmark, addressType} = req.body;
+        const { address_line1, city, state, pincode, country, mobile, landmark, addressType, isDefault } = req.body;
         const userId = req.userId;
 
-        if (!address_line1 || !city || !state || !pincode || !country || !mobile || !landmark || !addressType ) {
+        if (!address_line1 || !city || !state || !pincode || !country || !mobile || !landmark || !addressType) {
             return res.status(400).json({
                 message: "All fields are required",
                 error: true,
                 success: false,
             });
+        }
+
+        // If caller set this address as default, unset other defaults for this user first
+        if (isDefault === true) {
+            await AddressModel.updateMany({ userId }, { $set: { isDefault: false } });
         }
 
         const address = new AddressModel({
@@ -22,8 +27,9 @@ export const AddAddressesController = async (req, res) => {
             mobile,
             landmark,
             addressType,
+            isDefault: !!isDefault,
             userId
-        })
+        });
 
         const savedAddress = await address.save();
 
@@ -36,10 +42,10 @@ export const AddAddressesController = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-        message: error.message || error,
-        error: true,
-        success: false,
-        })
+            message: error.message || error,
+            error: true,
+            success: false,
+        });
     }
 }
 
@@ -54,7 +60,7 @@ export const getAddressesController = async (req, res) => {
                 success: false
             });
         }
-        const address = await AddressModel.find({ userId });
+        const address = await AddressModel.find({ userId }).sort({ isDefault: -1, createdAt: -1 });
 
         if (address.length === 0) {
             return res.status(404).json({
@@ -79,14 +85,14 @@ export const getAddressesController = async (req, res) => {
     }
 }
 
-export const deleteAddressController = async ( req, res ) => {
+export const deleteAddressController = async (req, res) => {
     try {
 
         const userId = req.userId;
         const _id = req.params.id
 
 
-        if(!_id) {
+        if (!_id) {
             return res.status(400).json({
                 message: "provide _id",
                 error: true,
@@ -110,7 +116,7 @@ export const deleteAddressController = async ( req, res ) => {
         return res.status(200).json({
             message: "Address remove",
             success: true,
-            error: false, 
+            error: false,
             data: deleteItem
         })
 
@@ -123,12 +129,12 @@ export const deleteAddressController = async ( req, res ) => {
     }
 }
 
-export const getSingleAddressController = async ( req, res ) => {
+export const getSingleAddressController = async (req, res) => {
     try {
         const id = req.params.id;
         const userId = req.userId;
 
-        if(!id) {
+        if (!id) {
             return res.status(400).json({
                 message: "provide _id",
                 error: true,
@@ -138,7 +144,7 @@ export const getSingleAddressController = async ( req, res ) => {
 
         const address = await AddressModel.findOne({ _id: id, userId: userId });
 
-        if(!address) {
+        if (!address) {
             return res.status(404).json({
                 message: "Address not found",
                 error: true,
@@ -154,7 +160,7 @@ export const getSingleAddressController = async ( req, res ) => {
         });
 
 
-    }catch (error) {
+    } catch (error) {
         return res.status(500).json({
             message: error.message || error,
             error: true,
@@ -163,17 +169,17 @@ export const getSingleAddressController = async ( req, res ) => {
     }
 }
 
-export const editAddressController = async ( req, res ) => {
+export const editAddressController = async (req, res) => {
     try {
 
         const id = req.params.id;
         const userId = req.userId;
-        const { address_line1, city, state, pincode, country, mobile, landmark, addressType} = req.body;
+        const { address_line1, city, state, pincode, country, mobile, landmark, addressType, isDefault } = req.body;
 
         // Verify ownership first
         const existingAddress = await AddressModel.findOne({ _id: id, userId: userId });
-        
-        if(!existingAddress) {
+
+        if (!existingAddress) {
             return res.status(404).json({
                 message: "Address not found",
                 error: true,
@@ -181,9 +187,14 @@ export const editAddressController = async ( req, res ) => {
             })
         }
 
+        // If setting this address as default, unset others
+        if (isDefault === true) {
+            await AddressModel.updateMany({ userId }, { $set: { isDefault: false } });
+        }
+
         // Build update object with only provided fields
         const allowedFields = [
-            "address_line1", "city", "state", "pincode", "country", "mobile", "landmark", "addressType"
+            "address_line1", "city", "state", "pincode", "country", "mobile", "landmark", "addressType", "isDefault"
         ];
         const updateObj = {};
         for (const key of allowedFields) {

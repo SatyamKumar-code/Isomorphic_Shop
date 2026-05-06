@@ -1,15 +1,102 @@
-import React, { useState } from 'react'
+import React, { useContext, useEffect, useState } from 'react'
 import BackButton from '../components/backButton'
 import { BiDotsVerticalRounded } from 'react-icons/bi'
 import { MdWatchLater } from "react-icons/md";
-import { Link } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { SiRazorpay } from "react-icons/si";
 import { TiTick } from "react-icons/ti";
 import { TbCoinRupeeFilled } from "react-icons/tb";
+import { fetchDataFromApi, postData } from '../utils/api';
+import AddressForm from '../components/address/AddressForm';
+import { MyContext } from '../App';
 
 const CheckOut = () => {
+    const context = useContext(MyContext);
+    const location = useLocation();
+    const selectedProduct = location.state?.selectedProduct || null;
     const [selectedPayment, setSelectedPayment] = useState('razorpay');
-    const razorpayMethods = ['UPI', 'Credit Card', 'Debit Card', 'Netbanking', 'Wallet', 'EMI'];
+    const [cartSummary, setCartSummary] = useState({ itemCount: 0, totalAmount: 0 });
+    const [selectedAddress, setSelectedAddress] = useState(null);
+    const [addresses, setAddresses] = useState([]);
+    const [showAddressPicker, setShowAddressPicker] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const navigate = useNavigate();
+    const [showQuickAdd, setShowQuickAdd] = useState(false);
+
+    const subtotal = selectedProduct
+        ? Number(selectedProduct.price || 0) * Number(selectedProduct.quantity || 1)
+        : Number(cartSummary.totalAmount || 0);
+    const itemCount = selectedProduct ? Number(selectedProduct.quantity || 1) : Number(cartSummary.itemCount || 0);
+
+    const loadSummary = async () => {
+        if (selectedProduct) {
+            setCartSummary({
+                itemCount: Number(selectedProduct.quantity || 1),
+                totalAmount: Number(selectedProduct.price || 0) * Number(selectedProduct.quantity || 1),
+            });
+
+            const addressRes = await fetchDataFromApi('/api/address/');
+            const fetchedAddresses = addressRes?.address || [];
+            setAddresses(fetchedAddresses);
+            const defaultAddr = fetchedAddresses.find((a) => a.isDefault) || fetchedAddresses[0] || null;
+            setSelectedAddress((prev) => prev || defaultAddr);
+            return;
+        }
+
+        const [countRes, totalRes, addressRes] = await Promise.allSettled([
+            fetchDataFromApi('/api/cart/item-count'),
+            fetchDataFromApi('/api/cart/total-amount'),
+            fetchDataFromApi('/api/address/'),
+        ]);
+
+        setCartSummary({
+            itemCount: countRes.status === 'fulfilled' ? countRes.value?.data?.itemCount || 0 : 0,
+            totalAmount: totalRes.status === 'fulfilled' ? totalRes.value?.data?.totalAmount || 0 : 0,
+        });
+
+        const fetchedAddresses = addressRes.status === 'fulfilled' ? addressRes.value?.address || [] : [];
+        setAddresses(fetchedAddresses);
+        const defaultAddr = fetchedAddresses.find((a) => a.isDefault) || fetchedAddresses[0] || null;
+        setSelectedAddress((prev) => prev || defaultAddr);
+    };
+
+    useEffect(() => {
+        loadSummary();
+    }, [selectedProduct]);
+
+    const handlePlaceOrder = async () => {
+        if (selectedPayment !== 'COD') {
+            context.alertBox('error', 'Razorpay checkout is not wired yet. Please choose COD to place the order.');
+            return;
+        }
+
+        if (!selectedAddress?._id) {
+            context.alertBox('error', 'Please add a delivery address before placing the order.');
+            return;
+        }
+
+        setIsSubmitting(true);
+        const response = await postData('/api/order/cod', {
+            delivery_address: selectedAddress._id,
+            ...(selectedProduct
+                ? {
+                    products: [{
+                        productId: selectedProduct._id,
+                        quantity: selectedProduct.quantity || 1,
+                    }],
+                }
+                : {}),
+        });
+        setIsSubmitting(false);
+
+        if (response?.error === false) {
+            context.alertBox('Success', 'Order placed successfully.');
+            navigate('/orders');
+            return;
+        }
+
+        context.alertBox('error', response?.message || 'Unable to place order.');
+    };
 
 
     return (
@@ -21,13 +108,69 @@ const CheckOut = () => {
                     {/* <BiDotsVerticalRounded className='text-2xl' /> */}
                 </div>
             </div>
+            {selectedProduct && (
+                <div className='mb-4'>
+                    <h4 className='font-bold text-lg my-1 px-2'>Selected Product</h4>
+                    <div className='flex items-center bg-blue-50 gap-3 rounded-lg p-2'>
+                        <img
+                            src={selectedProduct.image || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFYqoKTu_o3Zns2yExbst2Co84Gpc2Q1RJbA&s'}
+                            alt={selectedProduct.productName || 'Product'}
+                            className='h-16 w-16 rounded-lg object-cover'
+                        />
+                        <div className='min-w-0'>
+                            <div className='font-semibold text-gray-900'>{selectedProduct.productName || 'Product Name'}</div>
+                            <div className='text-sm text-gray-600'>Qty: {selectedProduct.quantity || 1}</div>
+                            <div className='text-sm font-bold text-blue-600'>₹{Number(subtotal || 0).toLocaleString('en-IN')}</div>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className='flex gap-4 my-4 leading-3'>
                 <div className='w-10 h-10 items-center flex justify-center bg-gray-100 rounded-full'>
                     <img src="location.png" />
                 </div>
                 <div>
                     <h4 className='font-bold text-[14px]'>Delivery Location</h4>
-                    <p className='text-gray-500 text-[12px] my-2'>123 Main Street, City, Country</p>
+                    <p className='text-gray-500 text-[12px] my-2'>
+                        {selectedAddress
+                            ? `${selectedAddress.address_line1}, ${selectedAddress.city}, ${selectedAddress.state}`
+                            : 'Select a saved address before placing the order.'}
+                    </p>
+                    <div className='mt-2'>
+                        <button type='button' onClick={() => setShowAddressPicker(!showAddressPicker)} className='text-sm text-blue-500 hover:underline'>
+                            {showAddressPicker ? 'Close' : (addresses.length ? 'Change' : 'Add address')}
+                        </button>
+                    </div>
+                    {showAddressPicker && (
+                        <div className='mt-3 space-y-2'>
+                            {addresses.length === 0 && <div className='text-sm text-gray-500'>No saved addresses. Add one from Addresses page.</div>}
+                            {addresses.map((a) => (
+                                <label key={a._id || a.id} className='flex items-start gap-3 p-2 border rounded'>
+                                    <input type='radio' name='selectedAddress' checked={selectedAddress?._id === (a._id || a.id)} onChange={() => { setSelectedAddress(a); setShowAddressPicker(false); }} />
+                                    <div>
+                                        <div className='font-semibold'>{a.name || a.addressType || 'Address'}</div>
+                                        <div className='text-sm'>{a.address_line1}, {a.city} - {a.pincode}</div>
+                                    </div>
+                                </label>
+                            ))}
+                            <div className='flex gap-3 items-center'>
+                                <a href='/addresses' className='text-sm text-blue-500 hover:underline'>Manage addresses</a>
+                                <button type='button' onClick={() => setShowQuickAdd(true)} className='text-sm text-green-600 hover:underline'>Add address</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {showQuickAdd && (
+                        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40'>
+                            <div className='bg-white rounded p-4 w-full max-w-md'>
+                                <div className='flex justify-between items-center mb-2'>
+                                    <h3 className='font-semibold'>Add Address</h3>
+                                    <button onClick={() => setShowQuickAdd(false)} className='text-gray-500'>Close</button>
+                                </div>
+                                <AddressForm onAdd={async () => { await loadSummary(); setShowQuickAdd(false); }} onDone={() => { setShowQuickAdd(false); }} />
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -42,7 +185,9 @@ const CheckOut = () => {
             </div>
 
 
-            <div className='fixed bottom-0 left-0 w-full'>
+            <div className=' w-full'>
+
+
                 <div className='rounded-lg bg-gray-100 px-4 pt-3'>
                     <div className='flex items-center justify-between gap-3'>
                         <div>
@@ -89,14 +234,6 @@ const CheckOut = () => {
                             {selectedPayment === 'razorpay' && <TiTick className='text-2xl text-green-500' />}
                         </button>
                     </div>
-
-                    <div className='mt-3 flex flex-wrap gap-2'>
-                        {razorpayMethods.map((method) => (
-                            <span key={method} className='rounded-full bg-white px-3 py-1 text-[12px] font-medium text-gray-600 shadow-sm'>
-                                {method}
-                            </span>
-                        ))}
-                    </div>
                 </div>
 
                 <div className='bg-gray-100 py-3 rounded-lg'>
@@ -107,28 +244,34 @@ const CheckOut = () => {
                     <div>
                         <div className='flex items-center justify-between mt-2'>
                             <span className='font-semibold text-gray-600'>Items</span>
-                            <span className='font-bold text-gray-600'>3</span>
+                            <span className='font-bold text-gray-600'>{itemCount}</span>
                         </div>
                         <div className='flex items-center justify-between mt-2'>
                             <span className='font-semibold text-gray-600'>Subtotal</span>
-                            <span className='font-bold text-gray-600'>$391.96</span>
+                            <span className='font-bold text-gray-600'>₹{Number(subtotal || 0).toLocaleString('en-IN')}</span>
                         </div>
                         <div className='flex items-center justify-between mt-2'>
                             <span className='font-semibold text-gray-600'>Discount</span>
-                            <span className='font-bold text-gray-600'>$4.00</span>
+                            <span className='font-bold text-gray-600'>₹0.00</span>
                         </div>
                         <div className='flex items-center justify-between mt-2'>
                             <span className='font-semibold text-gray-600'>Delivery Charges</span>
-                            <span className='font-bold text-gray-600'>$2.00</span>
+                            <span className='font-bold text-gray-600'>₹2.00</span>
                         </div>
                         <hr className='my-2' />
                         <div className='flex items-center justify-between mt-2'>
                             <span className='font-bold text-gray-900'>Total</span>
-                            <span className='font-bold text-gray-900'>$397.96</span>
+                            <span className='font-bold text-gray-900'>₹{Number((subtotal || 0) + 2).toLocaleString('en-IN')}</span>
                         </div>
-                        <button type='button' className='mt-4 w-full rounded-full bg-blue-500 p-3 font-bold text-white'>
-                            {selectedPayment === 'COD' ? 'Place COD Order' : 'Continue to Razorpay'}
+
+                        <button type='button' onClick={handlePlaceOrder} disabled={isSubmitting} className='mt-2 w-full rounded-full bg-blue-500 p-3 font-bold text-white disabled:opacity-60'>
+                            {isSubmitting
+                                ? 'Processing...'
+                                : selectedPayment === 'COD'
+                                    ? 'Place COD Order'
+                                    : 'Continue to Razorpay'}
                         </button>
+
                     </div>
                 </div>
             </div>

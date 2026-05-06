@@ -17,8 +17,14 @@ import notificationRouter from './router/notification.route.js';
 dotenv.config();
 
 const app = express();
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:5173',
+    'http://localhost:5174',
+].filter(Boolean);
+
 app.use(cors({
-    origin: 'http://localhost:5173', // Frontend origin
+    origin: allowedOrigins,
     credentials: true
 }));
 app.use(express.json());

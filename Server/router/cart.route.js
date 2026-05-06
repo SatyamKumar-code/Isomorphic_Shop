@@ -18,7 +18,7 @@ cartRouter.post("/add", userMiddleware, AddToCartController);
 cartRouter.get("/details", userMiddleware, getCartDetailsController);
 cartRouter.delete("/remove/:productId", userMiddleware, removeFromCartController);
 cartRouter.delete("/clear", userMiddleware, clearCartController);
-cartRouter.put("/update", userMiddleware, updateCartController);
+cartRouter.patch("/update", userMiddleware, updateCartController);
 cartRouter.get("/item-count", userMiddleware, getCartItemCountController);
 cartRouter.get("/total-amount", userMiddleware, getCartTotalAmountController);
 
