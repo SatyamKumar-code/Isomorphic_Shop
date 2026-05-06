@@ -1,13 +1,101 @@
 import Button from '@mui/material/Button';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { CgLogIn } from 'react-icons/cg';
 import { FaRegUser } from 'react-icons/fa';
 import VerifyAccountForm from '../components/VerifyAccountForm';
+import { forgotPasswordRequest } from '../authAPI';
+import { alertBox } from '../../../shared/utils/alert';
 
 
 
 const VerifyAccount = () => {
+  const [isResendLoading, setIsResendLoading] = useState(false);
+  const email = localStorage.getItem('userEmail') || '';
+
+  const getStored = (key, fallback = null) => {
+    try {
+      const v = localStorage.getItem(key);
+      return v === null ? fallback : v;
+    } catch (e) { return fallback; }
+  };
+
+  const initialCount = Number(getStored(`resendCount_${email}`, 0)) || 0;
+  const initialExpiry = Number(getStored(`resendExpiry_${email}`, 0)) || 0;
+
+  const [resendCount, setResendCount] = useState(initialCount);
+  const [cooldownExpiry, setCooldownExpiry] = useState(initialExpiry);
+  const [remainingSeconds, setRemainingSeconds] = useState(() => {
+    return initialExpiry > Date.now() ? Math.ceil((initialExpiry - Date.now()) / 1000) : 0;
+  });
+
+  useEffect(() => {
+    let timer = null;
+    if (cooldownExpiry && cooldownExpiry > Date.now()) {
+      setRemainingSeconds(Math.ceil((cooldownExpiry - Date.now()) / 1000));
+      timer = setInterval(() => {
+        const rem = Math.ceil((cooldownExpiry - Date.now()) / 1000);
+        if (rem <= 0) {
+          setRemainingSeconds(0);
+          setCooldownExpiry(0);
+          try { localStorage.removeItem(`resendExpiry_${email}`); } catch (e) { }
+          clearInterval(timer);
+        } else {
+          setRemainingSeconds(rem);
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [cooldownExpiry, email]);
+
+  const getCooldownSeconds = (count) => {
+    if (count <= 1) return 15;
+    if (count === 2) return 30;
+    return 60; // for 3rd and subsequent attempts
+  };
+
+  const startCooldown = (newCount) => {
+    const seconds = getCooldownSeconds(newCount);
+    const expiry = Date.now() + seconds * 1000;
+    setCooldownExpiry(expiry);
+    setRemainingSeconds(seconds);
+    try {
+      localStorage.setItem(`resendCount_${email}`, String(newCount));
+      localStorage.setItem(`resendExpiry_${email}`, String(expiry));
+    } catch (e) { }
+  };
+
+  const handleResend = async () => {
+    if (!email) {
+      alertBox('error', 'No email found to resend OTP');
+      return;
+    }
+
+    if (remainingSeconds > 0) {
+      alertBox('error', `Please wait ${remainingSeconds}s before resending OTP`);
+      return;
+    }
+
+    try {
+      setIsResendLoading(true);
+      const res = await forgotPasswordRequest({ email });
+      if (res?.data?.error === false) {
+        const newCount = resendCount + 1;
+        setResendCount(newCount);
+        startCooldown(newCount);
+        alertBox('Success', res?.data?.message || 'OTP resent successfully');
+        return;
+      }
+      alertBox('error', res?.data?.message || 'Unable to resend OTP');
+    } catch (err) {
+      alertBox('error', err?.response?.data?.message || err.message || 'Unable to resend OTP');
+    } finally {
+      setIsResendLoading(false);
+    }
+  };
 
 
 
@@ -47,8 +135,15 @@ const VerifyAccount = () => {
         </h1>
 
         <br />
-        <p className='text-center text-black dark:text-[#c1c6cf] text-[15px]'>OTP send to
-          <span className='text-primary font-bold'> {localStorage.getItem("userEmail")}</span></p>
+        <p className='text-center text-black dark:text-[#c1c6cf] text-[15px]'>OTP sent to
+          <span className='text-primary font-bold'> {localStorage.getItem("userEmail")}</span>
+        </p>
+
+        <div className='text-center mt-3'>
+          <Button onClick={handleResend} className='text-sm text-[#1976d2]!' disabled={isResendLoading || remainingSeconds > 0}>
+            {isResendLoading ? 'Resending...' : (remainingSeconds > 0 ? `Resend OTP (${remainingSeconds}s)` : 'Resend OTP')}
+          </Button>
+        </div>
 
         <br />
 

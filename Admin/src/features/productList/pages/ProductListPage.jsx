@@ -31,7 +31,7 @@ const ProductListPage = () => {
     }, [searchTextFromUrl, setSearchText]);
 
     return (
-        <div className="w-full overflow-x-auto scrollbarNone px-5 pb-6 pt-4">
+        <div className="w-full h-[calc(100vh-6.25rem)] overflow-x-auto scrollbarNone px-5 pb-6 pt-4">
             <ProductListHeader />
 
             <div className="rounded-lg bg-white p-4 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:bg-gray-950 dark:inset-shadow-gray-700 dark:shadow-gray-700">

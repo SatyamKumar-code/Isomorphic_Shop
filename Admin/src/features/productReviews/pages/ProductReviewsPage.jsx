@@ -10,7 +10,7 @@ const ProductReviewsPage = () => {
     const { activeTab, setActiveTab, currentPage, setCurrentPage } = useProductReviews();
 
     return (
-        <div className="w-full overflow-x-auto scrollbarNone px-5 pb-6 pt-4">
+        <div className="w-full h-[calc(100vh-6.25rem)] overflow-x-auto scrollbarNone px-5 pb-6 pt-4">
             <ReviewHeader />
 
             <ReviewSummaryCards />

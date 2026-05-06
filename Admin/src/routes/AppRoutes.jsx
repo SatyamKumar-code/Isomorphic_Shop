@@ -175,7 +175,7 @@ const AppRoutes = () => {
             element: (
                 <ProtectedRoute allowedRoles={["admin", "seller"]}>
                     <MainLayout title="Search Result">
-                        <div className="w-full h-[calc(100vh-6.3rem)] overflow-y-auto scrollbarNone">
+                        <div className="w-full h-[calc(100vh-6.25rem)] overflow-y-auto scrollbarNone">
                             <SearchResultPage />
                         </div>
                     </MainLayout>

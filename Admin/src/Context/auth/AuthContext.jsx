@@ -1,5 +1,5 @@
 import { createContext, useCallback, useMemo, useState, useEffect } from "react";
-import { loginUser, logoutUser, getProfile } from "../../features/auth/authAPI.js";
+import { loginUser, logoutUser, getProfile, forgotPasswordRequest } from "../../features/auth/authAPI.js";
 import { alertBox } from "../../shared/utils/alert";
 
 export const AuthContext = createContext();
@@ -47,7 +47,6 @@ export const AuthProvider = ({ children }) => {
         try {
             setIsLoading(true);
             const res = await loginUser(data);
-
             if (res?.data?.error === false) {
                 if (!["admin", "seller"].includes(res?.data?.data?.role)) {
                     alertBox("error", "You are not authorized to access this page");
@@ -61,9 +60,51 @@ export const AuthProvider = ({ children }) => {
                 // localStorage.setItem("refreshToken", res?.data?.data?.refreshToken);
 
                 alertBox("Success", res?.data?.message);
+                return true;
+            }
+
+            // If server returned an error message (e.g. "Invalid Password"), show it
+            if (res?.data?.error === true) {
+                // If server asks to verify email, trigger sending OTP and redirect to verify page
+                const msg = res?.data?.message || '';
+                if (msg && msg.toString().toLowerCase().includes('please verify your email')) {
+                    try {
+                        const email = data?.email || '';
+                        if (email) {
+                            localStorage.setItem('userEmail', email);
+                            localStorage.setItem('actionType', 'verify-email');
+                            // Request a fresh OTP (reuse forgot-password endpoint which issues an OTP)
+                            await forgotPasswordRequest({ email });
+                        }
+                    } catch (e) {
+                        // ignore resend failures, still redirect so user can request resend from UI
+                    }
+                    // Redirect user to verify page to enter OTP
+                    window.location.assign('/verify-account');
+                    return false;
+                }
+
+                alertBox('error', msg || 'Failed to login');
+                return false;
             }
         } catch (error) {
-            alertBox("Error", "Failed to login");
+            const serverMsg = error?.response?.data?.message || error?.message || '';
+            if (serverMsg && serverMsg.toString().toLowerCase().includes('please verify your email')) {
+                try {
+                    const email = data?.email || '';
+                    if (email) {
+                        localStorage.setItem('userEmail', email);
+                        localStorage.setItem('actionType', 'verify-email');
+                        await forgotPasswordRequest({ email });
+                    }
+                } catch (e) {
+                    // ignore
+                }
+                window.location.assign('/verify-account');
+                return false;
+            }
+
+            alertBox('error', serverMsg || 'Failed to login');
         } finally {
             setIsLoading(false);
         }
