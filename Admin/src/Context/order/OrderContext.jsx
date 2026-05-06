@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { useAuth } from "../auth/useAuth";
 import { createAdminOrder, getOrderSummary, getOrders, updateOrderRefundStatus, updateOrderStatus } from "../../features/ordersManagement/OrderManagementAPI";
 
 export const OrderContext = createContext();
@@ -45,6 +46,7 @@ const formatStatusLabel = (value) => normalizeStatusValue(value)
     .join(" ");
 
 export const OrderProvider = ({ children }) => {
+    const { isLoggedIn } = useAuth();
     const [summaryCards, setSummaryCards] = useState([]);
     const [dashboardSalesCard, setDashboardSalesCard] = useState(null);
     const [tabs, setTabs] = useState(initialTabs);
@@ -430,12 +432,20 @@ export const OrderProvider = ({ children }) => {
     }, [orders]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadSummary();
-    }, [loadSummary, summaryRequestParams]);
+    }, [isLoggedIn, loadSummary, summaryRequestParams]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadOrders();
-    }, [loadOrders]);
+    }, [isLoggedIn, loadOrders]);
 
     useEffect(() => {
         setCurrentPage(1);

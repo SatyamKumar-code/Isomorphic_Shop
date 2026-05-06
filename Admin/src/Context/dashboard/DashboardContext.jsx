@@ -123,7 +123,7 @@ const normalizeSellerOptions = (items) => {
 };
 
 export const DashboardProvider = ({ children }) => {
-    const { userData } = useAuth();
+    const { userData, isLoggedIn } = useAuth();
     const isAdmin = userData?.role === "admin";
     const [weeklyReport, setWeeklyReport] = useState(null);
     const [userReport, setUserReport] = useState(null);
@@ -326,28 +326,52 @@ export const DashboardProvider = ({ children }) => {
     }, [isAdmin]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadDashboardData();
-    }, [loadDashboardData]);
+    }, [isLoggedIn, loadDashboardData]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadUserReportData();
-    }, [loadUserReportData]);
+    }, [isLoggedIn, loadUserReportData]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadTransactionsData();
-    }, [loadTransactionsData]);
+    }, [isLoggedIn, loadTransactionsData]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadTopProductsData();
-    }, [loadTopProductsData]);
+    }, [isLoggedIn, loadTopProductsData]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadSellerDirectoryData();
-    }, [loadSellerDirectoryData]);
+    }, [isLoggedIn, loadSellerDirectoryData]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadBestSellingProductsData();
-    }, [loadBestSellingProductsData]);
+    }, [isLoggedIn, loadBestSellingProductsData]);
 
     useEffect(() => {
         if (!weeklyReport) {

@@ -1,4 +1,5 @@
 import { createContext, useEffect, useMemo, useState } from "react";
+import { useAuth } from "../auth/useAuth";
 import { getCustomersAnalytics } from "../../features/customers/CustomersAPI";
 
 export const CustomersContext = createContext();
@@ -121,6 +122,7 @@ const statusColors = {
 };
 
 export const CustomersProvider = ({ children }) => {
+    const { isLoggedIn } = useAuth();
     const getCurrentPathname = () => {
         if (typeof window === "undefined") {
             return "";
@@ -215,6 +217,18 @@ export const CustomersProvider = ({ children }) => {
 
     useEffect(() => {
         let isMounted = true;
+
+        if (!isLoggedIn) {
+            setCustomerRecords([]);
+            setAllCustomerRecords([]);
+            setTopSellers([]);
+            setSummaryCardData(summaryCards);
+            setOverviewStatData(overviewStats);
+            setWeekSeriesData(weekSeries);
+            setTotalPages(1);
+            setErrorMessage("");
+            return undefined;
+        }
 
         const fetchCustomers = async () => {
             try {
@@ -380,7 +394,7 @@ export const CustomersProvider = ({ children }) => {
         return () => {
             isMounted = false;
         };
-    }, [analyticsPeriod, selectedYear, selectedMonth, currentPage, pageSize, debouncedCustomerSearch, customerStatusFilter, customerOrderSort, customerSpendSort, joinDateFrom, joinDateTo, productsCountMin, productsCountMax, totalSalesMin, totalSalesMax, customersReloadKey, isSellerView]);
+    }, [isLoggedIn, analyticsPeriod, selectedYear, selectedMonth, currentPage, pageSize, debouncedCustomerSearch, customerStatusFilter, customerOrderSort, customerSpendSort, joinDateFrom, joinDateTo, productsCountMin, productsCountMax, totalSalesMin, totalSalesMax, customersReloadKey, isSellerView]);
 
     const reloadCustomers = () => {
         setCustomersReloadKey((current) => current + 1);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../../../Context/auth/useAuth";
 import { getDashboardPageData } from "../DashboardPageAPI";
 
 const getDefaultCardSettings = () => ({
@@ -24,6 +25,7 @@ export const getDashboardPeriodLabel = (settings) => {
 };
 
 export const useDashboardCardData = () => {
+    const { isLoggedIn } = useAuth();
     const [cardSettings, setCardSettings] = useState(getDefaultCardSettings());
     const [summaryCards, setSummaryCards] = useState([]);
     const [dashboardSalesCard, setDashboardSalesCard] = useState(null);
@@ -66,8 +68,12 @@ export const useDashboardCardData = () => {
     }, []);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadDashboardCardData(cardSettingsRef.current);
-    }, [loadDashboardCardData]);
+    }, [isLoggedIn, loadDashboardCardData]);
 
     const updateCardSettings = useCallback(async (patch) => {
         const nextSettings = {

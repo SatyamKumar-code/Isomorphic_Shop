@@ -50,7 +50,7 @@ const normalizeProducts = (items = []) => {
 };
 
 export const ProductListProvider = ({ children }) => {
-    const { userData } = useAuth();
+    const { isLoggedIn, userData } = useAuth();
     const [products, setProducts] = useState([]);
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
@@ -99,8 +99,12 @@ export const ProductListProvider = ({ children }) => {
     }, [searchText]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadProducts(currentPage, debouncedSearchText, sortBy);
-    }, [currentPage, debouncedSearchText, sortBy, pageSize, loadProducts]);
+    }, [isLoggedIn, currentPage, debouncedSearchText, sortBy, pageSize, loadProducts]);
 
     useEffect(() => {
         setCurrentPage(1);

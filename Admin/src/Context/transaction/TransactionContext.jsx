@@ -118,7 +118,7 @@ const mapOrderRow = (row) => {
 };
 
 export const TransactionProvider = ({ children }) => {
-    const { userData } = useAuth();
+    const { userData, isLoggedIn } = useAuth();
     const isAdmin = userData?.role === 'admin';
     const isSeller = userData?.role === 'seller';
 
@@ -316,6 +316,10 @@ export const TransactionProvider = ({ children }) => {
     }, [activeTab, currentPage, fetchAllOrderRows, filterData.method, filterData.searchTerm, isAdmin, isSeller, pageSize]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         if (!isAdmin) {
             return;
         }
@@ -323,9 +327,13 @@ export const TransactionProvider = ({ children }) => {
         loadSellerDirectory().catch((error) => {
             console.error('Error loading seller directory:', error);
         });
-    }, [isAdmin, loadSellerDirectory]);
+    }, [isLoggedIn, isAdmin, loadSellerDirectory]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         if (!isSeller) {
             return;
         }
@@ -333,9 +341,13 @@ export const TransactionProvider = ({ children }) => {
         loadScopedSellerData('').catch((error) => {
             console.error('Error loading seller payout data:', error);
         });
-    }, [isSeller, loadScopedSellerData, currentPage, pageSize, activeTab, filterData.method, filterData.searchTerm]);
+    }, [isLoggedIn, isSeller, loadScopedSellerData, currentPage, pageSize, activeTab, filterData.method, filterData.searchTerm]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         if (!isAdmin || !selectedSellerId) {
             return;
         }
@@ -343,7 +355,7 @@ export const TransactionProvider = ({ children }) => {
         loadScopedSellerData(selectedSellerId).catch((error) => {
             console.error('Error loading selected seller payout data:', error);
         });
-    }, [isAdmin, selectedSellerId, loadScopedSellerData, currentPage, pageSize, activeTab, filterData.method, filterData.searchTerm]);
+    }, [isLoggedIn, isAdmin, selectedSellerId, loadScopedSellerData, currentPage, pageSize, activeTab, filterData.method, filterData.searchTerm]);
 
     useEffect(() => {
         setCurrentPage(1);

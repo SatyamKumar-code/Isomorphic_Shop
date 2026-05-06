@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { useAuth } from "../auth/useAuth";
 import { getProductReviewSummary, getProductReviews, updateProductReviewStatus } from "../../features/productReviews/ProductReviewsAPI";
 
 export const ProductReviewsContext = createContext();
@@ -23,6 +24,7 @@ const thumbnailColors = [
 ];
 
 export const ProductReviewsProvider = ({ children }) => {
+    const { isLoggedIn } = useAuth();
     const [summaryCards, setSummaryCards] = useState([]);
     const [tabs, setTabs] = useState([]);
     const [reviews, setReviews] = useState([]);
@@ -107,8 +109,12 @@ export const ProductReviewsProvider = ({ children }) => {
     }, [searchText]);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadSummary();
-    }, [loadSummary]);
+    }, [isLoggedIn, loadSummary]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -124,8 +130,12 @@ export const ProductReviewsProvider = ({ children }) => {
     }, []);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadReviews();
-    }, [loadReviews]);
+    }, [isLoggedIn, loadReviews]);
 
     const pagination = useMemo(() => {
         return Array.from({ length: totalPages }, (_, index) => index + 1);

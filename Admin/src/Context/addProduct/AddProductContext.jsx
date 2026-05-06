@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useAuth } from '../auth/useAuth';
 import {
     createAddProduct,
     getAddProductById,
@@ -93,6 +94,7 @@ const buildFormDataFromProduct = (product, previousSearchText = '') => {
 };
 
 export const AddProductProvider = ({ children }) => {
+    const { isLoggedIn } = useAuth();
     const [formData, setFormData] = useState(defaultFormData);
     const [categories, setCategories] = useState([]);
     const [subCategories, setSubCategories] = useState([]);
@@ -147,8 +149,12 @@ export const AddProductProvider = ({ children }) => {
     }, []);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadCategories();
-    }, [loadCategories]);
+    }, [isLoggedIn, loadCategories]);
 
     useEffect(() => {
         if (formData.category) {

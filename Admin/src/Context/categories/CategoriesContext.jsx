@@ -1,4 +1,5 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../auth/useAuth';
 import { getCategories, getProducts } from '../../features/categories/CategoriesAPI';
 
 export const CategoriesContext = createContext();
@@ -29,6 +30,7 @@ const formatDate = (value) => {
 };
 
 export const CategoriesProvider = ({ children }) => {
+    const { isLoggedIn } = useAuth();
     const [discoverCategories, setDiscoverCategories] = useState([]);
     const [products, setProducts] = useState([]);
     const [searchText, setSearchText] = useState('');
@@ -103,9 +105,13 @@ export const CategoriesProvider = ({ children }) => {
     }, []);
 
     useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+
         loadCategories();
         loadProducts();
-    }, [loadCategories, loadProducts]);
+    }, [isLoggedIn, loadCategories, loadProducts]);
 
     const filteredProducts = useMemo(() => {
         const query = searchText.trim().toLowerCase();
