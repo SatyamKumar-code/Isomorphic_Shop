@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginUserController, registerUserController, registerSellerController, verifyEmailController, refreshTokenController, userAvatarController, adminAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, updateSellerApprovalStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController, adminSendResetPasswordLinkController, adminForceLogoutUserController, adminUpdateCustomerNoteController, getAdminAccessModeController, adminChangePasswordController, socialLoginController } from "../controller/user.controller.js";
+import { loginUserController, registerUserController, registerSellerController, verifyEmailController, refreshTokenController, userAvatarController, adminAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, updateSellerApprovalStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController, adminSendResetPasswordLinkController, adminForceLogoutUserController, adminUpdateCustomerNoteController, getAdminAccessModeController, adminChangePasswordController, socialLoginController, getAdminController } from "../controller/user.controller.js";
 import upload from "../middlewares/multer.js";
 import userMiddleware from "../middlewares/userMiddleware.js";
 import adminMiddleware from "../middlewares/adminMiddleware.js";
@@ -15,7 +15,7 @@ userRouter.post("/login", loginUserController);
 userRouter.get("/logout", userMiddleware, logoutController);
 userRouter.get("/admin/logout", adminMiddleware, logoutController);
 userRouter.get("/userData", userMiddleware, getUserController);
-userRouter.get("/admin/userData", adminMiddleware, getUserController);
+userRouter.get("/admin/userData", adminMiddleware, getAdminController);
 userRouter.get("/admin/access-mode", adminMiddleware, getAdminAccessModeController);
 userRouter.put("/admin/profile", adminMiddleware, updateUserDetails);
 userRouter.put("/admin/change-password", adminMiddleware, adminChangePasswordController);

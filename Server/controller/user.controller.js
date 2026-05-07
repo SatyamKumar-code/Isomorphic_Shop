@@ -1422,7 +1422,7 @@ export const loginUserController = async (req, res) => {
 
         const accessToken = await generateAccessToken(user._id, user.role);
         const refreshToken = await generateRefreshToken(user._id, user.role);
-        const userResponse = await buildUserResponse(user);
+        // const userResponse = await buildUserResponse(user);
 
         await UserModel.findByIdAndUpdate(user?._id, {
             last_login_date: Date.now()
@@ -1442,12 +1442,12 @@ export const loginUserController = async (req, res) => {
                 : "Login successful",
             error: false,
             success: true,
-            data: {
-                ...userResponse,
-                accessToken,
-                refreshToken,
-                role: user?.role
-            }
+            // data: {
+            //     ...userResponse,
+            //     accessToken,
+            //     refreshToken,
+            //     role: user?.role
+            // }
         });
 
 
@@ -1460,7 +1460,7 @@ export const loginUserController = async (req, res) => {
     }
 }
 
-export const getUserController = async (req, res) => {
+export const getAdminController = async (req, res) => {
     try {
         const userId = req.userId;
         const user = await UserModel.findById({ _id: userId }).select("-password -refresh_token -otp -otp_expiry");
@@ -1472,7 +1472,7 @@ export const getUserController = async (req, res) => {
                 success: false
             });
         }
-
+        
         return res.status(200).json({
             message: "User found",
             error: false,
@@ -1481,8 +1481,39 @@ export const getUserController = async (req, res) => {
                 ...user.toObject(),
                 location: await getSellerLocation(user._id, user.role),
                 socialLinks: await getSellerSocialLinks(user._id, user.role),
-                accessMode: getAccessModeFromRole(user.role),
-            }
+                // accessMode: getAccessModeFromRole(user.role),
+            } 
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Internal Server Error" + error.message,
+            error: true,
+            success: false
+        });
+    }
+}
+
+export const getUserController = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const user = await UserModel.findById({ _id: userId }).select("email name mobile avatar role status last_login_date")
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false
+            });
+        } 
+        
+        return res.status(200).json({
+            message: "User found",
+            error: false,
+            success: true,
+            data: {
+                ...user.toObject(),
+            } 
         });
 
     } catch (error) {
@@ -1547,7 +1578,7 @@ export const socialLoginController = async (req, res) => {
             // Issue tokens
             const accessToken = await generateAccessToken(user._id, user.role);
             const refreshToken = await generateRefreshToken(user._id, user.role);
-            const userResponse = await buildUserResponse(user);
+            // const userResponse = await buildUserResponse(user);
 
             await UserModel.findByIdAndUpdate(user._id, { last_login_date: Date.now() });
 
@@ -1555,7 +1586,17 @@ export const socialLoginController = async (req, res) => {
             res.cookie('accessToken', accessToken, cookiesOptions);
             res.cookie('refreshToken', refreshToken, cookiesOptions);
 
-            return res.status(200).json({ message: "Login successful", error: false, success: true, data: { ...userResponse, accessToken, refreshToken, role: user.role } });
+            return res.status(200).json({ 
+                message: "Login successful", 
+                error: false, 
+                success: true, 
+                // data: { 
+                //     ...userResponse, 
+                //     accessToken, 
+                //     refreshToken, 
+                //     role: user.role 
+                // } 
+            });
         }
 
         // Create new user for social login
@@ -1577,13 +1618,23 @@ export const socialLoginController = async (req, res) => {
 
         const accessToken = await generateAccessToken(newUser._id, newUser.role);
         const refreshToken = await generateRefreshToken(newUser._id, newUser.role);
-        const userResponse = await buildUserResponse(newUser);
+        // const userResponse = await buildUserResponse(newUser);
 
         const cookiesOptions = { httpOnly: true, secure: true, sameSite: "None" };
         res.cookie('accessToken', accessToken, cookiesOptions);
         res.cookie('refreshToken', refreshToken, cookiesOptions);
 
-        return res.status(201).json({ message: "Login successful", error: false, success: true, data: { ...userResponse, accessToken, refreshToken, role: newUser.role } });
+        return res.status(201).json({
+            message: "Login successful", 
+            error: false, 
+            success: true, 
+            // data: { ...userResponse, 
+            //     accessToken, 
+            //     refreshToken, 
+            //     role: newUser.role 
+            // } 
+        });
+
     } catch (error) {
         return res.status(500).json({ message: "Internal Server Error", error: error.message, success: false });
     }

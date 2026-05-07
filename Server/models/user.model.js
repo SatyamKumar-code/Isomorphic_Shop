@@ -31,7 +31,7 @@ const userSchema = new mongoose.Schema({
     sellerApprovalStatus: {
         type: String,
         enum: ['Pending', 'Approved', 'Rejected'],
-        default: 'Approved'
+        default: 'Pending'
     },
     mobile: {
         type: Number,
