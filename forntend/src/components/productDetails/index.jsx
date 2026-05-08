@@ -39,6 +39,33 @@ const ProductDetails = () => {
 
     const formatPrice = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
 
+    const formatDate = (value) => {
+        if (!value) {
+            return '';
+        }
+
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+
+        return date.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+        });
+    };
+
+    const productAttributes = [
+        { label: 'Size', value: product?.size },
+        { label: 'Weight', value: product?.weight },
+        { label: 'RAM', value: product?.RAM },
+        { label: 'ROM', value: product?.ROM },
+        { label: 'Color', value: product?.color },
+        { label: 'Expiration Start', value: formatDate(product?.expirationStart) },
+        { label: 'Expiration End', value: formatDate(product?.expirationEnd) },
+    ].filter((item) => item.value);
+
     const handleCheckout = () => {
         if (!product) {
             return;
@@ -143,16 +170,19 @@ const ProductDetails = () => {
                     <p className='text-gray-700 text-sm'>{product?.description || 'Product description is not available yet.'}</p>
                 </div>
 
-                <div className='mt-4 mb-15'>
-                    <h4 className='text-lg font-bold mb-2'>Size</h4>
-                    <div className='w-10 h-10 rounded-md flex'>
-                        <button className='border font-bold border-gray-400 rounded-md px-3 py-1 mr-2 mb-2'>S</button>
-                        <button className='border font-bold border-gray-400 rounded-md px-3 py-1 mr-2 mb-2'>M</button>
-                        <button className='border font-bold border-gray-400 rounded-md px-3 py-1 mr-2 mb-2'>L</button>
-                        <button className='border font-bold border-gray-400 rounded-md px-3 py-1 mr-2 mb-2'>XL</button>
+                {productAttributes.length > 0 && (
+                    <div className='mt-4 mb-15'>
+                        <h4 className='text-lg font-bold mb-2'>Product Details</h4>
+                        <div className='flex flex-wrap gap-2'>
+                            {productAttributes.map((item) => (
+                                <div key={item.label} className='min-w-32.5 rounded-md border border-gray-200 bg-gray-50 px-3 py-2'>
+                                    <div className='text-[11px] uppercase tracking-wide text-gray-500'>{item.label}</div>
+                                    <div className='text-sm font-semibold text-gray-800'>{item.value}</div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-
-                </div>
+                )}
             </div>
             <div className='fixed bottom-1 left-0 p-3 right-0'>
                 <div className='flex relative items-center'>

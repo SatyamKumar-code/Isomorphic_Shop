@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchDataFromApi } from '../utils/api'
+import BackButton from '../components/backButton'
+import { FaDownload, FaMapPin, FaUser } from 'react-icons/fa6'
+import { FaCheck } from "react-icons/fa";
+import { ImCross } from "react-icons/im";
 
 const suggestionItems = [
     {
@@ -47,6 +51,8 @@ const OrderDetails = () => {
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    console.log(order);
+
     useEffect(() => {
         const load = async () => {
             setLoading(true);
@@ -65,7 +71,8 @@ const OrderDetails = () => {
     const image = product?.images?.[0] || 'https://via.placeholder.com/300x300?text=Product';
     const status = String(order?.status || 'pending').toLowerCase();
     const orderIdLabel = useMemo(() => formatOrderId(order?._id), [order?._id]);
-    const listingPrice = Number(product?.price || order?.totalAmount || 0);
+    const listingPrice = Number(product?.oldPrice);
+    const salePrice = Number( product?.price);
     const totalAmount = Number(order?.totalAmount || product?.salePrice || product?.price || 0);
     const feeAmount = listingPrice > totalAmount ? Math.max(listingPrice - totalAmount, 0) : 0;
     const deliveryText = status === 'delivered'
@@ -86,9 +93,7 @@ const OrderDetails = () => {
         <div className='min-h-screen bg-[#f6f7fb] pb-8'>
             <div className='sticky top-0 z-20 flex items-center justify-between border-b border-gray-100 bg-white px-4 py-3'>
                 <div className='flex items-center gap-3'>
-                    <button type='button' onClick={() => window.history.back()} className='flex h-10 w-10 items-center justify-center rounded-full text-2xl text-gray-800'>
-                        ?
-                    </button>
+                    <BackButton />
                     <h1 className='text-[22px] font-semibold text-gray-900'>Order Details</h1>
                 </div>
 
@@ -97,7 +102,7 @@ const OrderDetails = () => {
                 </button>
             </div>
 
-            <div className='px-1 pt-4'>
+            <div className='px-1 pt-4 pb-4'>
                 <div className='flex items-start gap-3 rounded-2xl bg-white p-3'>
                     <img src={image} alt={product?.productName || 'Product'} className='h-14 w-14 rounded-xl object-cover' />
                     <div className='min-w-0 flex-1'>
@@ -115,8 +120,8 @@ const OrderDetails = () => {
                         <p className={`text-[17px] font-semibold ${status === 'cancelled' ? 'text-red-600' : 'text-green-600'}`}>
                             {deliveryText}
                         </p>
-                        <div className={`flex h-10 w-10 items-center justify-center rounded-full ${status === 'cancelled' ? 'bg-red-500' : 'bg-green-600'} text-white`}>
-                            {status === 'cancelled' ? '�' : '?'}
+                        <div className={`flex h-10 w-10 text-xl items-center justify-center rounded-full ${status === 'cancelled' ? 'bg-red-500' : 'bg-green-600'} text-white`}>
+                            {status === 'cancelled' ? <ImCross /> : <FaCheck className='text-white font-bold!' />}
                         </div>
                     </div>
 
@@ -162,24 +167,25 @@ const OrderDetails = () => {
                 <div className='mt-6 rounded-2xl bg-white p-4 shadow-sm'>
                     <h3 className='text-[18px] font-semibold text-gray-900'>Delivery details</h3>
                     <div className='mt-3 rounded-2xl bg-[#f6f7fb] p-4'>
-                        <div className='flex items-start gap-3 pb-3'>
-                            <span className='mt-0.5 text-gray-500'>?</span>
-                            <div className='min-w-0 flex-1'>
-                                <p className='text-[14px] font-semibold text-gray-900'>Other</p>
-                                <p className='mt-1 text-[13px] leading-5 text-gray-600'>
-                                    {formatAddress(order?.delivery_address)}
-                                </p>
-                            </div>
-                        </div>
 
                         <div className='flex items-start gap-3 border-t border-gray-200 pt-3'>
-                            <span className='mt-0.5 text-gray-500'>?</span>
+                            <FaUser className='mt-1 text-gray-500 text-[18px]' />
                             <div className='min-w-0 flex-1'>
                                 <p className='text-[14px] font-semibold text-gray-900'>
                                     {order?.userId?.name || order?.userId?.fullName || order?.userId?.username || 'Customer'}
                                 </p>
-                                <p className='mt-1 text-[13px] text-gray-600'>
-                                    {order?.userId?.mobile || order?.userId?.phone || ''}
+                            </div>
+                        </div>
+
+                        <div className='flex items-start gap-3 pb-3'>
+                            <FaMapPin className='mt-1 text-gray-500 text-[18px]' />
+                            <div className='min-w-0 flex-1'>
+                                <p className='text-[14px] font-semibold text-gray-900'>{order?.delivery_address?.addressType || 'N/A'}</p>
+                                <p className='mt-1 text-[13px] leading-5 text-gray-600'>
+                                    {formatAddress(order?.delivery_address)}
+                                </p>
+                                <p className='mt-1 text-[13px] leading-5 text-gray-600'>
+                                    Mobile: {order?.delivery_address?.mobile || order?.userId?.mobile || order?.userId?.phone || 'N/A'}
                                 </p>
                             </div>
                         </div>
@@ -191,26 +197,29 @@ const OrderDetails = () => {
                     <div className='mt-4 space-y-3 text-[14px] text-gray-700'>
                         <div className='flex items-center justify-between'>
                             <span>Listing price</span>
-                            <span className='text-gray-900'>?{listingPrice.toLocaleString('en-IN')}</span>
+                            <span className='text-gray-900 line-through'>₹{listingPrice.toLocaleString('en-IN')}</span>
                         </div>
                         <div className='flex items-center justify-between'>
                             <span>Special price</span>
-                            <span className='text-gray-900'>?{totalAmount.toLocaleString('en-IN')}</span>
+                            <span className='text-gray-900'>₹{salePrice.toLocaleString('en-IN')}</span>
                         </div>
+                        {order?.products?.[0]?.quantity > 1 && (
+                            <div className='flex items-center justify-between'>
+                                <span>Quantity</span>
+                                <span className='text-gray-900'>{order?.products?.[0]?.quantity}</span>
+                            </div>
+                        )}
                         <div className='flex items-center justify-between'>
                             <span>Total fees</span>
-                            <span className='text-gray-900'>?{Math.min(Math.max(Math.round(totalAmount * 0.02), 0), 99).toLocaleString('en-IN')}</span>
+                            <span className='text-gray-900'>₹{Math.min(Math.max(Math.round(totalAmount * 0.02), 0), 99).toLocaleString('en-IN')}</span>
                         </div>
-                        <div className='flex items-center justify-between'>
-                            <span>Other discount</span>
-                            <span className='text-green-600'>-{feeAmount.toLocaleString('en-IN')}</span>
-                        </div>
+                        
                     </div>
 
                     <div className='mt-4 border-t border-dashed border-gray-200 pt-4'>
                         <div className='flex items-center justify-between text-[16px] font-semibold text-gray-900'>
                             <span>Total amount</span>
-                            <span>?{totalAmount.toLocaleString('en-IN')}</span>
+                            <span>₹{totalAmount.toLocaleString('en-IN')}</span>
                         </div>
                     </div>
 
@@ -224,7 +233,7 @@ const OrderDetails = () => {
                     </div>
 
                     <button type='button' className='mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[15px] font-medium text-gray-900'>
-                        <span>?</span>
+                        <FaDownload />
                         <span>Download Invoice</span>
                     </button>
                 </div>
@@ -241,7 +250,7 @@ const OrderDetails = () => {
 
                 <div className='mt-6'>
                     <h3 className='text-[18px] font-semibold text-gray-900'>Order ID</h3>
-                    <p className='mt-1 text-[13px] text-gray-500'>{orderIdLabel}</p>
+                    <p className='mt-1 text-[13px] text-gray-500'>{order?._id?.toUpperCase()}</p>
                 </div>
 
                 <button type='button' className='mt-4 w-full rounded-2xl border border-[#9cc0ff] bg-white px-4 py-3 text-[15px] font-semibold text-blue-700 shadow-sm'>

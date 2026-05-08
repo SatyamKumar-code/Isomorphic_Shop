@@ -2,10 +2,12 @@ import React, { useEffect, useState, useContext } from 'react'
 import SerchBox from '../components/serchBox'
 import { FaRegHeart } from 'react-icons/fa'
 import { IoMdAddCircle } from "react-icons/io";
+import { FaCheckCircle } from 'react-icons/fa';
 import { Link, useSearchParams } from 'react-router-dom';
 import Footer from '../components/footer';
-import { fetchDataFromApi, postData } from '../utils/api';
+import { deleteData, fetchDataFromApi, postData } from '../utils/api';
 import { MyContext } from '../App';
+import { FaHeart } from 'react-icons/fa6';
 
 const Search = () => {
     const context = useContext(MyContext);
@@ -14,10 +16,29 @@ const Search = () => {
     const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [addingProductId, setAddingProductId] = useState(null);
+    const [cartItems, setCartItems] = useState([]);
 
     useEffect(() => {
         setSearchTerm(searchParams.get('q') || '');
     }, [searchParams]);
+
+    useEffect(() => {
+        const loadCartDetails = async () => {
+            try {
+                const response = await fetchDataFromApi('/api/cart/details');
+                if (response?.error === false && response?.data?.products) {
+                    setCartItems(response.data.products);
+                } else {
+                    setCartItems([]);
+                }
+            } catch (error) {
+                console.error('Error fetching cart details:', error);
+                setCartItems([]);
+            }
+        };
+
+        loadCartDetails();
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
@@ -52,8 +73,27 @@ const Search = () => {
         setSearchParams(nextQuery ? { q: nextQuery } : {});
     };
 
+    const isProductInCart = (productId) => {
+        if (!productId || !cartItems || cartItems.length === 0) {
+            return false;
+        }
+
+        const productIdStr = String(productId).trim();
+        return cartItems.some((item) => {
+            const itemProductId = String(item?.productId?._id || item?.productId || item?._id || '').trim();
+            return itemProductId === productIdStr;
+        });
+    };
+
+
     const handleAddToCart = async (productId) => {
         if (!productId || addingProductId) {
+            return;
+        }
+
+        // Prevent adding if already in cart
+        if (isProductInCart(productId)) {
+            context.alertBox('error', 'Product is already in your cart');
             return;
         }
 
@@ -66,11 +106,54 @@ const Search = () => {
 
         if (response?.error === false) {
             context.alertBox('Success', 'Added to cart');
-            window.location.href = '/cart';
+            // Refresh cart items to update UI
+            try {
+                const cartResponse = await fetchDataFromApi('/api/cart/details');
+                if (cartResponse?.error === false && cartResponse?.data?.products) {
+                    setCartItems(cartResponse.data.products);
+                }
+            } catch (error) {
+                console.error('Error refreshing cart:', error);
+            }
             return;
         }
 
         context.alertBox('error', response?.message || 'Unable to add product to cart.');
+    };
+
+    const handleRemoveFromCart = async (productId) => {
+        if (!productId || addingProductId) {
+            return;
+        }
+
+        setAddingProductId(productId);
+
+        try {
+            const response = await deleteData(`/api/cart/remove/${productId}`);
+
+            if (response?.error === false) {
+                context.alertBox('Success', 'Removed from cart');
+                try {
+                    const cartResponse = await fetchDataFromApi('/api/cart/details');
+                    if (cartResponse?.error === false && cartResponse?.data?.products) {
+                        setCartItems(cartResponse.data.products);
+                    } else {
+                        setCartItems([]);
+                    }
+                } catch (refreshError) {
+                    console.error('Error refreshing cart after remove:', refreshError);
+                    setCartItems([]);
+                }
+                return;
+            }
+
+            context.alertBox('error', response?.message || 'Unable to remove product from cart.');
+        } catch (error) {
+            console.error('Error removing product from cart:', error);
+            context.alertBox('error', 'Unable to remove product from cart.');
+        } finally {
+            setAddingProductId(null);
+        }
     };
 
     return (
@@ -99,12 +182,24 @@ const Search = () => {
                                         <h2 className='truncate text-[12px] font-bold'>{product?.productName || 'Product Name'}</h2>
                                         <p className='text-[12px] font-bold text-blue-500'>₹{Number(product?.price || 0).toLocaleString('en-IN')}</p>
                                     </div>
-                                    <button type='button' onClick={() => handleAddToCart(productId)} className='text-blue-500 text-2xl cursor-pointer disabled:opacity-60' disabled={addingProductId === productId}>
-                                        <IoMdAddCircle />
-                                    </button>
+                                    <span><span className='text-sm'>⭐</span>{product?.rating || 0}</span>
                                 </div>
                                 <div className='absolute top-2 right-2'>
-                                    <FaRegHeart className='text-gray-500 text-lg' />
+                                    {isProductInCart(productId) ? (
+                                        <button
+                                            type='button'
+                                            onClick={() => handleRemoveFromCart(productId)}
+                                            className='cursor-pointer'
+                                            title='Remove from cart'
+                                            disabled={addingProductId === productId}
+                                        >
+                                            <FaHeart className='text-red-400 text-lg' />
+                                        </button>
+                                    ) : (
+                                        <button type='button' onClick={() => handleAddToCart(productId)} className='text-blue-500 text-2xl cursor-pointer disabled:opacity-60' disabled={addingProductId === productId}>
+                                            <FaRegHeart className='text-gray-500 text-lg' />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         );

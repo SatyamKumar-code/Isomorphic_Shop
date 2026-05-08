@@ -52,17 +52,10 @@ const SerchBox = ({ value = '', onChange, onSearch, placeholder = 'Search...' })
                 }}
             />
             {searchTerm && (
-                <div className='absolute right-10 w-5 h-5 flex items-center justify-center bg-gray-700 rounded-full cursor-pointer' onClick={clearSearch}>
+                <div className='absolute right-3 w-5 h-5 flex items-center justify-center bg-gray-700 rounded-full cursor-pointer' onClick={clearSearch}>
                     <RxCross2 className='text-white font-bold' />
                 </div>
             )}
-            <button
-                type='button'
-                className='absolute right-2 rounded-full bg-blue-500 px-3 py-1 text-[12px] font-semibold text-white'
-                onClick={submitSearch}
-            >
-                Go
-            </button>
         </div>
     )
 }

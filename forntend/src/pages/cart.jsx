@@ -109,38 +109,54 @@ const Cart = () => {
                         );
                     })
                 ) : (
-                    <div className='mt-16 rounded-lg bg-gray-100 p-4 text-sm text-gray-600'>Your cart is empty.</div>
+                    <div className='mt-16 rounded-lg bg-gray-100 p-6 text-center'>
+                        <h3 className='font-bold text-lg'>Your cart is empty</h3>
+                        <p className='text-sm text-gray-600 mt-2'>Add items to your cart to start shopping.</p>
+                        
+                    </div>
                 )}
             </div>
 
             <div className='fixed bottom-0 left-0 w-full p-4 bg-white rounded-t-lg'>
-                <h4 className='font-bold text-lg'>Order Summary</h4>
-                <div>
-                    <div className='flex items-center justify-between mt-2'>
-                        <span className='font-semibold text-gray-600'>Items</span>
-                        <span className='font-bold text-gray-600'>{cartSummary.itemCount}</span>
+                {cartItems.length > 0 ? (
+                    <>
+                        <h4 className='font-bold text-lg'>Order Summary</h4>
+                        <div>
+                            <div className='flex items-center justify-between mt-2'>
+                                <span className='font-semibold text-gray-600'>Items</span>
+                                <span className='font-bold text-gray-600'>{cartSummary.itemCount}</span>
+                            </div>
+                            <div className='flex items-center justify-between mt-2'>
+                                <span className='font-semibold text-gray-600'>Subtotal</span>
+                                <span className='font-bold text-gray-600'>₹{Number(subtotal).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className='flex items-center justify-between mt-2'>
+                                <span className='font-semibold text-gray-600'>Discount</span>
+                                <span className='font-bold text-gray-600'>₹0.00</span>
+                            </div>
+                            <div className='flex items-center justify-between mt-2'>
+                                <span className='font-semibold text-gray-600'>Delivery Charges</span>
+                                <span className='font-bold text-gray-600'>₹{deliveryCharges.toFixed(2)}</span>
+                            </div>
+                            <hr className='my-2' />
+                            <div className='flex items-center justify-between mt-2'>
+                                <span className='font-bold text-gray-900'>Total</span>
+                                <span className='font-bold text-gray-900'>₹{Number(total).toLocaleString('en-IN')}</span>
+                            </div>
+                            <Link to='/checkout'>
+                                <button className='w-full bg-blue-500 text-white p-3 rounded-full font-bold mt-4'>Check Out</button>
+                            </Link>
+                        </div>
+                    </>
+                ) : (
+                    <div className='text-center opacity-90'>
+                        <h4 className='font-bold text-lg'>Order Summary</h4>
+                        <p className='text-sm text-gray-600 mt-2'>Your cart is empty — add items to see totals.</p>
+                        <Link to='/' className='block mt-4'>
+                            <button className='w-full bg-blue-500 text-white p-3 rounded-full font-bold'>Shop Products</button>
+                        </Link>
                     </div>
-                    <div className='flex items-center justify-between mt-2'>
-                        <span className='font-semibold text-gray-600'>Subtotal</span>
-                        <span className='font-bold text-gray-600'>₹{Number(subtotal).toLocaleString('en-IN')}</span>
-                    </div>
-                    <div className='flex items-center justify-between mt-2'>
-                        <span className='font-semibold text-gray-600'>Discount</span>
-                        <span className='font-bold text-gray-600'>₹0.00</span>
-                    </div>
-                    <div className='flex items-center justify-between mt-2'>
-                        <span className='font-semibold text-gray-600'>Delivery Charges</span>
-                        <span className='font-bold text-gray-600'>₹{deliveryCharges.toFixed(2)}</span>
-                    </div>
-                    <hr className='my-2' />
-                    <div className='flex items-center justify-between mt-2'>
-                        <span className='font-bold text-gray-900'>Total</span>
-                        <span className='font-bold text-gray-900'>₹{Number(total).toLocaleString('en-IN')}</span>
-                    </div>
-                    <Link to='/checkout'>
-                        <button className='w-full bg-blue-500 text-white p-3 rounded-full font-bold mt-4'>Check Out</button>
-                    </Link>
-                </div>
+                )}
             </div>
         </div>
     )

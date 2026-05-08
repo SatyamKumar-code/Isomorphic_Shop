@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchDataFromApi } from '../utils/api'
+import BackButton from '../components/backButton'
 
 const statusTimeline = [
-    { key: 'pending', label: 'Order placed', icon: '??' },
-    { key: 'confirmed', label: 'Confirmed', icon: '?' },
-    { key: 'packed', label: 'Packed', icon: '??' },
-    { key: 'shipped', label: 'Shipped', icon: '??' },
-    { key: 'out_for_delivery', label: 'Out for delivery', icon: '??' },
-    { key: 'delivered', label: 'Delivered', icon: '?' }
+    { key: 'pending', label: 'Order placed', icon: '📦' },
+    { key: 'confirmed', label: 'Confirmed', icon: '✓' },
+    { key: 'packed', label: 'Packed', icon: '📦' },
+    { key: 'shipped', label: 'Shipped', icon: '🚚' },
+    { key: 'out_for_delivery', label: 'Out for delivery', icon: '📍' },
+    { key: 'delivered', label: 'Delivered', icon: '✓' }
 ]
 
 const OrderStatus = () => {
@@ -47,9 +48,7 @@ const OrderStatus = () => {
         <div className='min-h-screen bg-[#f6f7fb]'>
             <div className='sticky top-0 z-20 flex items-center justify-between border-b border-gray-100 bg-white px-4 py-3'>
                 <div className='flex items-center gap-3'>
-                    <button type='button' onClick={() => window.history.back()} className='flex h-10 w-10 items-center justify-center rounded-full text-2xl text-gray-800'>
-                        ?
-                    </button>
+                    <BackButton />
                     <h1 className='text-[22px] font-semibold text-gray-900'>Order Status</h1>
                 </div>
             </div>
@@ -59,7 +58,7 @@ const OrderStatus = () => {
                     {currentStatus === 'cancelled' ? (
                         <div className='flex flex-col items-center justify-center py-8'>
                             <div className='flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-3xl'>
-                                ?
+                                ✕
                             </div>
                             <h2 className='mt-4 text-xl font-bold text-red-600'>Order Cancelled</h2>
                             <p className='mt-2 text-center text-sm text-gray-600'>
@@ -73,37 +72,35 @@ const OrderStatus = () => {
                                 const isCurrent = idx === currentIdx;
 
                                 return (
-                                    <div key={step.key} className='relative pb-8 last:pb-0'>
-                                        <div className='flex gap-4'>
+                                    <div key={step.key} className='relative pb-0 last:pb-0'>
+                                        <div className='flex gap-2 items-start'>
                                             <div className='flex flex-col items-center'>
                                                 <div
-                                                    className={`flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold transition-all ${
-                                                        isCompleted
+                                                    className={`flex h-12 w-12 items-center pb-1 justify-center rounded-full text-3xl font-bold transition-all ${isCompleted
                                                             ? isCurrent
                                                                 ? 'bg-blue-600 text-white shadow-lg'
                                                                 : 'bg-green-500 text-white'
                                                             : 'bg-gray-200 text-gray-400'
-                                                    }`}
+                                                        }`}
                                                 >
-                                                    {isCompleted ? '?' : idx + 1}
+                                                    {isCompleted ? step.icon : idx + 1}
                                                 </div>
 
                                                 {idx < statusTimeline.length - 1 && (
                                                     <div
-                                                        className={`mt-2 h-12 w-1 transition-all ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}`}
+                                                        className={`mt-0 h-12 w-1 transition-all ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}`}
                                                     />
                                                 )}
                                             </div>
 
                                             <div className='flex-1 pt-1'>
                                                 <h4
-                                                    className={`text-base font-semibold transition-all ${
-                                                        isCurrent
+                                                    className={`text-base font-semibold transition-all ${isCurrent
                                                             ? 'text-blue-600'
                                                             : isCompleted
                                                                 ? 'text-gray-900'
                                                                 : 'text-gray-400'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {step.label}
                                                 </h4>

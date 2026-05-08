@@ -1034,7 +1034,10 @@ export const getUserOrders = async (req, res) => {
     try {
         const userId = req.userId;
 
-        const orders = await OrderModel.find({ userId }).populate("products.productId").populate("delivery_address").sort({ createdAt: -1 });
+        const orders = await OrderModel.find({ userId }).populate("products.productId").populate("delivery_address").populate({
+            path: "userId",
+            select: "name"
+        }).sort({ createdAt: -1 });
 
         if (!orders || orders.length === 0) {
             return res.status(404).json({
