@@ -14,6 +14,8 @@ import ProductDetails from './components/productDetails';
 import Cart from './pages/cart';
 import CheckOut from './pages/checkOut';
 import Order from './pages/order';
+import OrderDetails from './pages/orderDetails';
+import OrderStatus from './pages/orderStatus';
 import Products from './pages/products';
 import Addresses from './pages/addresses';
 
@@ -77,6 +79,8 @@ const App = () => {
             <Route path='/cart' exact={true} element={<Cart />} />
             <Route path='/checkout' exact={true} element={<CheckOut />} />
             <Route path='/orders' exact={true} element={<Order />} />
+            <Route path='/order/:id' exact={true} element={<OrderDetails />} />
+            <Route path='/order/:id/status' exact={true} element={<OrderStatus />} />
           </Routes>
         </MyContext.Provider>
       </BrowserRouter>
