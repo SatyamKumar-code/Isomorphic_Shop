@@ -28,6 +28,30 @@ const shuffleProducts = (items = []) => {
     return shuffled;
 };
 
+const toSafeNumber = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return 0;
+    }
+
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
+    }
+
+    if (typeof value === 'object') {
+        if (typeof value.$numberDecimal === 'string') {
+            return Number.parseFloat(value.$numberDecimal) || 0;
+        }
+
+        if (typeof value.toString === 'function') {
+            const parsed = Number.parseFloat(value.toString());
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+    }
+
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const Search = () => {
     const context = useContext(MyContext);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -35,6 +59,9 @@ const Search = () => {
     const [inputValue, setInputValue] = useState(searchParams.get('q') || '');
     const [activeQuery, setActiveQuery] = useState('');
     const [products, setProducts] = useState([]);
+    const [selectedFilters, setSelectedFilters] = useState([]);
+    const [productSort, setProductSort] = useState('');
+    const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
     const [suggestions, setSuggestions] = useState([]);
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
     const [recentSearches, setRecentSearches] = useState([]);
@@ -42,6 +69,7 @@ const Search = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [addingProductId, setAddingProductId] = useState(null);
     const [cartItems, setCartItems] = useState([]);
+    const searchSeedRef = useRef(`${Date.now()}-${Math.random().toString(16).slice(2)}`);
     const randomSeedRef = useRef(`${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
     const navigate = useNavigate();
@@ -118,8 +146,21 @@ const Search = () => {
             }
 
             const effectiveQuery = queryFromUrl || storedLastQuery;
+            const activeFilter = selectedFilters[0] || '';
+            const serverSortMap = {
+                '': 'random',
+                'random': 'random',
+                'latest': 'latest',
+                'name-az': 'a-z',
+                'price-low': 'priceLow',
+                'price-high': 'priceHigh',
+                'rating-high': 'ratingHigh',
+            };
+            const sortQuery = serverSortMap[productSort] || (activeFilter ? 'latest' : 'random');
+            const filterQuery = activeFilter ? `&filterBy=${encodeURIComponent(activeFilter)}` : '';
+            const seedQuery = sortQuery === 'random' ? `&seed=${encodeURIComponent(searchSeedRef.current)}` : '';
             const endpoint = effectiveQuery
-                ? `/api/product/search?q=${encodeURIComponent(effectiveQuery)}`
+                ? `/api/product/search?q=${encodeURIComponent(effectiveQuery)}&sortBy=${sortQuery}${filterQuery}${seedQuery}`
                 : '/api/product/latest';
 
             const response = await fetchDataFromApi(endpoint);
@@ -136,8 +177,9 @@ const Search = () => {
                 }
             }
 
-            setActiveQuery(effectiveQuery);
-            setProducts(shuffleProducts(response?.products || []));
+            const appliedQuery = String(response?.searchMeta?.appliedQuery || effectiveQuery || '').trim();
+            setActiveQuery(appliedQuery || effectiveQuery);
+            setProducts(Array.isArray(response?.products) ? response.products : []);
             setIsLoading(false);
         };
 
@@ -146,7 +188,7 @@ const Search = () => {
         return () => {
             isMounted = false;
         };
-    }, [searchTerm]);
+    }, [searchTerm, productSort, selectedFilters]);
 
     useEffect(() => {
         let isMounted = true;
@@ -266,6 +308,7 @@ const Search = () => {
     const isShowingSuggestions = inputValue.trim().length > 0 && inputValue.trim() !== searchTerm.trim();
     const isBlankInput = inputValue.trim().length === 0;
     const showDiscovery = isBlankInput;
+    const showSearchResults = !showDiscovery && !isShowingSuggestions;
 
     const recentSearchItems = useMemo(() => {
         return recentSearches.slice(0, MAX_RECENT_SEARCHES).map((query) => {
@@ -293,6 +336,74 @@ const Search = () => {
             image: popularProducts[index]?.images?.[0] || '',
         }));
     }, [popularProducts]);
+
+    const filteredSearchProducts = useMemo(() => {
+        const filtered = products.filter((product) => {
+            if (!selectedFilters || selectedFilters.length === 0) {
+                return true;
+            }
+
+            return selectedFilters.every((filter) => {
+                if (filter === 'best-selling') {
+                    return toSafeNumber(product?.sales) > 0;
+                }
+
+                if (filter === 'discounted') {
+                    return toSafeNumber(product?.discountPercentage) > 0;
+                }
+
+                if (filter === 'featured') {
+                    return product?.featured === true;
+                }
+
+                if (filter === 'high-rated') {
+                    return toSafeNumber(product?.rating) >= 4;
+                }
+
+                return true;
+            });
+        });
+
+        const isFilterActive = Array.isArray(selectedFilters) && selectedFilters.length > 0;
+
+        if (!isFilterActive) {
+            return filtered;
+        }
+
+        const sorted = [...filtered].sort((firstProduct, secondProduct) => {
+            if (productSort === 'price-low') {
+                return toSafeNumber(firstProduct?.price) - toSafeNumber(secondProduct?.price);
+            }
+
+            if (productSort === 'price-high') {
+                return toSafeNumber(secondProduct?.price) - toSafeNumber(firstProduct?.price);
+            }
+
+            if (productSort === 'rating-high') {
+                return toSafeNumber(secondProduct?.rating) - toSafeNumber(firstProduct?.rating);
+            }
+
+            if (productSort === 'name-az') {
+                return String(firstProduct?.productName || '').localeCompare(String(secondProduct?.productName || ''));
+            }
+
+            return new Date(secondProduct?.createdAt || 0).getTime() - new Date(firstProduct?.createdAt || 0).getTime();
+        });
+
+        return sorted;
+    }, [products, selectedFilters, productSort]);
+
+    const sortOptions = useMemo(() => ([
+        { label: 'Latest', value: 'latest' },
+        { label: 'Name A-Z', value: 'name-az' },
+        { label: 'Price low to high', value: 'price-low' },
+        { label: 'Price high to low', value: 'price-high' },
+        { label: 'Top rated', value: 'rating-high' },
+    ]), []);
+
+    const selectedSortLabel = useMemo(() => {
+        return sortOptions.find((option) => option.value === productSort)?.label || 'Sort products';
+    }, [productSort, sortOptions]);
 
     const isProductInCart = (productId) => {
         if (!productId || !cartItems || cartItems.length === 0) {
@@ -380,7 +491,7 @@ const Search = () => {
 
     return (
         <div className='min-h-screen bg-[#f1f3f6]'>
-            <div className='sticky top-0 z-20 bg-[#c5d8f6] px-3 pb-3 pt-2'>
+            <div className='sticky top-0 z-20 bg-white px-3 pb-3 pt-2'>
                 <div className='flex items-center gap-2'>
                     <button type='button' onClick={() => navigate(-1)} className='flex h-8 w-8 items-center justify-center text-2xl text-gray-700'>
                         <IoIosArrowBack />
@@ -449,7 +560,7 @@ const Search = () => {
                     <div className='bg-white px-3 py-3'>
                         <h3 className='mb-2 text-[17px] font-semibold text-gray-800'>Recent Searches</h3>
                         {recentSearchItems.length > 0 ? (
-                            <div className='flex gap-3 overflow-x-auto pb-1'>
+                            <div className='flex gap-3 overflow-x-auto pb-1 no-scrollbar'>
                                 {recentSearchItems.map((item) => (
                                     <button
                                         key={item.query}
@@ -509,18 +620,75 @@ const Search = () => {
                 </div>
             )}
 
-            {!showDiscovery && !isShowingSuggestions && (
+            {showSearchResults && (
                 <div className='bg-[#f1f3f6] px-3 pb-20'>
-                    <div className='flex items-center justify-between pt-3'>
-                        <h2 className='text-[14px] font-bold text-gray-500'>Results for <span className='text-[16px] text-black'>"{activeQuery || 'latest products'}"</span></h2>
-                        <p className='text-[14px] font-bold text-blue-500'>{products.length} Results Found</p>
+                    <div className='mt-3 flex flex-wrap items-center gap-2'>
+                        <select
+                            aria-label='Filter products'
+                            value={selectedFilters[0] || ''}
+                            onChange={(event) => {
+                                setSelectedFilters(event.target.value ? [event.target.value] : []);
+                            }}
+                            className='rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none'
+                        >
+                            <option value=''>All Products</option>
+                            <option value='featured'>Featured</option>
+                            <option value='discounted'>Discounted</option>
+                            <option value='best-selling'>Best selling</option>
+                            <option value='high-rated'>High rating</option>
+                        </select>
+                        <div className='relative'>
+                            <button
+                                type='button'
+                                aria-label='Sort products'
+                                onClick={() => setIsSortMenuOpen((prev) => !prev)}
+                                className='flex min-w-40 items-center justify-between rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none'
+                            >
+                                <span>{selectedSortLabel}</span>
+                                <IoIosArrowForward className={`text-gray-400 transition-transform ${isSortMenuOpen ? 'rotate-90' : ''}`} />
+                            </button>
+
+                            {isSortMenuOpen && (
+                                <div className='absolute left-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg'>
+                                    <button
+                                        type='button'
+                                        onClick={() => {
+                                            setProductSort('');
+                                            setIsSortMenuOpen(false);
+                                        }}
+                                        className='block w-full border-b border-gray-100 px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50'
+                                    >
+                                        Clear sort
+                                    </button>
+                                    {sortOptions.map((option) => {
+                                        const isSelected = option.value === productSort;
+
+                                        return (
+                                            <button
+                                                key={option.value}
+                                                type='button'
+                                                onClick={() => {
+                                                    setProductSort((current) => (current === option.value ? '' : option.value));
+                                                    setIsSortMenuOpen(false);
+                                                }}
+                                                className={`block w-full px-4 py-3 text-left text-sm hover:bg-gray-50 ${isSelected ? 'font-bold text-blue-600' : 'font-medium text-gray-700'}`}
+                                            >
+                                                {option.label}
+                                                {isSelected ? '  (selected)' : ''}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </div>
+
 
                     {isLoading ? (
                         <div className='mt-4 text-sm text-gray-500'>Loading products...</div>
                     ) : (
                         <div className='mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7'>
-                            {products.length > 0 ? products.map((product) => {
+                            {filteredSearchProducts.length > 0 ? filteredSearchProducts.map((product) => {
                                 const productId = product?._id || product?.id;
                                 const image = product?.images?.[0] || 'https://via.placeholder.com/300x300?text=Product';
 
@@ -532,9 +700,9 @@ const Search = () => {
                                         <div className='flex h-12 items-center justify-between bg-gray-100 p-2 leading-tight'>
                                             <div className='w-full overflow-hidden leading-tight'>
                                                 <h2 className='truncate text-[12px] font-bold'>{product?.productName || 'Product Name'}</h2>
-                                                <p className='text-[12px] font-bold text-blue-500'>₹{Number(product?.price || 0).toLocaleString('en-IN')}</p>
+                                                <p className='text-[12px] font-bold text-blue-500'>₹{toSafeNumber(product?.price).toLocaleString('en-IN')}</p>
                                             </div>
-                                            <span className='text-[12px]'><span className='text-sm'>⭐</span>{product?.rating || 0}</span>
+                                            <span className='text-[12px]'><span className='text-sm'>⭐</span>{toSafeNumber(product?.rating)}</span>
                                         </div>
                                         <div className='absolute right-2 top-2'>
                                             {isProductInCart(productId) ? (

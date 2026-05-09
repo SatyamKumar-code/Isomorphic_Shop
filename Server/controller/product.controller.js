@@ -41,6 +41,313 @@ const shuffleProducts = (products = [], seedText = '') => {
     return shuffled;
 };
 
+const SEARCH_SYNONYM_GROUPS = [
+    ["mobile", "mobiles", "phone", "phones", "smartphone", "smartphones", "cellphone", "cellphones", "handset", "handsets"],
+    ["laptop", "laptops", "notebook", "notebooks"],
+    ["earbud", "earbuds", "earphone", "earphones", "headphone", "headphones", "buds"],
+    ["tv", "tvs", "television", "televisions", "smarttv", "smarttvs"],
+    ["fridge", "fridges", "refrigerator", "refrigerators"],
+    ["ac", "airconditioner", "airconditioners", "conditioner", "conditioners"],
+];
+
+const normalizeSearchText = (value = "") => String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const escapeRegex = (value = "") => String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const levenshteinDistance = (left = "", right = "") => {
+    const a = normalizeSearchText(left);
+    const b = normalizeSearchText(right);
+
+    if (!a) return b.length;
+    if (!b) return a.length;
+
+    const rows = a.length + 1;
+    const cols = b.length + 1;
+    const matrix = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+    for (let row = 0; row < rows; row += 1) {
+        matrix[row][0] = row;
+    }
+    for (let col = 0; col < cols; col += 1) {
+        matrix[0][col] = col;
+    }
+
+    for (let row = 1; row < rows; row += 1) {
+        for (let col = 1; col < cols; col += 1) {
+            const cost = a[row - 1] === b[col - 1] ? 0 : 1;
+            matrix[row][col] = Math.min(
+                matrix[row - 1][col] + 1,
+                matrix[row][col - 1] + 1,
+                matrix[row - 1][col - 1] + cost,
+            );
+        }
+    }
+
+    return matrix[rows - 1][cols - 1];
+};
+
+const pickClosestWord = (word = "", dictionary = []) => {
+    const source = normalizeSearchText(word);
+    if (!source || source.length < 3 || !Array.isArray(dictionary) || dictionary.length === 0) {
+        return "";
+    }
+
+    let best = "";
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    dictionary.forEach((candidateRaw) => {
+        const candidate = normalizeSearchText(candidateRaw);
+        if (!candidate || candidate === source) {
+            return;
+        }
+
+        const distance = levenshteinDistance(source, candidate);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = candidate;
+        }
+    });
+
+    const allowedDistance = source.length <= 4 ? 1 : (source.length <= 8 ? 2 : 3);
+    return bestDistance <= allowedDistance ? best : "";
+};
+
+const getSynonymExpandedTerms = (query = "") => {
+    const normalizedQuery = normalizeSearchText(query);
+    if (!normalizedQuery) {
+        return [];
+    }
+
+    const tokens = normalizedQuery.split(" ").filter(Boolean);
+    const expanded = new Set([normalizedQuery]);
+
+    tokens.forEach((token, tokenIndex) => {
+        const group = SEARCH_SYNONYM_GROUPS.find((synonymGroup) => synonymGroup.includes(token));
+        if (!group) {
+            return;
+        }
+
+        group.forEach((word) => {
+            if (word !== token) {
+                const replaced = [...tokens];
+                replaced[tokenIndex] = word;
+                expanded.add(replaced.join(" "));
+            }
+        });
+    });
+
+    return Array.from(expanded).slice(0, 12);
+};
+
+const getCorrectionDictionary = async () => {
+    const products = await ProductModel.find({}, "productName brand")
+        .populate("category", "catName")
+        .populate("subCategory", "subCatName")
+        .limit(600)
+        .lean();
+
+    const dictionary = new Set();
+
+    products.forEach((item) => {
+        [
+            item?.productName,
+            item?.brand,
+            item?.category?.catName,
+            item?.subCategory?.subCatName,
+        ].forEach((textValue) => {
+            const normalized = normalizeSearchText(textValue);
+            if (!normalized) {
+                return;
+            }
+
+            normalized.split(" ").forEach((word) => {
+                if (word && word.length >= 3) {
+                    dictionary.add(word);
+                }
+            });
+        });
+    });
+
+    SEARCH_SYNONYM_GROUPS.forEach((group) => {
+        group.forEach((word) => dictionary.add(word));
+    });
+
+    return Array.from(dictionary);
+};
+
+const getAutocorrectedQuery = async (query = "") => {
+    const normalizedQuery = normalizeSearchText(query);
+    if (!normalizedQuery) {
+        return "";
+    }
+
+    const dictionary = await getCorrectionDictionary();
+    const tokens = normalizedQuery.split(" ").filter(Boolean);
+
+    const correctedTokens = tokens.map((token) => {
+        const closest = pickClosestWord(token, dictionary);
+        return closest || token;
+    });
+
+    const correctedQuery = correctedTokens.join(" ").trim();
+    return correctedQuery && correctedQuery !== normalizedQuery ? correctedQuery : "";
+};
+
+const buildSearchQueryForTerm = async ({ term, requesterRole, requesterId }) => {
+    const safePattern = escapeRegex(term);
+    const searchRegex = new RegExp(safePattern, "i");
+
+    const [matchingCategories, matchingSubCategories] = await Promise.all([
+        mongoose.model("category").find({ catName: searchRegex }, { _id: 1 }).lean(),
+        mongoose.model("subcategory").find({ subCatName: searchRegex }, { _id: 1 }).lean(),
+    ]);
+
+    const categoryIds = matchingCategories.map((item) => item._id);
+    const subCategoryIds = matchingSubCategories.map((item) => item._id);
+
+    const searchConditions = [
+        { $text: { $search: term } },
+        { productName: searchRegex },
+        { description: searchRegex },
+        { brand: searchRegex },
+        { size: searchRegex },
+        { color: searchRegex },
+    ];
+
+    if (categoryIds.length > 0) {
+        searchConditions.push({ category: { $in: categoryIds } });
+    }
+
+    if (subCategoryIds.length > 0) {
+        searchConditions.push({ subCategory: { $in: subCategoryIds } });
+    }
+
+    const searchQuery = { $or: searchConditions };
+    if (requesterRole === "seller" && mongoose.Types.ObjectId.isValid(requesterId)) {
+        searchQuery.createdBy = new mongoose.Types.ObjectId(requesterId);
+    }
+
+    return searchQuery;
+};
+
+const fetchProductsByTerm = async ({ term, sortOption, requesterRole, requesterId }) => {
+    const searchRegex = new RegExp(escapeRegex(term), "i");
+
+    const pipeline = [];
+
+    if (requesterRole === "seller" && mongoose.Types.ObjectId.isValid(requesterId)) {
+        pipeline.push({
+            $match: {
+                createdBy: new mongoose.Types.ObjectId(requesterId),
+            },
+        });
+    }
+
+    pipeline.push(
+        {
+            $lookup: {
+                from: "categories",
+                localField: "category",
+                foreignField: "_id",
+                as: "category",
+                pipeline: [{ $project: { catName: 1 } }],
+            },
+        },
+        {
+            $lookup: {
+                from: "subcategories",
+                localField: "subCategory",
+                foreignField: "_id",
+                as: "subCategory",
+                pipeline: [{ $project: { subCatName: 1 } }],
+            },
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "createdBy",
+                foreignField: "_id",
+                as: "createdBy",
+                pipeline: [{ $project: { name: 1, email: 1 } }],
+            },
+        },
+        { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
+        { $unwind: { path: "$subCategory", preserveNullAndEmptyArrays: true } },
+        { $unwind: { path: "$createdBy", preserveNullAndEmptyArrays: true } },
+        {
+            $match: {
+                $or: [
+                    { productName: searchRegex },
+                    { description: searchRegex },
+                    { brand: searchRegex },
+                    { size: searchRegex },
+                    { weight: searchRegex },
+                    { RAM: searchRegex },
+                    { ROM: searchRegex },
+                    { color: searchRegex },
+                    { "category.catName": searchRegex },
+                    { "subCategory.subCatName": searchRegex },
+                ],
+            },
+        },
+    );
+
+    if (sortOption && Object.keys(sortOption).length > 0) {
+        pipeline.push({ $sort: sortOption });
+    }
+
+    return await ProductModel.aggregate(pipeline);
+};
+
+const toSafeNumericValue = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return 0;
+    }
+
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
+    }
+
+    if (typeof value === 'object' && typeof value.$numberDecimal === 'string') {
+        return Number.parseFloat(value.$numberDecimal) || 0;
+    }
+
+    const parsed = Number.parseFloat(typeof value === 'object' && typeof value.toString === 'function' ? value.toString() : value);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const applySearchFilter = (products = [], filterBy = '') => {
+    const normalizedFilter = String(filterBy || '').trim();
+
+    if (!normalizedFilter) {
+        return products;
+    }
+
+    return products.filter((product) => {
+        if (normalizedFilter === 'featured') {
+            return product?.featured === true;
+        }
+
+        if (normalizedFilter === 'discounted') {
+            return toSafeNumericValue(product?.discountPercentage) > 0;
+        }
+
+        if (normalizedFilter === 'best-selling') {
+            return toSafeNumericValue(product?.sales) > 0;
+        }
+
+        if (normalizedFilter === 'high-rated') {
+            return toSafeNumericValue(product?.rating) >= 4;
+        }
+
+        return true;
+    });
+};
+
 cloudinary.config({
     cloud_name: process.env.cloudinary_Config_Cloud_Name,
     api_key: process.env.cloudinary_Config_api_key,
@@ -902,9 +1209,11 @@ export const getLatestProductsController = async (req, res) => {
 
 export const searchProductsController = async (req, res) => {
     try {
-        const searchTerm = req.query.q;
+        const searchTerm = String(req.query.q || "").trim();
         const requesterRole = String(req.userRole || '').toLowerCase();
         const requesterId = String(req.userId || '').trim();
+        const filterBy = String(req.query.filterBy || '').trim();
+        const randomSeed = String(req.query.seed || '').trim();
         if (!searchTerm) {
             return res.status(400).json({
                 message: "Search term is required",
@@ -913,63 +1222,71 @@ export const searchProductsController = async (req, res) => {
             });
         }
 
-        // Find matching category & subCategory IDs by name
-        const [matchingCategories, matchingSubCategories] = await Promise.all([
-            mongoose.model("category").find(
-                { $text: { $search: searchTerm } },
-                { _id: 1 }
-            ),
-            mongoose.model("subcategory").find(
-                { $text: { $search: searchTerm } },
-                { _id: 1 }
-            )
-        ]);
-
-        const categoryIds = matchingCategories.map(c => c._id);
-        const subCategoryIds = matchingSubCategories.map(s => s._id);
-
-        // $text searches across all text-indexed fields (productName, description, size, weight, RAM, color)
-        // MongoDB $text automatically splits the search term into words and matches each word
-        const searchConditions = [
-            { $text: { $search: searchTerm } },
-        ];
-
-        if (categoryIds.length > 0) {
-            searchConditions.push({ category: { $in: categoryIds } });
-        }
-        if (subCategoryIds.length > 0) {
-            searchConditions.push({ subCategory: { $in: subCategoryIds } });
-        }
-
-        // Sort options: a-z, z-a, priceLow, priceHigh, ratingLow, ratingHigh
         const sortBy = req.query.sortBy;
+        const isRandomSort = !sortBy || sortBy === 'random';
         let sortOption = {};
         switch (sortBy) {
             case "a-z": sortOption = { productName: 1 }; break;
             case "z-a": sortOption = { productName: -1 }; break;
             case "priceLow": sortOption = { price: 1 }; break;
             case "priceHigh": sortOption = { price: -1 }; break;
-            case "ratingLow": sortOption = { Rating: 1 }; break;
-            case "ratingHigh": sortOption = { Rating: -1 }; break;
+            case "ratingLow": sortOption = { rating: 1 }; break;
+            case "ratingHigh": sortOption = { rating: -1 }; break;
+            case "random":
+                sortOption = {};
+                break;
             default: sortOption = {};
         }
 
-        const searchQuery = { $or: searchConditions };
-        if (requesterRole === 'seller' && mongoose.Types.ObjectId.isValid(requesterId)) {
-            searchQuery.createdBy = new mongoose.Types.ObjectId(requesterId);
-        }
+        const normalizedSearch = normalizeSearchText(searchTerm);
+        const synonymTerms = getSynonymExpandedTerms(normalizedSearch).filter((term) => term !== normalizedSearch);
+        const correctedQuery = await getAutocorrectedQuery(normalizedSearch);
+        const correctedSynonymTerms = correctedQuery
+            ? getSynonymExpandedTerms(correctedQuery).filter((term) => term !== correctedQuery)
+            : [];
 
-        const products = await ProductModel.find(searchQuery)
-            .populate("category", "catName")
-            .populate("subCategory", "subCatName")
-            .populate("createdBy", "name email")
-            .sort(sortOption);
+        const searchFlow = [
+            { term: normalizedSearch, strategy: "exact" },
+            ...synonymTerms.map((term) => ({ term, strategy: "synonym" })),
+            ...(correctedQuery ? [{ term: correctedQuery, strategy: "autocorrect" }] : []),
+            ...correctedSynonymTerms.map((term) => ({ term, strategy: "autocorrect+synonym" })),
+        ];
+
+        let products = [];
+        let matchedTerm = normalizedSearch;
+        let matchedStrategy = "exact";
+
+        for (let index = 0; index < searchFlow.length; index += 1) {
+            const candidate = searchFlow[index];
+            const foundProducts = await fetchProductsByTerm({
+                term: candidate.term,
+                sortOption,
+                requesterRole,
+                requesterId,
+            });
+
+            const filteredProducts = applySearchFilter(foundProducts, filterBy);
+
+            if (Array.isArray(filteredProducts) && filteredProducts.length > 0) {
+                products = isRandomSort ? shuffleProducts(filteredProducts, randomSeed || normalizedSearch) : filteredProducts;
+                matchedTerm = candidate.term;
+                matchedStrategy = candidate.strategy;
+                break;
+            }
+        }
 
         return res.status(200).json({
             message: "Products fetched successfully",
             success: true,
             error: false,
-            products
+            products,
+            searchMeta: {
+                originalQuery: searchTerm,
+                appliedQuery: matchedTerm,
+                correctedQuery: correctedQuery || null,
+                strategy: matchedStrategy,
+                didFallback: matchedTerm !== normalizedSearch,
+            },
         });
 
     } catch (error) {
