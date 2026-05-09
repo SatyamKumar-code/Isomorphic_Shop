@@ -7,7 +7,7 @@ import 'swiper/css';
 import 'swiper/css/pagination';
 import 'swiper/css/navigation';
 import { Pagination, Navigation } from 'swiper/modules';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { deleteData, fetchDataFromApi, postData } from '../../utils/api';
 import { MyContext } from '../../App';
 
@@ -22,6 +22,8 @@ const Product = ({ endpoint = '/api/product/latest', limit = 10 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [cartItems, setCartItems] = useState([]);
   const [activeProductId, setActiveProductId] = useState(null);
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadCartDetails = async () => {
@@ -108,7 +110,8 @@ const Product = ({ endpoint = '/api/product/latest', limit = 10 }) => {
       return;
     }
 
-    context?.alertBox?.('error', response?.message || 'Unable to add product to cart.');
+    context?.alertBox?.('error','Login first.');
+    navigate('/login');
   };
 
   const handleRemoveFromCart = async (productId) => {

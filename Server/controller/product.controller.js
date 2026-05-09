@@ -6,6 +6,41 @@ import mongoose from "mongoose";
 import ReviewModel from "../models/review.model.js";
 import UserModel from "../models/user.model.js";
 
+const hashSeed = (seedText = '') => {
+    let hash = 2166136261;
+
+    for (let index = 0; index < seedText.length; index += 1) {
+        hash ^= seedText.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+
+    return hash >>> 0;
+};
+
+const createSeededRandom = (seedText = '') => {
+    let state = hashSeed(seedText || 'products-random');
+
+    return () => {
+        state += 0x6D2B79F5;
+        let value = state;
+        value = Math.imul(value ^ (value >>> 15), value | 1);
+        value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+        return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+};
+
+const shuffleProducts = (products = [], seedText = '') => {
+    const shuffled = [...products];
+    const random = createSeededRandom(seedText);
+
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(random() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+
+    return shuffled;
+};
+
 cloudinary.config({
     cloud_name: process.env.cloudinary_Config_Cloud_Name,
     api_key: process.env.cloudinary_Config_api_key,
@@ -261,6 +296,7 @@ export const getAdminProductsController = async (req, res) => {
 export const getAllProductsController = async (req, res) => {
     try {
         const sortBy = req.query.sortBy;
+        const randomSeed = String(req.query.seed || '').trim();
         const requesterRole = String(req.userRole || '').toLowerCase();
         const requesterId = String(req.userId || '').trim();
         const requestedCreatedBy = String(req.query.createdBy || "").trim();
@@ -294,6 +330,8 @@ export const getAllProductsController = async (req, res) => {
             case "featured":
                 filterStage = { $match: { featured: true } };
                 sortStage = { $sort: { createdAt: -1, _id: -1 } };
+                break;
+            case "random":
                 break;
         }
 
@@ -357,6 +395,38 @@ export const getAllProductsController = async (req, res) => {
 
         if (filterStage) {
             basePipeline.push(filterStage);
+        }
+
+        if (sortBy === 'random') {
+            const products = await ProductModel.aggregate(basePipeline);
+            const shuffledProducts = shuffleProducts(products, randomSeed);
+
+            if (!paginate) {
+                return res.status(200).json({
+                    message: "Products fetched successfully",
+                    success: true,
+                    error: false,
+                    products: shuffledProducts,
+                });
+            }
+
+            const skip = (page - 1) * limit;
+            const paginatedProducts = shuffledProducts.slice(skip, skip + limit);
+
+            return res.status(200).json({
+                message: "Products fetched successfully",
+                success: true,
+                error: false,
+                products: paginatedProducts,
+                pagination: {
+                    page,
+                    limit,
+                    totalCount: shuffledProducts.length,
+                    totalPages: Math.max(1, Math.ceil(shuffledProducts.length / limit)),
+                    hasNextPage: skip + limit < shuffledProducts.length,
+                    hasPrevPage: page > 1,
+                },
+            });
         }
 
         if (sortStage) {
