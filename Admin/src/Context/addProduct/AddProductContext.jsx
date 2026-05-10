@@ -34,6 +34,8 @@ const defaultFormData = {
     RAM: '',
     ROM: '',
     color: '',
+    returnDays: '7',
+    warranty: '',
     searchText: '',
 };
 
@@ -89,6 +91,8 @@ const buildFormDataFromProduct = (product, previousSearchText = '') => {
         RAM: product?.RAM || '',
         ROM: product?.ROM || '',
         color: product?.color || '',
+        returnDays: String(product?.returnDays ?? '7'),
+        warranty: product?.warranty || '',
         searchText: previousSearchText,
     };
 };
@@ -497,6 +501,8 @@ export const AddProductProvider = ({ children }) => {
                 RAM: formData.RAM || undefined,
                 ROM: formData.ROM || undefined,
                 color: formData.color,
+                returnDays: formData.returnDays === '' ? undefined : Number(formData.returnDays),
+                warranty: formData.warranty || undefined,
                 featured: Boolean(formData.featured),
                 images: uploadedImages,
                 ...(formData.expirationStart ? { expirationStart: formData.expirationStart } : {}),

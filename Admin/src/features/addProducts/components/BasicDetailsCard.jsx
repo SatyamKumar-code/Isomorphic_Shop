@@ -197,6 +197,32 @@ const BasicDetailsCard = () => {
                 </div>
             </div>
 
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+                <div className="mb-3 md:mb-0">
+                    <label className={labelClass} htmlFor="returnDays">Return Days</label>
+                    <input
+                        id="returnDays"
+                        type="number"
+                        min="0"
+                        className={inputClass}
+                        value={formData.returnDays}
+                        onChange={(event) => updateField('returnDays', event.target.value)}
+                        placeholder="e.g. 7"
+                    />
+                </div>
+
+                <div className="mb-3 md:mb-0">
+                    <label className={labelClass} htmlFor="warranty">Warranty</label>
+                    <input
+                        id="warranty"
+                        className={inputClass}
+                        value={formData.warranty}
+                        onChange={(event) => updateField('warranty', event.target.value)}
+                        placeholder="e.g. 1 year brand warranty"
+                    />
+                </div>
+            </div>
+
             {(showRamRomFields || showSizeField || showWeightField) && (
                 <>
                     <h3 className="mb-2.5 mt-2 text-[28px] font-bold leading-[1.1] text-slate-900 dark:text-slate-100 xl:text-[24px]">Specifications</h3>

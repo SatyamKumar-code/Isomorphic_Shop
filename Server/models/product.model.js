@@ -75,6 +75,15 @@ const productSchema = new mongoose.Schema({
         type: Date,
         default: null,
     },
+    returnDays: {
+        type: Number,
+        default: 7,
+        min: 0,
+    },
+    warranty: {
+        type: String,
+        default: "",
+    },
     sales: {
         type: Number,
         default: 0,

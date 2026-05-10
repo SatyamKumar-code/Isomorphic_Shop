@@ -6,6 +6,8 @@ import mongoose from "mongoose";
 import ReviewModel from "../models/review.model.js";
 import UserModel from "../models/user.model.js";
 import OrderModel from "../models/order.model.js";
+import SellerLocationModel from "../models/sellerLocation.model.js";
+import AddressModel from "../models/address.model.js";
 
 const hashSeed = (seedText = '') => {
     let hash = 2166136261;
@@ -38,6 +40,109 @@ const getReviewEditState = async ({ review, userId, productId } = {}) => {
     return {
         deliveredCount,
         canEdit: deliveredCount > unlockedAtOrderCount,
+    };
+};
+
+const normalizeLocationText = (value = '') => String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const isSameLocation = (sellerLocation = '', userLocation = '') => {
+    const seller = normalizeLocationText(sellerLocation);
+    const user = normalizeLocationText(userLocation);
+
+    if (!seller || !user) {
+        return false;
+    }
+
+    return seller === user || seller.includes(user) || user.includes(seller);
+};
+
+const getUserLocationText = async (userId) => {
+    if (!userId) {
+        return '';
+    }
+
+    const defaultAddress = await AddressModel.findOne({ userId, isDefault: true })
+        .sort({ createdAt: -1 })
+        .lean();
+
+    const fallbackAddress = defaultAddress || await AddressModel.findOne({ userId })
+        .sort({ createdAt: -1 })
+        .lean();
+
+    if (!fallbackAddress) {
+        return '';
+    }
+
+    return [fallbackAddress.address_line1, fallbackAddress.city, fallbackAddress.state, fallbackAddress.pincode, fallbackAddress.country]
+        .filter(Boolean)
+        .join(' ');
+};
+
+const getSellerLocationText = async (sellerId) => {
+    if (!sellerId) {
+        return '';
+    }
+
+    const sellerLocation = await SellerLocationModel.findOne({ userId: sellerId }).select('location').lean();
+    return sellerLocation?.location || '';
+};
+
+const getPreviousDeliveredDurationDays = async ({ userId, productId } = {}) => {
+    if (!userId || !productId) {
+        return 0;
+    }
+
+    const previousOrder = await OrderModel.findOne({
+        userId,
+        status: 'delivered',
+        paymentStatus: 'completed',
+        'products.productId': productId,
+    })
+        .sort({ deliveredAt: -1, createdAt: -1 })
+        .select('createdAt deliveredAt')
+        .lean();
+
+    if (!previousOrder?.createdAt) {
+        return 0;
+    }
+
+    const startTime = new Date(previousOrder.createdAt).getTime();
+    const endTime = new Date(previousOrder.deliveredAt || previousOrder.createdAt).getTime();
+
+    if (Number.isNaN(startTime) || Number.isNaN(endTime) || endTime < startTime) {
+        return 0;
+    }
+
+    return Math.max(1, Math.ceil((endTime - startTime) / (1000 * 60 * 60 * 24)));
+};
+
+const buildDeliveryEstimate = async ({ product, userId }) => {
+    const sellerId = product?.createdBy?._id || product?.createdBy || null;
+    const sellerLocation = await getSellerLocationText(sellerId);
+    const userLocation = await getUserLocationText(userId);
+    const sameLocation = isSameLocation(sellerLocation, userLocation);
+    const previousDeliveryDays = sameLocation
+        ? await getPreviousDeliveredDurationDays({ userId, productId: product?._id })
+        : 0;
+
+    const expectedDays = previousDeliveryDays > 0
+        ? previousDeliveryDays + 2
+        : 3;
+
+    const expectedDate = new Date();
+    expectedDate.setDate(expectedDate.getDate() + expectedDays);
+
+    return {
+        expectedDays,
+        expectedDate: expectedDate.toISOString(),
+        sameLocation,
+        sellerLocation,
+        userLocation,
+        previousDeliveryDays,
     };
 };
 
@@ -574,6 +679,8 @@ export const createProductController = async (req, res) => {
             images,
             expirationStart,
             expirationEnd,
+            returnDays,
+            warranty,
         } = req.body;
         const requestImages = Array.isArray(images) ? images : [];
         const parsedOldPrice = Number(oldPrice ?? productPrice ?? price ?? 0);
@@ -612,6 +719,8 @@ export const createProductController = async (req, res) => {
             stock,
             expirationStart: parsedExpirationStart,
             expirationEnd: parsedExpirationEnd,
+            returnDays: Number.isFinite(Number(returnDays)) ? Number(returnDays) : 7,
+            warranty: String(warranty || '').trim(),
             createdBy: adminId || null,
         });
 
@@ -937,11 +1046,16 @@ export const getProductByIdController = async (req, res) => {
             });
         }
 
+        const deliveryEstimate = await buildDeliveryEstimate({ product, userId: req.userId });
+
         return res.status(200).json({
             message: "Product fetched successfully",
             success: true,
             error: false,
-            product
+            product: {
+                ...product.toObject(),
+                deliveryEstimate,
+            }
         });
 
 
@@ -977,8 +1091,11 @@ export const updateProductController = async (req, res) => {
             color,
             featured,
             stock,
+            images,
             expirationStart,
             expirationEnd,
+            returnDays,
+            warranty,
         } = req.body;
         const parsedOldPrice = Number(oldPrice ?? productPrice ?? 0);
         const parsedDiscountPercentage = Math.min(Math.max(Number(discountPercentage ?? discount ?? 0), 0), 99);
@@ -986,6 +1103,8 @@ export const updateProductController = async (req, res) => {
         const parsedExpirationEnd = expirationEnd ? new Date(expirationEnd) : null;
         const parsedRAM = RAM ?? req.body.Ram;
         const parsedROM = ROM ?? req.body.Rom;
+        const requestImages = Array.isArray(images) ? images : [];
+
         if (!productId) {
             return res.status(400).json({
                 message: "Product ID is required",
@@ -1013,8 +1132,21 @@ export const updateProductController = async (req, res) => {
         }
         updateObj.expirationStart = parsedExpirationStart;
         updateObj.expirationEnd = parsedExpirationEnd;
+        if (returnDays !== undefined) {
+            const parsedReturnDays = Number(returnDays);
+            if (Number.isFinite(parsedReturnDays) && parsedReturnDays >= 0) {
+                updateObj.returnDays = parsedReturnDays;
+            }
+        }
+        if (warranty !== undefined) {
+            updateObj.warranty = String(warranty || '').trim();
+        }
+
+        // Handle images: prioritize request body images, then use uploaded images
         let usedImagesArr = false;
-        if (imagesArr && imagesArr.length > 0) {
+        if (requestImages.length > 0) {
+            updateObj.images = requestImages;
+        } else if (imagesArr && imagesArr.length > 0) {
             updateObj.images = imagesArr;
             usedImagesArr = true;
         }

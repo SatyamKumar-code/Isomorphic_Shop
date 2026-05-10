@@ -41,21 +41,89 @@ const ProductDetails = () => {
     const [myReview, setMyReview] = useState(null);
     const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
     const [canReview, setCanReview] = useState(false);
-    const [canEditReview, setCanEditReview] = useState(false);
     const [isCheckingReviewEligibility, setIsCheckingReviewEligibility] = useState(true);
     const [reviewRating, setReviewRating] = useState(5);
     const [reviewComment, setReviewComment] = useState('');
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     const [userPendingRating, setUserPendingRating] = useState(null);
     const [isEditingReview, setIsEditingReview] = useState(false);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const reviewPageActiveRef = useRef(false);
+    const touchStartXRef = useRef(0);
+    const touchEndXRef = useRef(0);
+    const mouseDownXRef = useRef(0);
+
+    const handleTouchStart = (e) => {
+        touchStartXRef.current = e.touches[0].clientX;
+    };
+
+    const handleTouchEnd = (e) => {
+        touchEndXRef.current = e.changedTouches[0].clientX;
+        handleSwipe(touchStartXRef.current, touchEndXRef.current);
+    };
+
+    const handleMouseDown = (e) => {
+        mouseDownXRef.current = e.clientX;
+    };
+
+    const handleMouseUp = (e) => {
+        handleSwipe(mouseDownXRef.current, e.clientX);
+    };
+
+    const handleSwipe = (startX, endX) => {
+        const images = Array.isArray(product?.images) ? product.images : [];
+        if (images.length <= 1) return;
+
+        const diff = startX - endX;
+        const threshold = 50; // minimum swipe distance
+
+        if (diff > threshold) {
+            // swipe left - next image
+            handleNextImage();
+        } else if (diff < -threshold) {
+            // swipe right - previous image
+            handlePreviousImage();
+        }
+    };
 
     const formatPrice = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
+
+    const getCurrentProductImage = () => {
+        const images = Array.isArray(product?.images) ? product.images : [];
+        return images[currentImageIndex] || images[0] || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFYqoKTu_o3Zns2yExbst2Co84Gpc2Q1RJbA&s";
+    };
+
+    const handlePreviousImage = () => {
+        const images = Array.isArray(product?.images) ? product.images : [];
+        if (images.length > 1) {
+            setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+        }
+    };
+
+    const handleNextImage = () => {
+        const images = Array.isArray(product?.images) ? product.images : [];
+        if (images.length > 1) {
+            setCurrentImageIndex((prev) => (prev + 1) % images.length);
+        }
+    };
 
     const calculateDeliveryDate = (days = 3) => {
         const d = new Date();
         d.setDate(d.getDate() + days);
         return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    };
+
+    const formatDeliveryDate = (value) => {
+        if (!value) {
+            return calculateDeliveryDate(3);
+        }
+
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return calculateDeliveryDate(3);
+        }
+
+        return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
     };
 
     const formatDate = (value) => {
@@ -83,6 +151,8 @@ const ProductDetails = () => {
         { label: 'Color', value: product?.color },
         { label: 'Expiration Start', value: formatDate(product?.expirationStart) },
         { label: 'Expiration End', value: formatDate(product?.expirationEnd) },
+        { label: 'Return Days', value: product?.returnDays ? `${product.returnDays} days` : '' },
+        { label: 'Warranty', value: product?.warranty },
     ].filter((item) => item.value);
 
     const ratingStats = React.useMemo(() => {
@@ -132,9 +202,6 @@ const ProductDetails = () => {
                 setMyReview(response?.myReview || null);
                 // any existing review record should hide the form
                 setCanReview(false);
-                if (response?.myReview?.canEdit) {
-                    setCanEditReview(true);
-                }
                 // if user's pending review got approved and appears in incoming, clear pending flag
                 try {
                     const currentUserId = context?.userData?._id;
@@ -202,7 +269,7 @@ const ProductDetails = () => {
                     productName: product?.productName || 'Product Name',
                     price: product?.price || 0,
                     quantity: 1,
-                    image: product?.images?.[0] || '',
+                    image: getCurrentProductImage(),
                     description: product?.description || '',
                 },
             },
@@ -257,7 +324,7 @@ const ProductDetails = () => {
         reviewPageActiveRef.current = true;
         setIsCheckingReviewEligibility(true);
         setCanReview(false);
-        setCanEditReview(false);
+        setCurrentImageIndex(0);
 
         setIsLoading(true);
 
@@ -303,22 +370,10 @@ const ProductDetails = () => {
                 if (reviewPageActiveRef.current) {
                     // Only allow submitting a new review if user is eligible and does not already have a review
                     setCanReview(eligible && !myReview);
-
-                    // Prefer server-provided `myReview.canEdit` when available; otherwise fall back to repeat order heuristic
-                    if (myReview) {
-                        setCanEditReview(Boolean(myReview.canEdit));
-                    } else {
-                        setCanEditReview(repeatEligible);
-                    }
-
-                    if (repeatEligible && myReview && myReview.canEdit) {
-                        setMyReview((current) => current ? { ...current, canEdit: true } : current);
-                    }
                 }
             } catch (error) {
                 if (reviewPageActiveRef.current) {
                     setCanReview(false);
-                    setCanEditReview(false);
                 }
             } finally {
                 if (reviewPageActiveRef.current) {
@@ -342,16 +397,41 @@ const ProductDetails = () => {
 
     return (
         <div className='relative w-full min-h-screen pb-28 product-details-page'>
-            <div className='absolute top-4 left-4'>
+            <div className='absolute top-4 left-4 z-50'>
                 <BackButton />
             </div>
-            <div className='w-full h-100 bg-amber-50 rounded-b-xl overflow-hidden flex items-center justify-center'>
+            <div className='w-full h-100 bg-amber-50 rounded-b-xl flex items-center justify-center relative group'>
                 <img
-                    src={product?.images?.[0] || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFYqoKTu_o3Zns2yExbst2Co84Gpc2Q1RJbA&s"}
+                    src={getCurrentProductImage()}
                     alt={product?.productName || 'Product'}
-                    className='w-full h-100 object-cover'
+                    className='w-full h-100 object-cover cursor-grab active:cursor-grabbing'
+                    onTouchStart={handleTouchStart}
+                    onTouchEnd={handleTouchEnd}
+                    onMouseDown={handleMouseDown}
+                    onMouseUp={handleMouseUp}
                 />
             </div>
+            {Array.isArray(product?.images) && product.images.length > 1 && (
+                <div className='mt-3 flex gap-2 overflow-x-auto pb-2 no-scrollbar'>
+                    {product.images.map((image, index) => (
+                        <button
+                            key={index}
+                            type='button'
+                            onClick={() => setCurrentImageIndex(index)}
+                            className={`flex-shrink-0 h-16 w-16 rounded-lg border-2 overflow-hidden ${currentImageIndex === index
+                                ? 'border-blue-500 shadow-md'
+                                : 'border-gray-200 opacity-70 hover:opacity-100'
+                                }`}
+                        >
+                            <img
+                                src={image}
+                                alt={`Product ${index + 1}`}
+                                className='h-full w-full object-cover'
+                            />
+                        </button>
+                    ))}
+                </div>
+            )}
             <div className='absolute top-4! right-4 w-10 h-10 rounded-full bg-white flex items-center justify-center'>
                 <FaHeart className='text-gray-400 text-lg' />
             </div>
@@ -413,10 +493,25 @@ const ProductDetails = () => {
                     </ul>
                 </div>
 
-                <div className='mt-4'>
-                    <h4 className='text-lg font-bold mb-2'>Delivery</h4>
-                    <div className='text-sm text-gray-700'>
-                        Delivery by <span className='font-medium'>{calculateDeliveryDate(3)}</span> | Free delivery on orders above ₹499
+                <div className='mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm'>
+                    <h4 className='text-lg font-bold mb-3'>Delivery & Returns</h4>
+                    <div className='space-y-3 text-sm text-gray-700'>
+                        <div className='flex items-start justify-between gap-4'>
+                            <span className='font-medium text-gray-900'>Expected delivery</span>
+                            <span className='text-right'>By <span className='font-semibold'>{formatDeliveryDate(product?.deliveryEstimate?.expectedDate)}</span></span>
+                        </div>
+                        <div className='flex items-start justify-between gap-4'>
+                            <span className='font-medium text-gray-900'>Return policy</span>
+                            <span className='text-right'>Easy return within <span className='font-semibold'>{product?.returnDays || 7} days</span> of delivery</span>
+                        </div>
+                        <div className='flex items-start justify-between gap-4'>
+                            <span className='font-medium text-gray-900'>Warranty</span>
+                            <span className='text-right'>{product?.warranty || 'Brand warranty where applicable'}</span>
+                        </div>
+                        <div className='flex items-start justify-between gap-4'>
+                            <span className='font-medium text-gray-900'>Shipping</span>
+                            <span className='text-right'>Secure packaging and tracking updates</span>
+                        </div>
                     </div>
                 </div>
 
@@ -514,7 +609,7 @@ const ProductDetails = () => {
                 ) : null}
 
                 {/* Edit button for users who can edit their review */}
-                {myReview && myReview.canEdit && !isEditingReview && (
+                {myReview && Boolean(myReview.canEdit) && !isEditingReview && (
                     <div className='mt-3'>
                         <button type='button' onClick={() => { setIsEditingReview(true); setReviewRating(Number(myReview.rating || 5)); setReviewComment(myReview.comment || ''); setCanReview(true); }} className='text-sm font-medium text-blue-600'>Edit your review</button>
                     </div>
@@ -586,7 +681,7 @@ const ProductDetails = () => {
                     )}
                 </div>
             </div>
-            <div className='fixed bottom-1 left-0 p-3 right-0'>
+            <div className='fixed bg-white bottom-0 left-0 p-3 right-0'>
                 <div className='flex relative items-center'>
                     <button
                         type='button'

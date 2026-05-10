@@ -6,11 +6,14 @@ const BackButton = () => {
         window.history.back();
     }
     return (
-        <div>
-            <div className='w-10 h-10 bg-gray-100 rounded-full items-center justify-center flex cursor-pointer' onClick={handleBack}>
-                <FaArrowLeftLong />
-            </div>
-        </div>
+        <button
+            onClick={handleBack}
+            className='w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors'
+            aria-label='Go back'
+            type='button'
+        >
+            <FaArrowLeftLong />
+        </button>
     )
 }
 

@@ -57,7 +57,7 @@ productRouter.post("/", adminAuth, createProductController);
 productRouter.get("/admin/mine", adminAuth, getAdminProductsController);
 productRouter.get("/admin/:id", adminAuth, getAdminProductByIdController);
 productRouter.get("/", getAllProductsController);
-productRouter.get("/:id", getProductByIdController);
+productRouter.get("/:id", optionalUserMiddleware, getProductByIdController);
 productRouter.put("/:id", adminAuth, updateProductController);
 productRouter.delete("/:id", adminAuth, deleteProductController);
 export default productRouter;
