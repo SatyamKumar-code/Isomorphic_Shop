@@ -301,10 +301,17 @@ const ProductDetails = () => {
                 const repeatEligible = deliveredOrdersForProduct.length >= 2;
 
                 if (reviewPageActiveRef.current) {
-                    setCanReview(eligible);
-                    setCanEditReview(repeatEligible);
+                    // Only allow submitting a new review if user is eligible and does not already have a review
+                    setCanReview(eligible && !myReview);
 
-                    if (repeatEligible && myReview) {
+                    // Prefer server-provided `myReview.canEdit` when available; otherwise fall back to repeat order heuristic
+                    if (myReview) {
+                        setCanEditReview(Boolean(myReview.canEdit));
+                    } else {
+                        setCanEditReview(repeatEligible);
+                    }
+
+                    if (repeatEligible && myReview && myReview.canEdit) {
                         setMyReview((current) => current ? { ...current, canEdit: true } : current);
                     }
                 }
@@ -507,7 +514,7 @@ const ProductDetails = () => {
                 ) : null}
 
                 {/* Edit button for users who can edit their review */}
-                {myReview && (canEditReview || myReview.canEdit) && !isEditingReview && (
+                {myReview && myReview.canEdit && !isEditingReview && (
                     <div className='mt-3'>
                         <button type='button' onClick={() => { setIsEditingReview(true); setReviewRating(Number(myReview.rating || 5)); setReviewComment(myReview.comment || ''); setCanReview(true); }} className='text-sm font-medium text-blue-600'>Edit your review</button>
                     </div>
