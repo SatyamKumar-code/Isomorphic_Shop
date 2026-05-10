@@ -67,12 +67,13 @@ const OrderDetails = () => {
     }, [id]);
 
     const product = order?.products?.[0]?.productId || {};
+    const productId = product?._id || product?.id;
     const quantity = order?.products?.[0]?.quantity || 1;
     const image = product?.images?.[0] || 'https://via.placeholder.com/300x300?text=Product';
     const status = String(order?.status || 'pending').toLowerCase();
     const orderIdLabel = useMemo(() => formatOrderId(order?._id), [order?._id]);
     const listingPrice = Number(product?.oldPrice);
-    const salePrice = Number( product?.price);
+    const salePrice = Number(product?.price);
     const totalAmount = Number(order?.totalAmount || product?.salePrice || product?.price || 0);
     const feeAmount = listingPrice > totalAmount ? Math.max(listingPrice - totalAmount, 0) : 0;
     const deliveryText = status === 'delivered'
@@ -104,15 +105,31 @@ const OrderDetails = () => {
 
             <div className='px-1 pt-4 pb-4'>
                 <div className='flex items-start gap-3 rounded-2xl bg-white p-3'>
-                    <img src={image} alt={product?.productName || 'Product'} className='h-14 w-14 rounded-xl object-cover' />
-                    <div className='min-w-0 flex-1'>
-                        <h2 className='truncate text-[16px] font-medium leading-5 text-gray-900'>
-                            {product?.productName || 'Product'}
-                        </h2>
-                        <p className='mt-1 text-[13px] text-gray-500'>
-                            Color: {product?.color || 'Black'}
-                        </p>
-                    </div>
+                    {productId ? (
+                        <Link to={`/product/${productId}`} className='flex min-w-0 flex-1 items-start gap-3'>
+                            <img src={image} alt={product?.productName || 'Product'} className='h-14 w-14 rounded-xl object-cover' />
+                            <div className='min-w-0 flex-1'>
+                                <h2 className='truncate text-[16px] font-medium leading-5 text-gray-900'>
+                                    {product?.productName || 'Product'}
+                                </h2>
+                                <p className='mt-1 text-[13px] text-gray-500'>
+                                    Color: {product?.color || 'Black'}
+                                </p>
+                            </div>
+                        </Link>
+                    ) : (
+                        <>
+                            <img src={image} alt={product?.productName || 'Product'} className='h-14 w-14 rounded-xl object-cover' />
+                            <div className='min-w-0 flex-1'>
+                                <h2 className='truncate text-[16px] font-medium leading-5 text-gray-900'>
+                                    {product?.productName || 'Product'}
+                                </h2>
+                                <p className='mt-1 text-[13px] text-gray-500'>
+                                    Color: {product?.color || 'Black'}
+                                </p>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <div className='mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm'>
@@ -213,7 +230,7 @@ const OrderDetails = () => {
                             <span>Total fees</span>
                             <span className='text-gray-900'>₹{Math.min(Math.max(Math.round(totalAmount * 0.02), 0), 99).toLocaleString('en-IN')}</span>
                         </div>
-                        
+
                     </div>
 
                     <div className='mt-4 border-t border-dashed border-gray-200 pt-4'>

@@ -208,7 +208,7 @@ Server/
 | GET    | `/api/product/top-rated`     | —     | Get top‑rated products (limit 10).
 | GET    | `/api/product/latest`        | —     | Get latest products (limit 10).
 | GET    | `/api/product/related/:id`   | —     | Get related products sharing category or subcategory.
-| POST   | `/api/product/:id/review`    | User  | Add a review to a product (requires `rating` and `comment`).
+| POST   | `/api/product/:id/review`    | User  | Add a review to a product (requires `rating`, `comment`, and a delivered order for that product).
 | GET    | `/api/product/:id/reviews`   | —     | Get all reviews for a product (sorted newest first).
 
 ### Address Management

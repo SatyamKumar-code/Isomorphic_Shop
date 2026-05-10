@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const ReviewSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "user",
+        ref: "User",
         required: true
     },
     productId: {
@@ -25,6 +25,10 @@ const ReviewSchema = new mongoose.Schema({
         type: String,
         enum: ["Pending", "Approved", "Rejected"],
         default: "Pending"
+    },
+    editUnlockedAtOrderCount: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true })
 

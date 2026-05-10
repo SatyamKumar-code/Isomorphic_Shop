@@ -5,6 +5,7 @@ import ProductModel from "../models/product.model.js";
 import mongoose from "mongoose";
 import ReviewModel from "../models/review.model.js";
 import UserModel from "../models/user.model.js";
+import OrderModel from "../models/order.model.js";
 
 const hashSeed = (seedText = '') => {
     let hash = 2166136261;
@@ -15,6 +16,76 @@ const hashSeed = (seedText = '') => {
     }
 
     return hash >>> 0;
+};
+
+const getDeliveredProductOrderCount = async ({ userId, productId } = {}) => {
+    return OrderModel.countDocuments({
+        userId,
+        status: 'delivered',
+        paymentStatus: 'completed',
+        'products.productId': productId,
+    });
+};
+
+const getReviewEditState = async ({ review, userId, productId } = {}) => {
+    if (!review || !userId || !productId) {
+        return { deliveredCount: 0, canEdit: false };
+    }
+
+    const deliveredCount = await getDeliveredProductOrderCount({ userId, productId });
+    const unlockedAtOrderCount = Number(review.editUnlockedAtOrderCount || 0);
+
+    return {
+        deliveredCount,
+        canEdit: deliveredCount > unlockedAtOrderCount,
+    };
+};
+
+export const updateMyProductReviewController = async (req, res) => {
+    try {
+        const productId = req.params.id;
+        const userId = req.userId;
+        const { rating, comment } = req.body;
+
+        if (!productId) {
+            return res.status(400).json({ message: 'Product ID is required', success: false, error: true });
+        }
+
+        if (!rating) {
+            return res.status(400).json({ message: 'Rating is required', success: false, error: true });
+        }
+
+        const review = await ReviewModel.findOne({ productId, userId });
+        if (!review) {
+            return res.status(404).json({ message: 'Review not found', success: false, error: true });
+        }
+
+        const { deliveredCount, canEdit } = await getReviewEditState({ review, userId, productId });
+        if (!canEdit) {
+            return res.status(403).json({ message: 'Not allowed to edit review yet', success: false, error: true });
+        }
+
+        review.rating = rating;
+        review.comment = comment;
+        review.editUnlockedAtOrderCount = deliveredCount;
+
+        // if user reordered enough times, auto-approve
+        if (deliveredCount >= 2) review.status = 'Approved';
+        else review.status = 'Pending';
+
+        await review.save();
+
+        // if approved, recalc product rating
+        if (String(review.status) === 'Approved') {
+            const approvedReviews = await ReviewModel.find({ productId, $or: [{ status: 'Approved' }, { status: { $exists: false } }, { status: null }] }).select('rating');
+            const averageRating = approvedReviews.length ? approvedReviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / approvedReviews.length : 0;
+            await ProductModel.findByIdAndUpdate(productId, { rating: Number(averageRating.toFixed(1)) });
+        }
+
+        return res.status(200).json({ message: review.status === 'Approved' ? 'Review updated and approved' : 'Review updated and pending approval', success: true, error: false });
+    } catch (error) {
+        return res.status(500).json({ message: 'Error updating review: ' + error.message, success: false, error: true });
+    }
 };
 
 const createSeededRandom = (seedText = '') => {
@@ -855,7 +926,8 @@ export const getProductByIdController = async (req, res) => {
 
         const product = await ProductModel.findById(productId)
             .populate("category", "catName")
-            .populate("subCategory", "subCatName");
+            .populate("subCategory", "subCatName")
+            .populate("createdBy", "name email");
 
         if (!product) {
             return res.status(404).json({
@@ -1420,13 +1492,6 @@ export const createProductReviewController = async (req, res) => {
                 error: true
             });
         }
-        if (!comment) {
-            return res.status(400).json({
-                message: "Comment is required",
-                success: false,
-                error: true
-            });
-        }
 
         const product = await ProductModel.findById(productId);
         if (!product) {
@@ -1437,34 +1502,122 @@ export const createProductReviewController = async (req, res) => {
             });
         }
 
-        const existingReview = await ReviewModel.findOne({ productId, userId });
-        if (existingReview) {
-            return res.status(400).json({
-                message: "You have already reviewed this product",
+        const eligibleOrder = await OrderModel.findOne({
+            userId,
+            status: "delivered",
+            paymentStatus: "completed",
+            products: {
+                $elemMatch: {
+                    productId,
+                },
+            },
+        }).select("_id");
+
+        if (!eligibleOrder) {
+            return res.status(403).json({
+                message: "Only customers who have ordered and received this product can review it",
                 success: false,
                 error: true
             });
         }
+
+        const existingReview = await ReviewModel.findOne({ productId, userId });
+        if (existingReview) {
+            const deliveredCount = await getDeliveredProductOrderCount({ userId, productId });
+            const canEdit = deliveredCount > Number(existingReview.editUnlockedAtOrderCount || 0);
+
+            // Allow editing the same review again only after a new delivered order unlocks it.
+            if (!canEdit) {
+                // If existing review has no comment and user provided a comment now, keep the old behavior limited to the first-order flow.
+                if ((!existingReview.comment || String(existingReview.comment).trim() === '') && comment && String(comment).trim() !== '') {
+                    existingReview.comment = comment;
+                    existingReview.editUnlockedAtOrderCount = deliveredCount;
+                    existingReview.status = 'Pending';
+
+                    await existingReview.save();
+
+                    return res.status(200).json({
+                        message: 'Review updated with comment and is pending approval',
+                        success: true,
+                        error: false,
+                    });
+                }
+
+                return res.status(400).json({
+                    message: "You have already reviewed this product",
+                    success: false,
+                    error: true
+                });
+            }
+
+            existingReview.rating = rating;
+            existingReview.comment = comment;
+            existingReview.editUnlockedAtOrderCount = deliveredCount;
+            existingReview.status = 'Approved';
+            await existingReview.save();
+
+            const approvedReviews = await ReviewModel.find({
+                productId,
+                $or: [{ status: 'Approved' }, { status: { $exists: false } }, { status: null }],
+            }).select('rating');
+            const averageRating = approvedReviews.length
+                ? approvedReviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / approvedReviews.length
+                : 0;
+            product.rating = Number(averageRating.toFixed(1));
+            await product.save();
+
+            return res.status(200).json({
+                message: 'Review updated and approved',
+                success: true,
+                error: false,
+            });
+        }
+
+        // Determine if this review should be auto-approved (user reordered product)
+        const deliveredCount = await getDeliveredProductOrderCount({ userId, productId });
+
+        const statusToSet = deliveredCount >= 2 ? 'Approved' : 'Pending';
 
         const newReview = new ReviewModel({
             userId,
             productId,
             rating,
             comment,
-            status: "Pending"
+            status: statusToSet,
+            editUnlockedAtOrderCount: deliveredCount,
         });
         await newReview.save();
 
-        // Update product's average rating
-        const reviews = await ReviewModel.find({ productId });
-        const averageRating = reviews.reduce((acc, review) => acc + review.rating, 0) / reviews.length;
-        product.rating = averageRating;
-        await product.save();
+        // If the review is approved immediately, recalculate product rating from approved reviews
+        if (statusToSet === 'Approved') {
+            const approvedReviews = await ReviewModel.find({
+                productId,
+                $or: [{ status: 'Approved' }, { status: { $exists: false } }, { status: null }],
+            }).select('rating');
+            const averageRating = approvedReviews.length
+                ? approvedReviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / approvedReviews.length
+                : 0;
+            product.rating = Number(averageRating.toFixed(1));
+            await product.save();
+        } else {
+            // Update product's average rating to include this new rating immediately for display
+            const approvedReviews = await ReviewModel.find({
+                productId,
+                $or: [{ status: 'Approved' }, { status: { $exists: false } }, { status: null }],
+            }).select('rating');
+            const approvedSum = approvedReviews.reduce((acc, review) => acc + Number(review.rating || 0), 0);
+            const approvedCount = approvedReviews.length;
+            const combinedSum = approvedSum + Number(rating || 0);
+            const combinedCount = approvedCount + 1;
+            const combinedAvg = combinedCount ? (combinedSum / combinedCount) : 0;
+            product.rating = Number(combinedAvg.toFixed(1));
+            await product.save();
+        }
 
         return res.status(201).json({
-            message: "Review created successfully",
+            message: statusToSet === 'Approved' ? 'Review created and approved' : 'Review created successfully and is pending approval',
             success: true,
-            error: false
+            error: false,
         });
 
     } catch (error) {
@@ -1487,15 +1640,72 @@ export const getProductReviewsController = async (req, res) => {
             });
         }
 
-        const reviews = await ReviewModel.find({ productId })
+        // fetch only approved reviews for display
+        const reviews = await ReviewModel.find({
+            productId,
+            $or: [{ status: "Approved" }, { status: { $exists: false } }, { status: null }],
+        })
             .populate("userId", "name avatar")
             .sort({ createdAt: -1 });
+
+        // fetch current user's review (if authenticated) so they can edit/add comment later
+        let myReview = null;
+        try {
+            const currentUserId = req.userId;
+            if (currentUserId) {
+                myReview = await ReviewModel.findOne({ productId, userId: currentUserId }).select('rating comment status createdAt editUnlockedAtOrderCount').lean();
+                if (myReview) {
+                    const { deliveredCount, canEdit } = await getReviewEditState({
+                        review: myReview,
+                        userId: currentUserId,
+                        productId,
+                    });
+                    myReview.canEdit = canEdit;
+
+                    // Once the customer has reordered the product, the latest review should no longer wait for seller approval.
+                    if (canEdit && deliveredCount >= 2 && String(myReview.status || '') !== 'Approved') {
+                        await ReviewModel.updateOne(
+                            { _id: myReview._id },
+                            { $set: { status: 'Approved', editUnlockedAtOrderCount: deliveredCount } },
+                        );
+                        myReview.status = 'Approved';
+                        myReview.editUnlockedAtOrderCount = deliveredCount;
+
+                        const approvedReviews = await ReviewModel.find({
+                            productId,
+                            $or: [{ status: 'Approved' }, { status: { $exists: false } }, { status: null }],
+                        }).select('rating');
+                        const averageRating = approvedReviews.length
+                            ? approvedReviews.reduce((acc, review) => acc + Number(review.rating || 0), 0) / approvedReviews.length
+                            : 0;
+                        await ProductModel.findByIdAndUpdate(productId, { rating: Number(averageRating.toFixed(1)) });
+                    }
+                }
+            }
+        } catch (e) {
+            myReview = myReview || null;
+        }
+
+        // aggregate counts and average from all submitted ratings (including pending)
+        const allReviews = await ReviewModel.find({ productId }).select("rating");
+        const counts = [0, 0, 0, 0, 0];
+        let sum = 0;
+        allReviews.forEach((r) => {
+            const rating = Math.max(1, Math.min(5, Number(r.rating || 0)));
+            counts[5 - rating] += 1; // index 0 => 5-star
+            sum += Number(r.rating || 0);
+        });
+        const total = counts.reduce((a, b) => a + b, 0) || 0;
+        const percent = counts.map((c) => total ? Math.round((c / total) * 100) : 0);
+        const average = total ? Number((sum / total).toFixed(1)) : Number(product?.rating || 0 || 0);
 
         return res.status(200).json({
             message: "Product reviews fetched successfully",
             success: true,
             error: false,
-            reviews
+            reviews,
+            ratingSummary: { counts, percent, total, average },
+            myReview
         });
 
 

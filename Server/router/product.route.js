@@ -17,11 +17,12 @@ import {
 	filterProductsController,
 	getRelatedProductsController,
 	createProductReviewController,
-	getProductReviewsController
+	getProductReviewsController,
+	updateMyProductReviewController
 } from "../controller/product.controller.js";
 
 import upload from "../middlewares/multer.js";
-import userAuth from "../middlewares/userMiddleware.js";
+import userAuth, { optionalUserMiddleware } from "../middlewares/userMiddleware.js";
 import adminAuth from "../middlewares/adminMiddleware.js";
 
 const productRouter = express.Router();
@@ -48,7 +49,8 @@ productRouter.get("/related/:id", getRelatedProductsController);
 
 // Reviews (has additional path segment, so safe)
 productRouter.post("/:id/review", userAuth, createProductReviewController);
-productRouter.get("/:id/reviews", getProductReviewsController);
+productRouter.get("/:id/reviews", optionalUserMiddleware, getProductReviewsController);
+productRouter.patch("/:id/review", userAuth, updateMyProductReviewController);
 
 // CRUD (parameterized /:id routes last)
 productRouter.post("/", adminAuth, createProductController);
