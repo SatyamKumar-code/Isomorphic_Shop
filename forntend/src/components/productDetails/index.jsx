@@ -48,6 +48,9 @@ const ProductDetails = () => {
     const [userPendingRating, setUserPendingRating] = useState(null);
     const [isEditingReview, setIsEditingReview] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [recentlyViewed, setRecentlyViewed] = useState([]);
+    const [relatedProducts, setRelatedProducts] = useState([]);
+    const [isLoadingRelated, setIsLoadingRelated] = useState(false);
     const reviewPageActiveRef = useRef(false);
     const touchStartXRef = useRef(0);
     const touchEndXRef = useRef(0);
@@ -151,8 +154,6 @@ const ProductDetails = () => {
         { label: 'Color', value: product?.color },
         { label: 'Expiration Start', value: formatDate(product?.expirationStart) },
         { label: 'Expiration End', value: formatDate(product?.expirationEnd) },
-        { label: 'Return Days', value: product?.returnDays ? `${product.returnDays} days` : '' },
-        { label: 'Warranty', value: product?.warranty },
     ].filter((item) => item.value);
 
     const ratingStats = React.useMemo(() => {
@@ -316,6 +317,32 @@ const ProductDetails = () => {
         context.alertBox('error', response?.message || 'Unable to add product to cart.');
     };
 
+    const loadRecentlyViewed = async () => {
+        try {
+            const response = await fetchDataFromApi('/api/product/recently-viewed');
+            if (Array.isArray(response?.products)) {
+                setRecentlyViewed(response.products.slice(0, 8));
+            }
+        } catch (error) {
+            // silently fail
+        }
+    };
+
+    const loadRelatedProducts = async (categoryId) => {
+        if (!categoryId) return;
+        try {
+            setIsLoadingRelated(true);
+            const response = await fetchDataFromApi(`/api/product/related/${categoryId}`);
+            if (Array.isArray(response?.products)) {
+                setRelatedProducts(response.products.slice(0, 8));
+            }
+        } catch (error) {
+            // silently fail
+        } finally {
+            setIsLoadingRelated(false);
+        }
+    };
+
     useEffect(() => {
         if (!id) {
             return;
@@ -388,6 +415,19 @@ const ProductDetails = () => {
             productId: id,
             viewerKey: getViewerKey(),
             countryCode: getCountryCode(),
+        });
+
+        // Load recently viewed products
+        loadRecentlyViewed();
+
+        // Load related products after product is loaded
+        fetchDataFromApi(`/api/product/${id}`).then((response) => {
+            const categoryId = response?.product?.categoryId || response?.product?.category?._id;
+            if (categoryId && reviewPageActiveRef.current) {
+                loadRelatedProducts(categoryId);
+            }
+        }).catch(() => {
+            // ignore
         });
 
         return () => {
@@ -477,20 +517,24 @@ const ProductDetails = () => {
                         <span className="text-gray-600 text-sm">{Number(displayRating.average || 0).toFixed(1)} ({displayRating.total || 0} reviews)</span>
                     </div>
                 </div>
+
+                {productAttributes.length > 0 && (
+                    <div className='mt-4 mb-4'>
+                        <h4 className='text-lg font-bold mb-2'>Product Details</h4>
+                        <div className='flex flex-wrap gap-2'>
+                            {productAttributes.map((item) => (
+                                <div key={item.label} className='min-w-32.5 rounded-md border border-gray-200 bg-gray-50 px-3 py-2'>
+                                    <div className='text-[11px] uppercase tracking-wide text-gray-500'>{item.label}</div>
+                                    <div className='text-sm font-semibold text-gray-800'>{item.value}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div>
                     <h2 className='text-lg font-bold mb-2'>Description</h2>
                     <p className='text-gray-700 text-sm'>{product?.description || 'Product description is not available yet.'}</p>
-                </div>
-
-                <div className='mt-4'>
-                    <h4 className='text-lg font-bold mb-2'>Offers</h4>
-                    <ul className='list-disc list-inside text-sm text-gray-700'>
-                        <li>Bank Offer: 5% off on XYZ Bank cards</li>
-                        {product?.discountPercentage > 0 && (
-                            <li>Limited time discount: {Number(product.discountPercentage)}% off</li>
-                        )}
-                        <li>Special Price: Get extra discount on first order</li>
-                    </ul>
                 </div>
 
                 <div className='mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm'>
@@ -504,37 +548,18 @@ const ProductDetails = () => {
                             <span className='font-medium text-gray-900'>Return policy</span>
                             <span className='text-right'>Easy return within <span className='font-semibold'>{product?.returnDays || 7} days</span> of delivery</span>
                         </div>
-                        <div className='flex items-start justify-between gap-4'>
-                            <span className='font-medium text-gray-900'>Warranty</span>
-                            <span className='text-right'>{product?.warranty || 'Brand warranty where applicable'}</span>
-                        </div>
+                        {product?.warranty && (
+                            <div className='flex items-start justify-between gap-4'>
+                                <span className='font-medium text-gray-900'>Warranty</span>
+                                <span className='text-right'>{product?.warranty || 'Brand warranty where applicable'}</span>
+                            </div>
+                        )}
                         <div className='flex items-start justify-between gap-4'>
                             <span className='font-medium text-gray-900'>Shipping</span>
                             <span className='text-right'>Secure packaging and tracking updates</span>
                         </div>
                     </div>
                 </div>
-
-                {product?.createdBy?.name && (
-                    <div className='mt-4'>
-                        <h4 className='text-lg font-bold mb-2'>Seller</h4>
-                        <div className='text-sm text-gray-700'>Sold by <span className='font-medium text-gray-800'>{product.createdBy.name}</span></div>
-                    </div>
-                )}
-
-                {productAttributes.length > 0 && (
-                    <div className='mt-4 mb-15'>
-                        <h4 className='text-lg font-bold mb-2'>Product Details</h4>
-                        <div className='flex flex-wrap gap-2'>
-                            {productAttributes.map((item) => (
-                                <div key={item.label} className='min-w-32.5 rounded-md border border-gray-200 bg-gray-50 px-3 py-2'>
-                                    <div className='text-[11px] uppercase tracking-wide text-gray-500'>{item.label}</div>
-                                    <div className='text-sm font-semibold text-gray-800'>{item.value}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
                 {/* Ratings breakdown */}
                 <div className='mt-4'>
@@ -680,6 +705,115 @@ const ProductDetails = () => {
                         </div>
                     )}
                 </div>
+
+                {/* FAQ Section */}
+                <div className='mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm'>
+                    <h4 className='text-lg font-bold mb-3'>Frequently Asked Questions</h4>
+                    <div className='space-y-2'>
+                        {[
+                            { q: 'How long does delivery take?', a: 'Typically 2-3 business days across major cities.' },
+                            { q: 'Is this product original?', a: 'Yes, all our products are 100% authentic and come with warranty.' },
+                            { q: 'What is the return policy?', a: `Easy returns within ${product?.returnDays || 7} days of delivery.` },
+                            { q: 'Do you offer international shipping?', a: 'Currently, we ship only within India.' }
+                        ].map((faq, idx) => (
+                            <details key={idx} className='border-b border-gray-100 py-2'>
+                                <summary className='cursor-pointer font-medium text-gray-700 hover:text-blue-600'>
+                                    {faq.q}
+                                </summary>
+                                <p className='mt-2 text-sm text-gray-600 ml-2'>{faq.a}</p>
+                            </details>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Enhanced Seller Info */}
+                {product?.createdBy?.name && (
+                    <div className='mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm'>
+                        <h4 className='text-lg font-bold mb-3'>About Seller</h4>
+                        <div className='flex items-start gap-3'>
+                            <div className='h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0'>
+                                <span className='text-lg font-bold text-blue-600'>{product.createdBy.name.charAt(0)}</span>
+                            </div>
+                            <div className='flex-1'>
+                                <div className='font-semibold text-gray-800'>{product.createdBy.name}</div>
+                                <div className='flex items-center gap-2 mt-1'>
+                                    <div className='flex items-center gap-1'>
+                                        {[1, 2, 3, 4, 5].map((star) => (
+                                            <FaStar key={star} className='text-yellow-400 text-sm' />
+                                        ))}
+                                    </div>
+                                    <span className='text-sm text-gray-600'>4.5 (1.2K reviews)</span>
+                                </div>
+                                <div className='mt-2 text-sm text-gray-600 space-y-1'>
+                                    <div>✓ Fast & Reliable Shipping</div>
+                                    <div>✓ Customer Support Available</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Recently Viewed Products */}
+                {recentlyViewed.length > 0 && (
+                    <div className='mt-4'>
+                        <h4 className='text-lg font-bold mb-3'>Recently Viewed</h4>
+                        <div className='flex gap-3 overflow-x-auto pb-2 no-scrollbar'>
+                            {recentlyViewed.map((item) => (
+                                <button
+                                    key={item._id}
+                                    type='button'
+                                    onClick={() => navigate(`/product-details/${item._id}`)}
+                                    className='flex-shrink-0 w-32 rounded-lg overflow-hidden bg-white border border-gray-200 hover:shadow-md transition-shadow'
+                                >
+                                    <div className='h-32 w-full bg-gray-100 overflow-hidden'>
+                                        <img
+                                            src={Array.isArray(item.images) && item.images[0] ? item.images[0] : 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFYqoKTu_o3Zns2yExbst2Co84Gpc2Q1RJbA&s'}
+                                            alt={item.productName}
+                                            className='h-full w-full object-cover'
+                                        />
+                                    </div>
+                                    <div className='p-2'>
+                                        <div className='text-xs font-semibold text-gray-800 line-clamp-2'>{item.productName}</div>
+                                        <div className='text-sm font-bold text-blue-600 mt-1'>₹{Number(item.price || 0).toLocaleString('en-IN')}</div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Related Products */}
+                {relatedProducts.length > 0 && (
+                    <div className='mt-4'>
+                        <h4 className='text-lg font-bold mb-3'>Related Products</h4>
+                        {isLoadingRelated ? (
+                            <div className='text-sm text-gray-600'>Loading...</div>
+                        ) : (
+                            <div className='flex gap-3 overflow-x-auto pb-2 no-scrollbar'>
+                                {relatedProducts.map((item) => (
+                                    <button
+                                        key={item._id}
+                                        type='button'
+                                        onClick={() => navigate(`/product-details/${item._id}`)}
+                                        className='flex-shrink-0 w-32 rounded-lg overflow-hidden bg-white border border-gray-200 hover:shadow-md transition-shadow'
+                                    >
+                                        <div className='h-32 w-full bg-gray-100 overflow-hidden'>
+                                            <img
+                                                src={Array.isArray(item.images) && item.images[0] ? item.images[0] : 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFYqoKTu_o3Zns2yExbst2Co84Gpc2Q1RJbA&s'}
+                                                alt={item.productName}
+                                                className='h-full w-full object-cover'
+                                            />
+                                        </div>
+                                        <div className='p-2'>
+                                            <div className='text-xs font-semibold text-gray-800 line-clamp-2'>{item.productName}</div>
+                                            <div className='text-sm font-bold text-blue-600 mt-1'>₹{Number(item.price || 0).toLocaleString('en-IN')}</div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
             <div className='fixed bg-white bottom-0 left-0 p-3 right-0'>
                 <div className='flex relative items-center'>
