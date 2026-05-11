@@ -54,6 +54,12 @@ const ProductDetails = () => {
     const [isLoadingRelated, setIsLoadingRelated] = useState(false);
     const [cartItems, setCartItems] = useState([]);
     const [addingProductId, setAddingProductId] = useState(null);
+    const [faqs, setFaqs] = useState([]);
+    const [isLoadingFaqs, setIsLoadingFaqs] = useState(false);
+    const [qas, setQas] = useState([]);
+    const [isLoadingQas, setIsLoadingQas] = useState(false);
+    const [questionText, setQuestionText] = useState('');
+    const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false);
     const reviewPageActiveRef = useRef(false);
     const touchStartXRef = useRef(0);
     const touchEndXRef = useRef(0);
@@ -360,6 +366,67 @@ const ProductDetails = () => {
         }
     };
 
+    const loadFaqs = async (productId) => {
+        if (!productId) return;
+        try {
+            setIsLoadingFaqs(true);
+            const response = await fetchDataFromApi(`/api/faq/product/${productId}`);
+            if (Array.isArray(response?.faqs)) {
+                setFaqs(response.faqs);
+            }
+        } catch (error) {
+            // silently fail
+        } finally {
+            setIsLoadingFaqs(false);
+        }
+    };
+
+    const loadQas = async (productId) => {
+        if (!productId) return;
+        try {
+            setIsLoadingQas(true);
+            const response = await fetchDataFromApi(`/api/qa/product/${productId}`);
+            if (Array.isArray(response?.qas)) {
+                setQas(response.qas);
+            }
+        } catch (error) {
+            // silently fail
+        } finally {
+            setIsLoadingQas(false);
+        }
+    };
+
+    const handleAskQuestion = async (e) => {
+        e.preventDefault();
+
+        if (!context?.isLoggedIn) {
+            context.alertBox('error', 'Please login to ask a question');
+            navigate('/login');
+            return;
+        }
+
+        if (!questionText.trim()) {
+            context.alertBox('error', 'Please enter a question');
+            return;
+        }
+
+        setIsSubmittingQuestion(true);
+        const response = await postData('/api/qa/ask', {
+            productId: id,
+            question: questionText
+        });
+        setIsSubmittingQuestion(false);
+
+        if (response?.error === false) {
+            context.alertBox('Success', 'Question posted successfully');
+            setQuestionText('');
+            await loadQas(id);
+            return;
+        }
+
+        context.alertBox('error', response?.message || 'Unable to post question.');
+    };
+
     const isProductInCart = (productId) => {
         if (!productId || !cartItems || cartItems.length === 0) return false;
         const productIdStr = String(productId).trim();
@@ -509,6 +576,12 @@ const ProductDetails = () => {
 
         // Load related products using current product ID
         loadRelatedProducts(id);
+        
+        // Load FAQs from backend
+        loadFaqs(id);
+
+        // Load Q&A from backend
+        loadQas(id);
 
         return () => {
             reviewPageActiveRef.current = false;
@@ -789,21 +862,95 @@ const ProductDetails = () => {
                 {/* FAQ Section */}
                 <div className='mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm'>
                     <h4 className='text-lg font-bold mb-3'>Frequently Asked Questions</h4>
-                    <div className='space-y-2'>
-                        {[
-                            { q: 'How long does delivery take?', a: 'Typically 2-3 business days across major cities.' },
-                            { q: 'Is this product original?', a: 'Yes, all our products are 100% authentic and come with warranty.' },
-                            { q: 'What is the return policy?', a: `Easy returns within ${product?.returnDays || 7} days of delivery.` },
-                            { q: 'Do you offer international shipping?', a: 'Currently, we ship only within India.' }
-                        ].map((faq, idx) => (
-                            <details key={idx} className='border-b border-gray-100 py-2'>
-                                <summary className='cursor-pointer font-medium text-gray-700 hover:text-blue-600'>
-                                    {faq.q}
-                                </summary>
-                                <p className='mt-2 text-sm text-gray-600 ml-2'>{faq.a}</p>
-                            </details>
-                        ))}
-                    </div>
+                    {isLoadingFaqs ? (
+                        <div className='text-sm text-gray-600'>Loading FAQs...</div>
+                    ) : faqs.length === 0 ? (
+                        <div className='text-sm text-gray-600'>No FAQs available yet.</div>
+                    ) : (
+                        <div className='space-y-2'>
+                            {faqs.map((faq, idx) => (
+                                <details key={idx} className='border-b border-gray-100 py-2'>
+                                    <summary className='cursor-pointer font-medium text-gray-700 hover:text-blue-600'>
+                                        {faq.question}
+                                    </summary>
+                                    <p className='mt-2 text-sm text-gray-600 ml-2'>{faq.answer}</p>
+                                </details>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Q&A Section */}
+                <div className='mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm'>
+                    <h4 className='text-lg font-bold mb-3'>Questions & Answers</h4>
+
+                    {/* Ask Question Form */}
+                    {context?.isLoggedIn ? (
+                        <form onSubmit={handleAskQuestion} className='mb-4 pb-4 border-b border-gray-200'>
+                            <div className='mb-2'>
+                                <textarea
+                                    value={questionText}
+                                    onChange={(e) => setQuestionText(e.target.value)}
+                                    placeholder='Ask a question about this product...'
+                                    rows='2'
+                                    className='w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm'
+                                    disabled={isSubmittingQuestion}
+                                />
+                            </div>
+                            <button
+                                type='submit'
+                                disabled={isSubmittingQuestion || !questionText.trim()}
+                                className='bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 disabled:opacity-60'
+                            >
+                                {isSubmittingQuestion ? 'Posting...' : 'Ask Question'}
+                            </button>
+                        </form>
+                    ) : (
+                        <div className='mb-4 pb-4 border-b border-gray-200 p-3 bg-blue-50 rounded-lg'>
+                            <p className='text-sm text-blue-700'>
+                                <button type='button' onClick={() => navigate('/login')} className='font-medium underline hover:no-underline'>
+                                    Login
+                                </button>
+                                {' '}to ask questions about this product
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Q&A List */}
+                    {isLoadingQas ? (
+                        <div className='text-sm text-gray-600'>Loading questions...</div>
+                    ) : qas.length === 0 ? (
+                        <div className='text-sm text-gray-600'>No answered questions yet. Be the first to ask!</div>
+                    ) : (
+                        <div className='space-y-3'>
+                            {qas.map((qa, idx) => (
+                                <div key={qa._id} className='border-b border-gray-100 pb-3'>
+                                    <div className='flex items-start gap-2'>
+                                        <div className='flex-1'>
+                                            <div className='flex items-center gap-2 mb-1'>
+                                                <span className='font-medium text-sm text-gray-800'>{qa.userId?.name || 'Anonymous'}</span>
+                                                <span className='text-xs text-gray-500'>
+                                                    {new Date(qa.createdAt).toLocaleDateString('en-IN')}
+                                                </span>
+                                            </div>
+                                            <p className='text-sm text-gray-700 mb-2'>Q: {qa.question}</p>
+                                            
+                                            {qa.isAnswered && qa.answer ? (
+                                                <div className='ml-4 p-2 bg-gray-50 rounded-lg border-l-2 border-green-500'>
+                                                    <div className='text-xs font-medium text-green-700 mb-1'>✓ Seller's Answer:</div>
+                                                    <p className='text-sm text-gray-700'>A: {qa.answer}</p>
+                                                </div>
+                                            ) : (
+                                                <div className='ml-4 p-2 bg-yellow-50 rounded-lg text-xs text-yellow-700'>
+                                                    ⏳ Waiting for seller's answer...
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Enhanced Seller Info */}

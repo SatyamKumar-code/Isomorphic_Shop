@@ -4,6 +4,8 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import AddProductActionBar from '../components/AddProductActionBar';
 import BasicDetailsCard from '../components/BasicDetailsCard';
 import ProductMediaCard from '../components/ProductMediaCard';
+import FaqManager from '../components/FaqManager';
+import QaManager from '../components/QaManager';
 import { useAddProduct } from '../../../Context/addProduct/useAddProduct';
 import { useAuth } from '../../../Context/auth/useAuth';
 
@@ -29,6 +31,8 @@ const AddProductPage = () => {
         pageTitle,
         updateField,
         onCategoryChange,
+        editingProductId,
+        formData,
     } = useAddProduct();
     const prefillAppliedRef = React.useRef('');
     const showPrefillNotice = !editId && Boolean(
@@ -161,6 +165,22 @@ const AddProductPage = () => {
                         <BasicDetailsCard />
                         <ProductMediaCard />
                     </div>
+
+                    {/* FAQ Manager - Show when editing a product */}
+                    {editingProductId && (
+                        <FaqManager
+                            productId={editingProductId}
+                            productName={formData?.productName || 'Product'}
+                        />
+                    )}
+
+                    {/* Q&A Manager - Show when editing a product */}
+                    {editingProductId && (
+                        <QaManager
+                            productId={editingProductId}
+                            productName={formData?.productName || 'Product'}
+                        />
+                    )}
                 </>
             )}
         </div>

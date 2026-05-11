@@ -14,6 +14,8 @@ import reviewRouter from './router/review.route.js';
 import payoutRouter from './router/payout.route.js';
 import dashboardRouter from './router/dashboard.route.js';
 import notificationRouter from './router/notification.route.js';
+import faqRouter from './router/faq.route.js';
+import qaRouter from './router/qa.route.js';
 dotenv.config();
 
 const app = express();
@@ -52,6 +54,8 @@ app.use("/api/review", reviewRouter);
 app.use("/api/payout", payoutRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/notification", notificationRouter);
+app.use("/api/faq", faqRouter);
+app.use("/api/qa", qaRouter);
 
 
 connectDB().then(() => {
