@@ -2,6 +2,7 @@ import express from "express";
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import ProductModel from "../models/product.model.js";
+import ProductViewModel from "../models/productView.model.js";
 import mongoose from "mongoose";
 import ReviewModel from "../models/review.model.js";
 import UserModel from "../models/user.model.js";
@@ -1591,19 +1592,69 @@ export const getRelatedProductsController = async (req, res) => {
 
         return res.status(200).json({
             message: "Related products fetched successfully",
-            success: true,
             error: false,
-            products: relatedProducts
+            success: true,
+            products: relatedProducts,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Error fetching related products: ' + error.message, error: true, success: false
+        });
+    }
+};
+
+export const getRecentlyViewedProductsController = async (req, res) => {
+    try {
+        // viewerKey may be provided via query or headers; if not, fallback to latest products
+        const viewerKey = String(req.query.viewerKey || req.headers['x-viewer-id'] || req.headers['x-session-id'] || '').trim();
+
+        if (!viewerKey) {
+            // return latest products as a sensible default
+            const latest = await ProductModel.find({}).sort({ createdAt: -1 }).limit(10).lean();
+            return res.status(200).json({ message: 'Recently viewed fetched (latest fallback)', error: false, success: true, products: latest });
+        }
+
+        // find most recent distinct productIds for this viewer
+
+        // fetch recent view records and pick distinct product ids (most recent first)
+        const views = await ProductViewModel.find({ viewerKey }).sort({ createdAt: -1 }).limit(200).lean();
+        const seen = new Set();
+        const productIds = [];
+        for (const v of views) {
+            const id = String(v.productId || '');
+            if (id && !seen.has(id)) {
+                seen.add(id);
+                productIds.push(id);
+            }
+            if (productIds.length >= 10) break;
+        }
+
+        // preserve order: fetch each product by id in the same sequence
+        const products = [];
+        if (productIds.length > 0) {
+            for (const pid of productIds) {
+                try {
+                    const p = await ProductModel.findById(pid).lean();
+                    if (p) products.push(p);
+                } catch (e) {
+                    // ignore missing products
+                }
+            }
+        }
+
+
+        return res.status(200).json({
+            message: 'Recently viewed fetched',
+            error: false,
+            success: true, products
         });
 
     } catch (error) {
         return res.status(500).json({
-            message: "Error in fetching related products: " + error.message,
-            success: false,
-            error: true
-        })
+            message: 'Error fetching recently viewed: ' + error.message, error: true, success: false
+        });
     }
-}
+};
 
 export const createProductReviewController = async (req, res) => {
     try {

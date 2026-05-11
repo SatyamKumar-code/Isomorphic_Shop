@@ -17,6 +17,57 @@ const getHeaders = (contentType = 'application/json') => ({
     ...(contentType ? { 'Content-Type': contentType } : {}),
 });
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    })
+
+    isRefreshing = false;
+    failedQueue = [];
+}
+
+// Response interceptor for token refresh
+axios.interceptors.response.use(
+    response => response,
+    error => {
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then(token => {
+                    originalRequest.headers['Authorization'] = 'Bearer ' + token;
+                    return axios(originalRequest);
+                });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            return axios.post(buildApiUrl('/api/user/refresh-token'), {}, {
+                withCredentials: true
+            }).then(res => {
+                isRefreshing = false;
+                processQueue(null);
+                return axios(originalRequest);
+            }).catch(err => {
+                processQueue(err, null);
+                return Promise.reject(err);
+            });
+        }
+
+        return Promise.reject(error);
+    }
+);
+
 export const postData = async (url, formData) => {
     try {
         const response = await fetch(buildApiUrl(url), {

@@ -2,8 +2,9 @@ import React, { useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import BackButton from '../backButton'
 import { FaCartArrowDown } from "react-icons/fa";
+import { FaRegHeart } from "react-icons/fa";
 import { FaHeart, FaStar } from "react-icons/fa6";
-import { fetchDataFromApi, postData } from '../../utils/api';
+import { fetchDataFromApi, postData, deleteData } from '../../utils/api';
 import { MyContext } from '../../App';
 
 const getViewerKey = () => {
@@ -51,6 +52,8 @@ const ProductDetails = () => {
     const [recentlyViewed, setRecentlyViewed] = useState([]);
     const [relatedProducts, setRelatedProducts] = useState([]);
     const [isLoadingRelated, setIsLoadingRelated] = useState(false);
+    const [cartItems, setCartItems] = useState([]);
+    const [addingProductId, setAddingProductId] = useState(null);
     const reviewPageActiveRef = useRef(false);
     const touchStartXRef = useRef(0);
     const touchEndXRef = useRef(0);
@@ -319,20 +322,34 @@ const ProductDetails = () => {
 
     const loadRecentlyViewed = async () => {
         try {
-            const response = await fetchDataFromApi('/api/product/recently-viewed');
+            const key = getViewerKey();
+            const response = await fetchDataFromApi(`/api/product/recently-viewed?viewerKey=${encodeURIComponent(key)}`);
             if (Array.isArray(response?.products)) {
-                setRecentlyViewed(response.products.slice(0, 8));
+                setRecentlyViewed(response.products.slice(0, 10));
             }
         } catch (error) {
             // silently fail
         }
     };
 
-    const loadRelatedProducts = async (categoryId) => {
-        if (!categoryId) return;
+    const loadCartDetails = async () => {
+        try {
+            const response = await fetchDataFromApi('/api/cart/details');
+            if (response?.error === false && response?.data?.products) {
+                setCartItems(response.data.products);
+            } else {
+                setCartItems([]);
+            }
+        } catch (error) {
+            setCartItems([]);
+        }
+    };
+
+    const loadRelatedProducts = async (productId) => {
+        if (!productId) return;
         try {
             setIsLoadingRelated(true);
-            const response = await fetchDataFromApi(`/api/product/related/${categoryId}`);
+            const response = await fetchDataFromApi(`/api/product/related/${productId}`);
             if (Array.isArray(response?.products)) {
                 setRelatedProducts(response.products.slice(0, 8));
             }
@@ -343,9 +360,77 @@ const ProductDetails = () => {
         }
     };
 
+    const isProductInCart = (productId) => {
+        if (!productId || !cartItems || cartItems.length === 0) return false;
+        const productIdStr = String(productId).trim();
+        return cartItems.some((item) => {
+            const itemProductId = String(item?.productId?._id || item?.productId || item?._id || '').trim();
+            return itemProductId === productIdStr;
+        });
+    };
+
+    const handleAddToCartById = async (productId) => {
+        if (!productId || addingProductId) return;
+        if (isProductInCart(productId)) {
+            context.alertBox('error', 'Product is already in your cart');
+            return;
+        }
+        setAddingProductId(productId);
+        const response = await postData('/api/cart/add', { productId, quantity: 1 });
+        setAddingProductId(null);
+        if (response?.error === false) {
+            context.alertBox('Success', 'Added to cart');
+            try {
+                const cartResponse = await fetchDataFromApi('/api/cart/details');
+                if (cartResponse?.error === false && cartResponse?.data?.products) {
+                    setCartItems(cartResponse.data.products);
+                }
+            } catch (e) {
+                // ignore
+            }
+            return;
+        }
+        context?.alertBox?.('error', 'Login first.');
+        navigate('/login');
+    };
+
+    const handleRemoveFromCartById = async (productId) => {
+        if (!productId || addingProductId) return;
+        setAddingProductId(productId);
+        try {
+            const response = await deleteData(`/api/cart/remove/${productId}`);
+            if (response?.error === false) {
+                context.alertBox('Success', 'Removed from cart');
+                try {
+                    const cartResponse = await fetchDataFromApi('/api/cart/details');
+                    if (cartResponse?.error === false && cartResponse?.data?.products) {
+                        setCartItems(cartResponse.data.products);
+                    } else {
+                        setCartItems([]);
+                    }
+                } catch (e) {
+                    setCartItems([]);
+                }
+                return;
+            }
+            context.alertBox('error', response?.message || 'Unable to remove product from cart.');
+        } catch (error) {
+            context.alertBox('error', 'Unable to remove product from cart.');
+        } finally {
+            setAddingProductId(null);
+        }
+    };
+
     useEffect(() => {
         if (!id) {
             return;
+        }
+
+        // Ensure page scrolls to top when navigating to a different product
+        try {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (e) {
+            window.scrollTo(0, 0);
         }
 
         reviewPageActiveRef.current = true;
@@ -419,16 +504,11 @@ const ProductDetails = () => {
 
         // Load recently viewed products
         loadRecentlyViewed();
+        // Load cart details for cart UI
+        loadCartDetails();
 
-        // Load related products after product is loaded
-        fetchDataFromApi(`/api/product/${id}`).then((response) => {
-            const categoryId = response?.product?.categoryId || response?.product?.category?._id;
-            if (categoryId && reviewPageActiveRef.current) {
-                loadRelatedProducts(categoryId);
-            }
-        }).catch(() => {
-            // ignore
-        });
+        // Load related products using current product ID
+        loadRelatedProducts(id);
 
         return () => {
             reviewPageActiveRef.current = false;
@@ -758,26 +838,36 @@ const ProductDetails = () => {
                     <div className='mt-4'>
                         <h4 className='text-lg font-bold mb-3'>Recently Viewed</h4>
                         <div className='flex gap-3 overflow-x-auto pb-2 no-scrollbar'>
-                            {recentlyViewed.map((item) => (
-                                <button
-                                    key={item._id}
-                                    type='button'
-                                    onClick={() => navigate(`/product-details/${item._id}`)}
-                                    className='flex-shrink-0 w-32 rounded-lg overflow-hidden bg-white border border-gray-200 hover:shadow-md transition-shadow'
-                                >
-                                    <div className='h-32 w-full bg-gray-100 overflow-hidden'>
-                                        <img
-                                            src={Array.isArray(item.images) && item.images[0] ? item.images[0] : 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFYqoKTu_o3Zns2yExbst2Co84Gpc2Q1RJbA&s'}
-                                            alt={item.productName}
-                                            className='h-full w-full object-cover'
-                                        />
+                            {recentlyViewed.map((item) => {
+                                const productId = item?._id || item?.id;
+                                const image = Array.isArray(item.images) && item.images[0] ? item.images[0] : 'https://via.placeholder.com/300x300?text=Product';
+
+                                return (
+                                    <div key={productId} className='relative overflow-hidden rounded-lg bg-white flex-shrink-0 w-32'>
+                                        <button type='button' onClick={() => navigate(`/product/${productId}`)} className='block p-0 m-0'>
+                                            <img src={image} alt={item?.productName || 'Product'} className='h-32 w-full object-cover' />
+                                        </button>
+                                        <div className='flex h-12 items-center justify-between bg-gray-100 p-2 leading-tight'>
+                                            <div className='w-full overflow-hidden leading-tight'>
+                                                <h2 className='truncate text-[12px] font-bold'>{item?.productName || 'Product Name'}</h2>
+                                                <p className='text-[12px] font-bold text-blue-500'>₹{Number(item.price || 0).toLocaleString('en-IN')}</p>
+                                            </div>
+                                            <span className='text-[12px]'><span className='text-sm'>⭐</span>{Number(item.rating || 0)}</span>
+                                        </div>
+                                        <div className='absolute right-2 top-2'>
+                                            {isProductInCart(productId) ? (
+                                                <button type='button' onClick={() => handleRemoveFromCartById(productId)} className='cursor-pointer' title='Remove from cart' disabled={addingProductId === productId}>
+                                                    <FaHeart className='text-lg text-red-400' />
+                                                </button>
+                                            ) : (
+                                                <button type='button' onClick={() => handleAddToCartById(productId)} className='cursor-pointer text-2xl text-blue-500 disabled:opacity-60' disabled={addingProductId === productId}>
+                                                    <FaRegHeart className='text-lg text-gray-500' />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className='p-2'>
-                                        <div className='text-xs font-semibold text-gray-800 line-clamp-2'>{item.productName}</div>
-                                        <div className='text-sm font-bold text-blue-600 mt-1'>₹{Number(item.price || 0).toLocaleString('en-IN')}</div>
-                                    </div>
-                                </button>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}
@@ -789,27 +879,37 @@ const ProductDetails = () => {
                         {isLoadingRelated ? (
                             <div className='text-sm text-gray-600'>Loading...</div>
                         ) : (
-                            <div className='flex gap-3 overflow-x-auto pb-2 no-scrollbar'>
-                                {relatedProducts.map((item) => (
-                                    <button
-                                        key={item._id}
-                                        type='button'
-                                        onClick={() => navigate(`/product-details/${item._id}`)}
-                                        className='flex-shrink-0 w-32 rounded-lg overflow-hidden bg-white border border-gray-200 hover:shadow-md transition-shadow'
-                                    >
-                                        <div className='h-32 w-full bg-gray-100 overflow-hidden'>
-                                            <img
-                                                src={Array.isArray(item.images) && item.images[0] ? item.images[0] : 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFYqoKTu_o3Zns2yExbst2Co84Gpc2Q1RJbA&s'}
-                                                alt={item.productName}
-                                                className='h-full w-full object-cover'
-                                            />
+                            <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3'>
+                                {relatedProducts.map((item) => {
+                                    const productId = item?._id || item?.id;
+                                    const image = Array.isArray(item.images) && item.images[0] ? item.images[0] : 'https://via.placeholder.com/300x300?text=Product';
+
+                                    return (
+                                        <div key={productId} className='relative overflow-hidden rounded-lg bg-white w-40'>
+                                            <button type='button' onClick={() => navigate(`/product/${productId}`)} className='block p-0 m-0'>
+                                                <img src={image} alt={item?.productName || 'Product'} className='w-40 h-36 aspect-square object-cover' />
+                                            </button>
+                                            <div className='flex h-12 items-center justify-between bg-gray-100 p-2 leading-tight'>
+                                                <div className='w-full overflow-hidden leading-tight'>
+                                                    <h2 className='truncate text-[12px] font-bold'>{item?.productName || 'Product Name'}</h2>
+                                                    <p className='text-[12px] font-bold text-blue-500'>₹{Number(item.price || 0).toLocaleString('en-IN')}</p>
+                                                </div>
+                                                <span className='text-[12px]'><span className='text-sm'>⭐</span>{Number(item.rating || 0)}</span>
+                                            </div>
+                                            <div className='absolute right-2 top-2'>
+                                                {isProductInCart(productId) ? (
+                                                    <button type='button' onClick={() => handleRemoveFromCartById(productId)} className='cursor-pointer' title='Remove from cart' disabled={addingProductId === productId}>
+                                                        <FaHeart className='text-lg text-red-400' />
+                                                    </button>
+                                                ) : (
+                                                    <button type='button' onClick={() => handleAddToCartById(productId)} className='cursor-pointer text-2xl text-blue-500 disabled:opacity-60' disabled={addingProductId === productId}>
+                                                        <FaRegHeart className='text-lg text-gray-500' />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className='p-2'>
-                                            <div className='text-xs font-semibold text-gray-800 line-clamp-2'>{item.productName}</div>
-                                            <div className='text-sm font-bold text-blue-600 mt-1'>₹{Number(item.price || 0).toLocaleString('en-IN')}</div>
-                                        </div>
-                                    </button>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

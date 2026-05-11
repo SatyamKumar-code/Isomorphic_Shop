@@ -16,6 +16,7 @@ import {
 	searchProductsController,
 	filterProductsController,
 	getRelatedProductsController,
+	getRecentlyViewedProductsController,
 	createProductReviewController,
 	getProductReviewsController,
 	updateMyProductReviewController
@@ -46,6 +47,8 @@ productRouter.get("/subcategory/:subCategoryId", getProductsBySubCategoryIdContr
 
 // Related products
 productRouter.get("/related/:id", getRelatedProductsController);
+// Recently viewed
+productRouter.get("/recently-viewed", getRecentlyViewedProductsController);
 
 // Reviews (has additional path segment, so safe)
 productRouter.post("/:id/review", userAuth, createProductReviewController);

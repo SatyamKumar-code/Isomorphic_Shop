@@ -38,13 +38,16 @@ const App = () => {
   const checkUserLoggedIn = async () => {
     try {
       const res = await fetchDataFromApi("/api/user/userData");
-      if (res?.error === false) {
-        setUserData(res?.data || null);
+      if (res?.error === false && res?.data) {
+        setUserData(res.data);
         setIsLoggedIn(true);
       } else {
+        setUserData(null);
         setIsLoggedIn(false);
       }
     } catch (err) {
+      console.log("Auth check error:", err);
+      setUserData(null);
       setIsLoggedIn(false);
     }
   }
