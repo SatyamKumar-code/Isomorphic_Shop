@@ -20,6 +20,8 @@ const RevenueOverviewPage = lazy(() => import("../features/Transaction/pages/Rev
 const ProfileSettings = lazy(() => import("../features/profile/pages/ProfileSettings"));
 const NotificationsPage = lazy(() => import("../features/notifications/pages/NotificationsPage"));
 const SearchResultPage = lazy(() => import("../features/SearchResult/pages/SearchResultPage"));
+const QAListPage = lazy(() => import("../features/qa/pages/QAListPage"));
+const QADetailPage = lazy(() => import("../features/qa/pages/QADetailPage"));
 
 
 
@@ -178,6 +180,30 @@ const AppRoutes = () => {
                         <div className="w-full h-[calc(100vh-6.25rem)] overflow-y-auto scrollbarNone">
                             <SearchResultPage />
                         </div>
+                    </MainLayout>
+                </ProtectedRoute>
+            )
+        },
+
+        {
+            path: '/qa-management',
+            exact: true,
+            element: (
+                <ProtectedRoute allowedRoles={["admin", "seller"]}>
+                    <MainLayout title="Q&A Management">
+                        <QAListPage />
+                    </MainLayout>
+                </ProtectedRoute>
+            )
+        },
+
+        {
+            path: '/qa-management/:productId',
+            exact: true,
+            element: (
+                <ProtectedRoute allowedRoles={["admin", "seller"]}>
+                    <MainLayout title="Product Q&A">
+                        <QADetailPage />
                     </MainLayout>
                 </ProtectedRoute>
             )

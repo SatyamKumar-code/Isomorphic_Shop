@@ -128,11 +128,11 @@ const FaqManager = ({ productId, productName }) => {
     };
 
     return (
-        <div className='mt-6 p-4 border border-gray-300 rounded-lg bg-gray-50'>
+        <div className='mt-2 p-4 shadow-md inset-shadow-sm inset-shadow-gray-300 shadow-gray-300 dark:shadow-gray-700 dark:inset-shadow-gray-700 bg-white dark:bg-gray-950 rounded-lg'>
             <div className='flex items-center justify-between mb-4'>
                 <div>
-                    <h3 className='text-lg font-bold text-gray-800'>Frequently Asked Questions</h3>
-                    <p className='text-sm text-gray-600'>Manage FAQs for {productName}</p>
+                    <h3 className='text-lg font-bold text-[#23272E] dark:text-[#c1c6cf]'>Frequently Asked Questions</h3>
+                    <p className='text-sm text-[#23272E] dark:text-[#c1c6cf]'>Manage FAQs for {productName}</p>
                 </div>
                 {!showForm && (
                     <button
@@ -161,9 +161,9 @@ const FaqManager = ({ productId, productName }) => {
 
             {/* FAQ Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} className='mb-4 p-4 bg-white border border-gray-300 rounded-lg'>
+                <form onSubmit={handleSubmit} className='mb-4 p-4 bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 rounded-lg'>
                     <div className='mb-3'>
-                        <label className='block text-sm font-medium text-gray-700 mb-1'>
+                        <label className='block text-sm font-medium text-[#23272E] dark:text-[#c1c6cf] mb-1'>
                             Question
                         </label>
                         <input
@@ -172,13 +172,13 @@ const FaqManager = ({ productId, productName }) => {
                             value={formData.question}
                             onChange={handleInputChange}
                             placeholder='Enter question'
-                            className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500'
+                            className='w-full px-3 py-2 text-[#23272E] dark:text-[#c1c6cf] border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500'
                             disabled={isSaving}
                         />
                     </div>
 
                     <div className='mb-3'>
-                        <label className='block text-sm font-medium text-gray-700 mb-1'>
+                        <label className='block text-sm font-medium text-[#23272E] dark:text-[#c1c6cf] mb-1'>
                             Answer
                         </label>
                         <textarea
@@ -187,7 +187,7 @@ const FaqManager = ({ productId, productName }) => {
                             onChange={handleInputChange}
                             placeholder='Enter answer'
                             rows='4'
-                            className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500'
+                            className='w-full px-3 py-2 text-[#23272E] dark:text-[#c1c6cf] border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500'
                             disabled={isSaving}
                         />
                     </div>
@@ -219,11 +219,11 @@ const FaqManager = ({ productId, productName }) => {
             ) : (
                 <div className='space-y-2'>
                     {faqs.map((faq) => (
-                        <div key={faq._id} className='p-3 bg-white border border-gray-200 rounded-lg'>
+                        <div key={faq._id} className='p-3 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-600 rounded-lg'>
                             <div className='flex items-start justify-between gap-2'>
                                 <div className='flex-1'>
-                                    <h4 className='font-medium text-gray-800'>{faq.question}</h4>
-                                    <p className='text-sm text-gray-600 mt-1'>{faq.answer}</p>
+                                    <h4 className='font-medium text-[#23272E] dark:text-[#c1c6cf]'>{faq.question}</h4>
+                                    <p className='text-sm text-[#23272E] dark:text-[#c1c6cf] mt-1'>{faq.answer}</p>
                                 </div>
                                 <div className='flex gap-2 flex-shrink-0'>
                                     <button

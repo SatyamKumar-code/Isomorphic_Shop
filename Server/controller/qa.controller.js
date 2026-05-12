@@ -166,6 +166,7 @@ export const getSellerUnansweredQuestions = async (req, res) => {
     try {
         const { productId } = req.params;
         const userId = req.userId;
+        const { page = 1, limit = 10, filter = "latest" } = req.query;
 
         if (!userId) {
             return res.status(401).json({
@@ -175,7 +176,9 @@ export const getSellerUnansweredQuestions = async (req, res) => {
         }
 
         // Verify product belongs to seller
-        const product = await ProductModel.findById(productId);
+        const product = await ProductModel.findById(productId)
+            .populate('category', 'catName')
+            .populate('subCategory', 'subCatName');
         if (!product) {
             return res.status(404).json({
                 error: true,
@@ -190,17 +193,83 @@ export const getSellerUnansweredQuestions = async (req, res) => {
             });
         }
 
-        // Get ALL questions (answered and unanswered) for this product
-        const qas = await QAModel.find({
+        const parsedPage = Number.parseInt(page, 10);
+        const parsedLimit = Number.parseInt(limit, 10);
+        const safePage = Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+        const allowedLimits = [10, 20, 30, 50, 100];
+        const safeLimit = allowedLimits.includes(parsedLimit) ? parsedLimit : 10;
+
+        let statusFilter = {};
+        let sortOption = { createdAt: -1 };
+
+        if (filter === "oldest") {
+            sortOption = { createdAt: 1 };
+        }
+
+        if (filter === "pending") {
+            statusFilter = { isAnswered: false };
+        }
+
+        if (filter === "answered") {
+            statusFilter = { isAnswered: true };
+        }
+
+        const baseQuery = {
             productId,
             sellerId: userId,
             isActive: true
-        }).populate('userId', 'name avatar').sort({ isAnswered: 1, createdAt: -1 });
+        };
+
+        const query = {
+            ...baseQuery,
+            ...statusFilter
+        };
+
+        const total = await QAModel.countDocuments(query);
+        const skip = (safePage - 1) * safeLimit;
+
+        const qas = await QAModel.find(query)
+            .populate('userId', 'name avatar')
+            .sort(sortOption)
+            .skip(skip)
+            .limit(safeLimit);
+
+        const [totalCount, answeredCount, pendingCount] = await Promise.all([
+            QAModel.countDocuments(baseQuery),
+            QAModel.countDocuments({ ...baseQuery, isAnswered: true }),
+            QAModel.countDocuments({ ...baseQuery, isAnswered: false })
+        ]);
 
         res.status(200).json({
             error: false,
+            product: {
+                _id: product._id,
+                productName: product.productName,
+                price: product.price,
+                images: product.images,
+                category: product.category,
+                subCategory: product.subCategory,
+                stock: product.stock,
+                description: product.description,
+                rating: product.rating,
+                sales: product.sales
+            },
             qas,
-            count: qas.length
+            count: qas.length,
+            stats: {
+                total: totalCount,
+                answered: answeredCount,
+                pending: pendingCount
+            },
+            pagination: {
+                page: safePage,
+                limit: safeLimit,
+                total,
+                totalPages: Math.ceil(total / safeLimit) || 1,
+                hasNextPage: skip + qas.length < total,
+                hasPrevPage: safePage > 1
+            },
+            filter
         });
     } catch (error) {
         res.status(500).json({
@@ -244,6 +313,99 @@ export const deleteQuestion = async (req, res) => {
         res.status(200).json({
             error: false,
             message: "Question deleted successfully"
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: true,
+            message: error.message
+        });
+    }
+};
+
+// Get all products with Q&A counts (admin/seller view)
+export const getProductsWithQACounts = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { page = 1, limit = 10, filter = 'all' } = req.query;
+
+        if (!userId) {
+            return res.status(401).json({
+                error: true,
+                message: "Unauthorized - User not found"
+            });
+        }
+
+        // Get all products for the seller/admin
+        const products = await ProductModel.find({ createdBy: userId })
+            .select('_id productName images')
+            .lean();
+
+        // Get Q&A counts for each product with timestamps for sorting
+        const productsWithCounts = await Promise.all(
+            products.map(async (product) => {
+                const qas = await QAModel.find({
+                    productId: product._id,
+                    isActive: true
+                }).lean();
+
+                const answeredCount = qas.filter(qa => qa.isAnswered).length;
+                const unansweredCount = qas.filter(qa => !qa.isAnswered).length;
+                const latestQuestion = qas.length > 0 ? Math.max(...qas.map(q => new Date(q.createdAt).getTime())) : 0;
+                const oldestQuestion = qas.length > 0 ? Math.min(...qas.map(q => new Date(q.createdAt).getTime())) : 0;
+
+                return {
+                    _id: product._id,
+                    productName: product.productName,
+                    productImage: product.images?.[0] || '',
+                    totalQA: qas.length,
+                    answeredQA: answeredCount,
+                    unansweredQA: unansweredCount,
+                    latestQuestion,
+                    oldestQuestion
+                };
+            })
+        );
+
+        // Filter to show only products with Q&As
+        let productsWithQA = productsWithCounts.filter(p => p.totalQA > 0);
+
+        // Apply filter: all | answered | pending | latest | oldest
+        if (filter === 'answered') {
+            productsWithQA = productsWithQA.filter(p => p.answeredQA > 0);
+        } else if (filter === 'pending') {
+            productsWithQA = productsWithQA.filter(p => p.unansweredQA > 0);
+        } else if (filter === 'latest') {
+            productsWithQA = productsWithQA.sort((a, b) => b.latestQuestion - a.latestQuestion);
+        } else if (filter === 'oldest') {
+            productsWithQA = productsWithQA.sort((a, b) => a.oldestQuestion - b.oldestQuestion);
+        }
+
+        // Pagination (safe param handling)
+        const parsedPage = Number.parseInt(page, 10);
+        const parsedLimit = Number.parseInt(limit, 10);
+        const allowedLimits = [10, 20, 30, 50, 100];
+        const safePage = Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+        const safeLimit = allowedLimits.includes(parsedLimit) ? parsedLimit : 10;
+
+        const total = productsWithQA.length;
+        const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+        const start = (safePage - 1) * safeLimit;
+        const end = start + safeLimit;
+        const paginated = productsWithQA.slice(start, end);
+
+        res.status(200).json({
+            error: false,
+            products: paginated,
+            count: paginated.length,
+            pagination: {
+                page: safePage,
+                limit: safeLimit,
+                total,
+                totalPages,
+                hasNextPage: safePage < totalPages,
+                hasPrevPage: safePage > 1
+            },
+            filter
         });
     } catch (error) {
         res.status(500).json({

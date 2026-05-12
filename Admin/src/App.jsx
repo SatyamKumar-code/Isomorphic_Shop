@@ -10,6 +10,7 @@ import { AddProductProvider } from './Context/addProduct/AddProductContext'
 import { ProductListProvider } from './Context/productList/ProductListContext'
 import { ProductReviewsProvider } from './Context/productReviews/ProductReviewsContext'
 import { TransactionProvider } from './Context/transaction/TransactionContext'
+import { QAProvider } from './Context/qa/QAContext'
 import AppRoutes from './routes/AppRoutes'
 
 const MyContext = createContext();
@@ -25,8 +26,10 @@ function App() {
                 <ProductListProvider>
                   <ProductReviewsProvider>
                     <TransactionProvider>
-                      <AppRoutes />
-                      <Toaster />
+                      <QAProvider>
+                        <AppRoutes />
+                        <Toaster />
+                      </QAProvider>
                     </TransactionProvider>
                   </ProductReviewsProvider>
                 </ProductListProvider>
