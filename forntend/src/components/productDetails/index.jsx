@@ -60,6 +60,7 @@ const ProductDetails = () => {
     const [isLoadingQas, setIsLoadingQas] = useState(false);
     const [questionText, setQuestionText] = useState('');
     const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false);
+    const [sellerStats, setSellerStats] = useState(null);
     const reviewPageActiveRef = useRef(false);
     const touchStartXRef = useRef(0);
     const touchEndXRef = useRef(0);
@@ -311,6 +312,13 @@ const ProductDetails = () => {
             return;
         }
 
+        // Check if product is already in cart
+        const productId = product?._id || id;
+        if (isProductInCart(productId)) {
+            context.alertBox('error', 'This product is already in your cart');
+            return;
+        }
+
         setIsAddingToCart(true);
         const response = await postData('/api/cart/add', {
             productId: product?._id || id,
@@ -511,6 +519,19 @@ const ProductDetails = () => {
             if (reviewPageActiveRef.current) {
                 setProduct(response?.product || null);
                 setIsLoading(false);
+
+                // Fetch seller stats if seller ID is available
+                if (response?.product?.createdBy?._id) {
+                    fetchDataFromApi(`/api/product/seller/${response.product.createdBy._id}/stats`)
+                        .then((statsResponse) => {
+                            if (reviewPageActiveRef.current && statsResponse?.data) {
+                                setSellerStats(statsResponse.data);
+                            }
+                        })
+                        .catch((error) => {
+                            console.error('Error fetching seller stats:', error);
+                        });
+                }
             }
         });
 
@@ -576,7 +597,7 @@ const ProductDetails = () => {
 
         // Load related products using current product ID
         loadRelatedProducts(id);
-        
+
         // Load FAQs from backend
         loadFaqs(id);
 
@@ -625,8 +646,28 @@ const ProductDetails = () => {
                     ))}
                 </div>
             )}
-            <div className='absolute top-4! right-4 w-10 h-10 rounded-full bg-white flex items-center justify-center'>
-                <FaHeart className='text-gray-400 text-lg' />
+            <div className='absolute top-4 right-4 z-50'>
+                {isProductInCart(product?._id || product?.id) ? (
+                    <button
+                        type='button'
+                        onClick={() => handleRemoveFromCartById(product?._id || product?.id)}
+                        className='w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-md hover:shadow-lg transition-all'
+                        title='Remove from cart'
+                        disabled={addingProductId === (product?._id || product?.id)}
+                    >
+                        <FaHeart className='text-lg text-red-500' />
+                    </button>
+                ) : (
+                    <button
+                        type='button'
+                        onClick={() => handleAddToCartById(product?._id || product?.id)}
+                        className='w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-md hover:shadow-lg transition-all disabled:opacity-60'
+                        title='Add to cart'
+                        disabled={addingProductId === (product?._id || product?.id) || isLoading || !product}
+                    >
+                        <FaRegHeart className='text-lg text-gray-400' />
+                    </button>
+                )}
             </div>
             <div className='p-4 w-full pb-28'>
                 {isLoading ? (
@@ -882,7 +923,10 @@ const ProductDetails = () => {
 
                 {/* Q&A Section */}
                 <div className='mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm'>
-                    <h4 className='text-lg font-bold mb-3'>Questions & Answers</h4>
+                    <div className='mb-3'>
+                        <h4 className='text-lg font-bold'>Questions & Answers</h4>
+                        <p className='text-xs text-gray-500 mt-1'>💬 Your questions and answers are private and only visible to you</p>
+                    </div>
 
                     {/* Ask Question Form */}
                     {context?.isLoggedIn ? (
@@ -920,7 +964,7 @@ const ProductDetails = () => {
                     {isLoadingQas ? (
                         <div className='text-sm text-gray-600'>Loading questions...</div>
                     ) : qas.length === 0 ? (
-                        <div className='text-sm text-gray-600'>No answered questions yet. Be the first to ask!</div>
+                        <div className='text-sm text-gray-600'>No questions asked yet by you.</div>
                     ) : (
                         <div className='space-y-3'>
                             {qas.map((qa, idx) => (
@@ -934,7 +978,7 @@ const ProductDetails = () => {
                                                 </span>
                                             </div>
                                             <p className='text-sm text-gray-700 mb-2'>Q: {qa.question}</p>
-                                            
+
                                             {qa.isAnswered && qa.answer ? (
                                                 <div className='ml-4 p-2 bg-gray-50 rounded-lg border-l-2 border-green-500'>
                                                     <div className='text-xs font-medium text-green-700 mb-1'>✓ Seller's Answer:</div>
@@ -965,11 +1009,24 @@ const ProductDetails = () => {
                                 <div className='font-semibold text-gray-800'>{product.createdBy.name}</div>
                                 <div className='flex items-center gap-2 mt-1'>
                                     <div className='flex items-center gap-1'>
-                                        {[1, 2, 3, 4, 5].map((star) => (
-                                            <FaStar key={star} className='text-yellow-400 text-sm' />
-                                        ))}
+                                        {sellerStats ? (
+                                            <>
+                                                {[...Array(5)].map((_, i) => (
+                                                    <FaStar
+                                                        key={i}
+                                                        className={`text-sm ${i < Math.floor(sellerStats.averageRating) ? 'text-yellow-400' : 'text-gray-300'}`}
+                                                    />
+                                                ))}
+                                            </>
+                                        ) : (
+                                            [...Array(5)].map((_, i) => (
+                                                <FaStar key={i} className='text-yellow-400 text-sm' />
+                                            ))
+                                        )}
                                     </div>
-                                    <span className='text-sm text-gray-600'>4.5 (1.2K reviews)</span>
+                                    <span className='text-sm text-gray-600'>
+                                        {sellerStats ? `${sellerStats.averageRating} (${sellerStats.totalReviews.toLocaleString('en-IN')} reviews)` : 'Loading...'}
+                                    </span>
                                 </div>
                                 <div className='mt-2 text-sm text-gray-600 space-y-1'>
                                     <div>✓ Fast & Reliable Shipping</div>
@@ -1067,12 +1124,18 @@ const ProductDetails = () => {
                     <button
                         type='button'
                         onClick={handleCheckout}
-                        disabled={isLoading || !product || isAddingToCart}
+                        disabled={isLoading || !product}
                         className='w-[70%] bg-blue-500 text-white p-3 rounded-full font-bold disabled:opacity-60'
                     >
                         Proceed to Checkout
                     </button>
-                    <button type='button' onClick={handleAddToCart} className='absolute items-center right-10 text-3xl' disabled={isLoading || !product || isAddingToCart}>
+                    <button
+                        type='button'
+                        onClick={handleAddToCart}
+                        className={`absolute items-center right-10 text-3xl transition-colors ${isProductInCart(product?._id || product?.id) ? 'text-green-500 opacity-60 cursor-not-allowed' : 'text-blue-500'}`}
+                        disabled={isLoading || !product || isAddingToCart || isProductInCart(product?._id || product?.id)}
+                        title={isProductInCart(product?._id || product?.id) ? 'Already in cart' : 'Add to cart'}
+                    >
                         <FaCartArrowDown />
                     </button>
                 </div>

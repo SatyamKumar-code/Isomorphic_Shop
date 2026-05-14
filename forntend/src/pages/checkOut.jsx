@@ -60,13 +60,109 @@ const CheckOut = () => {
         setSelectedAddress((prev) => prev || defaultAddr);
     };
 
+    // Load Razorpay script
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        document.body.appendChild(script);
+        return () => {
+            document.body.removeChild(script);
+        };
+    }, []);
+
     useEffect(() => {
         loadSummary();
     }, [selectedProduct]);
 
+    const handleRazorpayPayment = async () => {
+        if (!selectedAddress?._id) {
+            context.alertBox('error', 'Please add a delivery address before placing the order.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            const initResponse = await postData('/api/order/razorpay/initialize', {
+                delivery_address: selectedAddress._id,
+                ...(selectedProduct
+                    ? {
+                        products: [{
+                            productId: selectedProduct._id,
+                            quantity: selectedProduct.quantity || 1,
+                        }],
+                    }
+                    : {}),
+            });
+
+            if (initResponse?.error) {
+                context.alertBox('error', initResponse?.message || 'Failed to initialize payment');
+                setIsSubmitting(false);
+                return;
+            }
+
+            const { orderId, amount, currency, key_id, user_email, user_name, user_phone } = initResponse?.data || {};
+
+            const options = {
+                key: key_id,
+                amount: amount,
+                currency: currency,
+                name: 'Isomorphic Shop',
+                description: 'Order Payment',
+                order_id: orderId,
+                prefill: {
+                    name: user_name,
+                    email: user_email,
+                    contact: user_phone,
+                },
+                theme: {
+                    color: '#3b82f6',
+                },
+                handler: async (response) => {
+                    try {
+                        const createOrderResponse = await postData('/api/order/razorpay', {
+                            paymentId: response.razorpay_payment_id,
+                            delivery_address: selectedAddress._id,
+                            ...(selectedProduct
+                                ? {
+                                    products: [{
+                                        productId: selectedProduct._id,
+                                        quantity: selectedProduct.quantity || 1,
+                                    }],
+                                }
+                                : {}),
+                        });
+
+                        if (createOrderResponse?.error === false) {
+                            context.alertBox('Success', 'Order placed successfully.');
+                            navigate('/orders');
+                        } else {
+                            context.alertBox('error', createOrderResponse?.message || 'Failed to create order after payment');
+                        }
+                    } catch (error) {
+                        context.alertBox('error', 'Error creating order: ' + error.message);
+                    }
+                    setIsSubmitting(false);
+                },
+                modal: {
+                    ondismiss: () => {
+                        setIsSubmitting(false);
+                        context.alertBox('info', 'Payment cancelled');
+                    },
+                },
+            };
+
+            const razorpay = new window.Razorpay(options);
+            razorpay.open();
+        } catch (error) {
+            context.alertBox('error', 'Error initiating payment: ' + error.message);
+            setIsSubmitting(false);
+        }
+    };
+
     const handlePlaceOrder = async () => {
-        if (selectedPayment !== 'COD') {
-            context.alertBox('error', 'Razorpay checkout is not wired yet. Please choose COD to place the order.');
+        if (selectedPayment === 'razorpay') {
+            await handleRazorpayPayment();
             return;
         }
 
@@ -269,7 +365,7 @@ const CheckOut = () => {
                                 ? 'Processing...'
                                 : selectedPayment === 'COD'
                                     ? 'Place COD Order'
-                                    : 'Continue to Razorpay'}
+                                    : 'Pay with Razorpay'}
                         </button>
 
                     </div>

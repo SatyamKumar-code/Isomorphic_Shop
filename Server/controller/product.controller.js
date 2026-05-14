@@ -1901,3 +1901,61 @@ export const getProductReviewsController = async (req, res) => {
     }
 }
 
+export const getSellerStatsController = async (req, res) => {
+    try {
+        const sellerId = req.params.sellerId;
+
+        if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
+            return res.status(400).json({
+                message: "Valid seller ID is required",
+                success: false,
+                error: true
+            });
+        }
+
+        // Get all products created by this seller
+        const sellerProducts = await ProductModel.find({ createdBy: new mongoose.Types.ObjectId(sellerId) }).select("_id").lean();
+        const productIds = sellerProducts.map(p => p._id);
+
+        if (productIds.length === 0) {
+            return res.status(200).json({
+                message: "Seller found",
+                success: true,
+                error: false,
+                data: {
+                    averageRating: 0,
+                    totalReviews: 0
+                }
+            });
+        }
+
+        // Get all approved reviews for seller's products
+        const reviews = await ReviewModel.find({
+            productId: { $in: productIds },
+            $or: [{ status: "Approved" }, { status: { $exists: false } }, { status: null }]
+        }).select("rating").lean();
+
+        const averageRating = reviews.length > 0
+            ? parseFloat((reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length).toFixed(1))
+            : 0;
+
+        return res.status(200).json({
+            message: "Seller stats fetched successfully",
+            success: true,
+            error: false,
+            data: {
+                averageRating,
+                totalReviews: reviews.length
+            }
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error fetching seller stats: " + error.message,
+            success: false,
+            error: true
+        });
+    }
+}
+
+

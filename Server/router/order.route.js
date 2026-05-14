@@ -3,6 +3,7 @@ import express from "express";
 import {
 	createOrderWithCOD,
 	createOrderWithRazorpay,
+	initializeRazorpayPayment,
 	getUserOrders,
 	getAllOrders,
 	getOrderSummary,
@@ -20,6 +21,7 @@ const orderRouter = express.Router();
 
 // User routes
 orderRouter.post("/cod", userMiddleware, createOrderWithCOD); // Create order with COD
+orderRouter.post("/razorpay/initialize", userMiddleware, initializeRazorpayPayment); // Initialize Razorpay payment
 orderRouter.post("/razorpay", userMiddleware, createOrderWithRazorpay); // Create order with Razorpay
 orderRouter.get("/my-orders", userMiddleware, getUserOrders); // Get user's own orders
 

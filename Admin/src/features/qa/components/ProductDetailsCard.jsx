@@ -34,7 +34,7 @@ const ProductDetailsCard = ({ productDetails, qaList, qaStats }) => {
 
                             return (
                                 <div>
-                                    <div className='w-full h-52 rounded-xl overflow-hidden border-2 border-blue-200 dark:border-blue-800 shadow-md hover:shadow-lg transition'>
+                                    <div className='w-full h-49 rounded-xl overflow-hidden border-2 border-blue-200 dark:border-blue-800 shadow-md hover:shadow-lg transition'>
                                         <img
                                             src={buildUrl(mainImg)}
                                             alt={productDetails?.productName || 'Product'}
@@ -43,7 +43,7 @@ const ProductDetailsCard = ({ productDetails, qaList, qaStats }) => {
                                     </div>
                                     {secondImg && (
                                         <div className='mt-3'>
-                                            <div className='w-full h-52 rounded-xl overflow-hidden border-2 border-gray-200 dark:border-gray-700'>
+                                            <div className='w-full h-48 rounded-xl overflow-hidden border-2 border-gray-200 dark:border-gray-700'>
                                                 <img
                                                     src={buildUrl(secondImg)}
                                                     alt={`${productDetails?.productName || 'Product'} - 2`}
@@ -55,7 +55,7 @@ const ProductDetailsCard = ({ productDetails, qaList, qaStats }) => {
 
                                     {thirdImg && (
                                         <div className='mt-3'>
-                                            <div className='w-full h-52 rounded-xl overflow-hidden border-2 border-gray-200 dark:border-gray-700'>
+                                            <div className='w-full h-48 rounded-xl overflow-hidden border-2 border-gray-200 dark:border-gray-700'>
                                                 <img
                                                     src={buildUrl(thirdImg)}
                                                     alt={`${productDetails?.productName || 'Product'} - 3`}

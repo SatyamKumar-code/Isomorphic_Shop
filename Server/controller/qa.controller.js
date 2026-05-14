@@ -2,12 +2,12 @@ import QAModel from "../models/qa.model.js";
 import ProductModel from "../models/product.model.js";
 import JWT from "jsonwebtoken";
 
-// Get all Q&A for a product (public - shows only answered, plus user's own unanswered)
+// Get all Q&A for a product (private - only user's own questions visible)
 export const getQaByProduct = async (req, res) => {
     try {
         const { productId } = req.params;
 
-        // Try to get user ID if logged in (optional)
+        // Try to get user ID if logged in (required for Q&A visibility)
         let userId = null;
         const token = req.cookies?.accessToken || req?.headers?.authorization?.split(" ")[1];
         if (token) {
@@ -20,29 +20,19 @@ export const getQaByProduct = async (req, res) => {
             }
         }
 
-        // Get all answered questions (public)
-        const answeredQas = await QAModel.find({
-            productId,
-            isActive: true,
-            isAnswered: true
-        }).populate('userId', 'name avatar').select("question answer isAnswered createdAt updatedAt").sort({ createdAt: -1 });
-
-        let userUnansweredQas = [];
-        // If user is logged in, get their own unanswered questions
+        // Only show Q&A to the user who asked the question
+        let userQas = [];
         if (userId) {
-            userUnansweredQas = await QAModel.find({
+            userQas = await QAModel.find({
                 productId,
                 userId,
-                isActive: true,
-                isAnswered: false
+                isActive: true
             }).populate('userId', 'name avatar').select("question answer isAnswered createdAt updatedAt").sort({ createdAt: -1 });
         }
 
-        const allQas = [...answeredQas, ...userUnansweredQas].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
         res.status(200).json({
             error: false,
-            qas: allQas
+            qas: userQas
         });
     } catch (error) {
         res.status(500).json({

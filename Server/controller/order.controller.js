@@ -1030,6 +1030,148 @@ export const createOrderWithRazorpay = async (req, res) => {
     }
 }
 
+export const initializeRazorpayPayment = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { delivery_address, products } = req.body;
+
+        if (!delivery_address) {
+            return res.status(400).json({
+                message: "Delivery address is required",
+                error: true,
+                success: false
+            });
+        }
+
+        const directItems = Array.isArray(products)
+            ? products
+                .map((item) => ({
+                    productId: String(item?.productId || "").trim(),
+                    quantity: Number(item?.quantity || 0),
+                }))
+                .filter((item) => item.productId && Number.isFinite(item.quantity) && item.quantity > 0)
+            : [];
+
+        let orderItems = [];
+
+        if (directItems.length > 0) {
+            const invalidProductId = directItems.find((item) => !mongoose.Types.ObjectId.isValid(item.productId));
+
+            if (invalidProductId) {
+                return res.status(400).json({
+                    message: "Invalid product ID provided",
+                    error: true,
+                    success: false,
+                });
+            }
+
+            const productIds = directItems.map((item) => new mongoose.Types.ObjectId(item.productId));
+            const quantityMap = new Map(directItems.map((item) => [item.productId, item.quantity]));
+            const productDocs = await ProductModel.find({ _id: { $in: productIds } }).session(null);
+
+            if (productDocs.length !== productIds.length) {
+                return res.status(404).json({
+                    message: "One or more products were not found",
+                    error: true,
+                    success: false,
+                });
+            }
+
+            orderItems = productDocs.map((productDoc) => ({
+                productId: productDoc,
+                quantity: quantityMap.get(String(productDoc._id)) || 0,
+            })).filter((item) => item.quantity > 0);
+        } else {
+            const poductInCart = await CartModel.findOne({ userId }).populate("products.productId");
+
+            if (!poductInCart || !poductInCart.products.length) {
+                return res.status(404).json({
+                    message: "Cart is empty",
+                    error: true,
+                    success: false
+                });
+            }
+
+            orderItems = poductInCart.products
+                .filter((item) => item?.productId)
+                .map((item) => ({
+                    productId: item.productId,
+                    quantity: Number(item.quantity || 0),
+                }))
+                .filter((item) => item.quantity > 0);
+        }
+
+        if (!orderItems.length) {
+            return res.status(404).json({
+                message: "No valid products found for checkout",
+                error: true,
+                success: false
+            });
+        }
+
+        // Validate stock for all items
+        for (const item of orderItems) {
+            const product = item.productId;
+            if (product.stock < item.quantity) {
+                return res.status(400).json({
+                    message: `Insufficient stock for product: ${product.productName}`,
+                    error: true,
+                    success: false
+                });
+            }
+        }
+
+        // Calculate total amount (in paise for Razorpay)
+        let totalAmount = 0;
+        for (const item of orderItems) {
+            totalAmount += item.productId.price * item.quantity;
+        }
+        totalAmount = Math.round(totalAmount * 100); // Convert to paise
+
+        // Get user email
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false
+            });
+        }
+
+        // Create Razorpay order
+        const razorpayOrder = await razorpay.orders.create({
+            amount: totalAmount,
+            currency: "INR",
+            receipt: `order_${Date.now()}`,
+            notes: {
+                userId,
+                delivery_address
+            }
+        });
+
+        return res.status(200).json({
+            message: "Razorpay order created successfully",
+            error: false,
+            success: true,
+            data: {
+                orderId: razorpayOrder.id,
+                amount: razorpayOrder.amount,
+                currency: razorpayOrder.currency,
+                key_id: process.env.RAZORPAY_KEY_ID,
+                user_email: user.email,
+                user_name: user.name,
+                user_phone: user.phone || "",
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error initializing Razorpay payment: " + error.message,
+            error: true,
+            success: false
+        });
+    }
+}
+
 export const getUserOrders = async (req, res) => {
     try {
         const userId = req.userId;

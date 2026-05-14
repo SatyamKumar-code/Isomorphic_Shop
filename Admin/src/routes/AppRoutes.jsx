@@ -189,7 +189,7 @@ const AppRoutes = () => {
             path: '/qa-management',
             exact: true,
             element: (
-                <ProtectedRoute allowedRoles={["admin", "seller"]}>
+                <ProtectedRoute allowedRoles={["seller"]}>
                     <MainLayout title="Q&A Management">
                         <QAListPage />
                     </MainLayout>
@@ -201,7 +201,7 @@ const AppRoutes = () => {
             path: '/qa-management/:productId',
             exact: true,
             element: (
-                <ProtectedRoute allowedRoles={["admin", "seller"]}>
+                <ProtectedRoute allowedRoles={["seller"]}>
                     <MainLayout title="Product Q&A">
                         <QADetailPage />
                     </MainLayout>

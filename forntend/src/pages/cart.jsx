@@ -35,6 +35,15 @@ const Cart = () => {
         loadCart();
     }, []);
 
+    // Recalculate itemCount whenever cartItems changes
+    useEffect(() => {
+        const totalQuantity = cartItems.reduce((sum, item) => sum + Number(item?.quantity || 1), 0);
+        setCartSummary(prevSummary => ({
+            ...prevSummary,
+            itemCount: totalQuantity
+        }));
+    }, [cartItems]);
+
     const subtotal = useMemo(() => cartSummary.totalAmount || 0, [cartSummary.totalAmount]);
     const deliveryCharges = 2;
     const total = subtotal + deliveryCharges;
@@ -44,21 +53,77 @@ const Cart = () => {
             context.alertBox('error', 'Quantity must be at least 1');
             return;
         }
+
+        // Update UI immediately (optimistic update)
+        setCartItems(prevItems =>
+            prevItems.map(item => {
+                const itemProductId = item?.productId?._id || item?.productId;
+                if (String(itemProductId) === String(productId)) {
+                    return { ...item, quantity };
+                }
+                return item;
+            })
+        );
+
+        // Update cart summary immediately
+        setCartSummary(prevSummary => {
+            const currentItem = cartItems.find(item => {
+                const itemProductId = item?.productId?._id || item?.productId;
+                return String(itemProductId) === String(productId);
+            });
+            if (currentItem) {
+                const oldQuantity = Number(currentItem.quantity || 1);
+                const priceDiff = (quantity - oldQuantity) * Number(currentItem?.productId?.price || 0);
+                return {
+                    ...prevSummary,
+                    totalAmount: prevSummary.totalAmount + priceDiff
+                };
+            }
+            return prevSummary;
+        });
+
+        // Make API call in background without blocking UI
         const response = await editData('/api/cart/update', { productId, quantity });
         if (response?.error === false) {
             context.alertBox('Success', 'Quantity updated');
-            await loadCart();
         } else {
+            // Revert on error
+            await loadCart();
             context.alertBox('error', response?.message || 'Unable to update quantity');
         }
     };
 
     const removeItem = async (productId) => {
+        // Update UI immediately (optimistic update)
+        setCartItems(prevItems =>
+            prevItems.filter(item => {
+                const itemProductId = item?.productId?._id || item?.productId;
+                return String(itemProductId) !== String(productId);
+            })
+        );
+
+        // Update cart summary immediately
+        const removedItem = cartItems.find(item => {
+            const itemProductId = item?.productId?._id || item?.productId;
+            return String(itemProductId) === String(productId);
+        });
+
+        if (removedItem) {
+            const removedAmount = Number(removedItem.quantity || 1) * Number(removedItem?.productId?.price || 0);
+            setCartSummary(prevSummary => ({
+                ...prevSummary,
+                itemCount: Math.max(0, prevSummary.itemCount - 1),
+                totalAmount: Math.max(0, prevSummary.totalAmount - removedAmount)
+            }));
+        }
+
+        // Make API call in background without blocking UI
         const response = await deleteData(`/api/cart/remove/${productId}`);
         if (response?.error === false) {
             context.alertBox('Success', 'Item removed from cart');
-            await loadCart();
         } else {
+            // Revert on error
+            await loadCart();
             context.alertBox('error', response?.message || 'Unable to remove item');
         }
     };
@@ -112,7 +177,7 @@ const Cart = () => {
                     <div className='mt-16 rounded-lg bg-gray-100 p-6 text-center'>
                         <h3 className='font-bold text-lg'>Your cart is empty</h3>
                         <p className='text-sm text-gray-600 mt-2'>Add items to your cart to start shopping.</p>
-                        
+
                     </div>
                 )}
             </div>

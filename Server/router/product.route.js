@@ -19,7 +19,8 @@ import {
 	getRecentlyViewedProductsController,
 	createProductReviewController,
 	getProductReviewsController,
-	updateMyProductReviewController
+	updateMyProductReviewController,
+	getSellerStatsController
 } from "../controller/product.controller.js";
 
 import upload from "../middlewares/multer.js";
@@ -49,6 +50,8 @@ productRouter.get("/subcategory/:subCategoryId", getProductsBySubCategoryIdContr
 productRouter.get("/related/:id", getRelatedProductsController);
 // Recently viewed
 productRouter.get("/recently-viewed", getRecentlyViewedProductsController);
+// Seller stats
+productRouter.get("/seller/:sellerId/stats", getSellerStatsController);
 
 // Reviews (has additional path segment, so safe)
 productRouter.post("/:id/review", userAuth, createProductReviewController);

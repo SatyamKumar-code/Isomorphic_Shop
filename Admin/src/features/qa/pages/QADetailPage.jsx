@@ -52,11 +52,6 @@ const QADetailPage = () => {
         if (result.success) {
             setAnswerText(prev => ({ ...prev, [qaId]: '' }));
             setEditingId(null);
-            await fetchQAByProduct(productId, {
-                page: qaPagination.page,
-                limit: qaPagination.limit,
-                filter: activeFilter
-            });
             toast.success('Answer posted successfully');
         } else {
             toast.error(result.error || 'Failed to post answer');
