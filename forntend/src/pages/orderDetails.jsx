@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchDataFromApi } from '../utils/api'
 import BackButton from '../components/backButton'
+import OrderHelpModal from '../components/OrderHelpModal'
 import { FaDownload, FaMapPin, FaUser } from 'react-icons/fa6'
 import { FaCheck } from "react-icons/fa";
 import { ImCross } from "react-icons/im";
@@ -50,6 +51,8 @@ const OrderDetails = () => {
     const { id } = useParams();
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [showHelpModal, setShowHelpModal] = useState(false);
+    const [returnStatus, setReturnStatus] = useState(null);
 
     console.log(order);
 
@@ -65,6 +68,23 @@ const OrderDetails = () => {
 
         load();
     }, [id]);
+
+    // Load return status when order changes
+    useEffect(() => {
+        if (order?._id) {
+            const loadReturnStatus = async () => {
+                try {
+                    const res = await fetchDataFromApi(`/api/order/${order._id}/return-status`);
+                    if (res?.data) {
+                        setReturnStatus(res.data);
+                    }
+                } catch (error) {
+                    console.error('Error loading return status:', error);
+                }
+            };
+            loadReturnStatus();
+        }
+    }, [order?._id]);
 
     const product = order?.products?.[0]?.productId || {};
     const productId = product?._id || product?.id;
@@ -98,7 +118,11 @@ const OrderDetails = () => {
                     <h1 className='text-[22px] font-semibold text-gray-900'>Order Details</h1>
                 </div>
 
-                <button type='button' className='rounded-xl border border-gray-200 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 shadow-sm'>
+                <button
+                    type='button'
+                    onClick={() => setShowHelpModal(true)}
+                    className='rounded-xl border border-gray-200 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 shadow-sm hover:bg-gray-50'
+                >
                     Help
                 </button>
             </div>
@@ -141,6 +165,46 @@ const OrderDetails = () => {
                             {status === 'cancelled' ? <ImCross /> : <FaCheck className='text-white font-bold!' />}
                         </div>
                     </div>
+
+                    {/* Refund/Return Status */}
+                    {returnStatus && (returnStatus?.refundStatus && returnStatus.refundStatus !== 'none') && (
+                        <div className='mt-4 pt-4 border-t border-gray-200'>
+                            <p className='text-sm font-semibold text-gray-900 mb-2'>📋 Refund/Return Status</p>
+                            <div className='space-y-2 text-sm'>
+                                <div className='flex items-center justify-between'>
+                                    <span className='text-gray-600'>Status:</span>
+                                    <span className='font-semibold capitalize px-3 py-1 bg-blue-50 text-blue-700 rounded'>{returnStatus.refundStatus}</span>
+                                </div>
+                                {returnStatus?.refundAmount && (
+                                    <div className='flex items-center justify-between'>
+                                        <span className='text-gray-600'>Refund Amount:</span>
+                                        <span className='font-semibold text-blue-600'>₹{Number(returnStatus.refundAmount).toLocaleString('en-IN')}</span>
+                                    </div>
+                                )}
+                                {returnStatus?.refundStatus === 'requested' && (
+                                    <p className='text-xs text-blue-600 mt-2 p-2 bg-blue-50 rounded'>⏳ Your refund request is being processed by our team.</p>
+                                )}
+                                {returnStatus?.refundStatus === 'approved' && (
+                                    <p className='text-xs text-blue-600 mt-2 p-2 bg-blue-50 rounded'>📦 Your return has been approved. Waiting for pickup.</p>
+                                )}
+                                {returnStatus?.refundStatus === 'pickup_completed' && (
+                                    <p className='text-xs text-blue-600 mt-2 p-2 bg-blue-50 rounded'>✓ Your item has been picked up. Refund will be processed soon.</p>
+                                )}
+                                {returnStatus?.refundStatus === 'initiated' && (
+                                    <p className='text-xs text-blue-600 mt-2 p-2 bg-blue-50 rounded'>💳 Your refund has been initiated and will be credited shortly.</p>
+                                )}
+                                {returnStatus?.refundStatus === 'processed' && (
+                                    <p className='text-xs text-green-600 mt-2 p-2 bg-green-50 rounded'>✓ Your refund has been successfully processed!</p>
+                                )}
+                                {returnStatus?.refundStatus === 'rejected' && (
+                                    <div className='mt-2 p-2 bg-red-50 rounded'>
+                                        <p className='text-xs text-red-600'>❌ Your return request was rejected.</p>
+                                        {returnStatus?.refundReason && <p className='text-xs text-red-600 mt-1'>Reason: {returnStatus.refundReason}</p>}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     <div className='mt-4 border-t border-gray-100 pt-4 text-center'>
                         <Link to={`/order/${order._id}/status`} className='text-[16px] font-semibold text-blue-600'>
@@ -287,6 +351,32 @@ const OrderDetails = () => {
                     </div>
                 </div> */}
             </div>
+
+            <OrderHelpModal
+                isOpen={showHelpModal}
+                onClose={() => setShowHelpModal(false)}
+                orderId={order?._id}
+                orderStatus={String(order?.status || 'pending').toLowerCase()}
+                paymentMethod={order?.paymentMethod || 'COD'}
+                onActionComplete={() => {
+                    // Reload order data and return status
+                    const load = async () => {
+                        const res = await fetchDataFromApi('/api/order/my-orders');
+                        const list = res?.orders || [];
+                        const found = list.find((item) => String(item._id) === String(id));
+                        setOrder(found || null);
+
+                        // Also reload return status
+                        if (found?._id) {
+                            const statusRes = await fetchDataFromApi(`/api/order/${found._id}/return-status`);
+                            if (statusRes?.data) {
+                                setReturnStatus(statusRes.data);
+                            }
+                        }
+                    }
+                    load();
+                }}
+            />
         </div>
     )
 }

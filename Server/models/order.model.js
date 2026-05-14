@@ -34,6 +34,27 @@ const orderSchema = new mongoose.Schema({
         enum: ["pending", "confirmed", "packed", "shipped", "out_for_delivery", "delivered", "cancelled"],
         default: "pending"
     },
+    statusHistory: {
+        type: [
+            {
+                status: {
+                    type: String,
+                    enum: ["pending", "confirmed", "packed", "shipped", "out_for_delivery", "delivered", "cancelled"],
+                    required: true,
+                },
+                updatedAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+            }
+        ],
+        default: () => [{ status: "pending", updatedAt: new Date() }],
+    },
+    cancelledFromStatus: {
+        type: String,
+        enum: ["pending", "confirmed", "packed", "shipped", "out_for_delivery", null],
+        default: null
+    },
     paymentMethod: {
         type: String,
         enum: ["Razorpay", "COD"],
@@ -62,6 +83,22 @@ const orderSchema = new mongoose.Schema({
         type: String,
         enum: ["none", "requested", "approved", "pickup_completed", "initiated", "processed", "rejected"],
         default: "none"
+    },
+    refundStatusHistory: {
+        type: [
+            {
+                status: {
+                    type: String,
+                    enum: ["none", "requested", "approved", "pickup_completed", "initiated", "processed", "rejected"],
+                    required: true,
+                },
+                updatedAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+            }
+        ],
+        default: () => [{ status: "none", updatedAt: new Date() }],
     },
     refundReason: {
         type: String,

@@ -4,6 +4,7 @@ import OrderModel from "../models/order.model.js";
 import ProductModel from "../models/product.model.js";
 import UserModel from "../models/user.model.js";
 import AddressModel from "../models/address.model.js";
+import ReturnRequestModel from "../models/returnRequest.model.js";
 import razorpay from "../config/razorpay.js";
 import { notifyOrderParticipants } from "../utils/notificationService.js";
 
@@ -102,6 +103,22 @@ const normalizeRefundStatus = (value) => {
     };
 
     return aliasMap[normalized] || normalized;
+};
+
+const appendOrderStatusHistory = (orderDoc, status) => {
+    if (!orderDoc || !status) return;
+    if (!Array.isArray(orderDoc.statusHistory)) {
+        orderDoc.statusHistory = [];
+    }
+    orderDoc.statusHistory.push({ status, updatedAt: new Date() });
+};
+
+const appendRefundStatusHistory = (orderDoc, status) => {
+    if (!orderDoc || !status) return;
+    if (!Array.isArray(orderDoc.refundStatusHistory)) {
+        orderDoc.refundStatusHistory = [];
+    }
+    orderDoc.refundStatusHistory.push({ status, updatedAt: new Date() });
 };
 
 const hasGlobalAdminAccess = async (adminId) => {
@@ -719,6 +736,8 @@ export const createOrderByAdmin = async (req, res) => {
                     paymentStatus,
                     paymentId,
                     status,
+                    statusHistory: [{ status, updatedAt: new Date() }],
+                    refundStatusHistory: [{ status: "none", updatedAt: new Date() }],
                 },
             ], { session });
 
@@ -864,7 +883,9 @@ export const createOrderWithCOD = async (req, res) => {
                         userId,
                         products: [{ productId: product._id, quantity: item.quantity }],
                         delivery_address,
-                        totalAmount: orderAmount
+                        totalAmount: orderAmount,
+                        statusHistory: [{ status: "pending", updatedAt: new Date() }],
+                        refundStatusHistory: [{ status: "none", updatedAt: new Date() }],
                     });
                     await order.save({ session });
                     createdOrders.push(order);
@@ -984,7 +1005,9 @@ export const createOrderWithRazorpay = async (req, res) => {
                         totalAmount: orderAmount,
                         paymentMethod: "Razorpay",
                         paymentId,
-                        paymentStatus: paymentStatusFetched === "captured" ? "completed" : "pending"
+                        paymentStatus: paymentStatusFetched === "captured" ? "completed" : "pending",
+                        statusHistory: [{ status: "pending", updatedAt: new Date() }],
+                        refundStatusHistory: [{ status: "none", updatedAt: new Date() }],
                     });
                     await order.save({ session });
                     createdOrders.push(order);
@@ -1814,12 +1837,23 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         // Update the order status and persist delivery timestamp for payout hold calculations
-        const updatePayload = { status: normalizedIncomingStatus };
+        const updateSet = { status: normalizedIncomingStatus };
         if (normalizedIncomingStatus === "delivered" && previousStatus !== "delivered") {
-            updatePayload.deliveredAt = new Date();
+            updateSet.deliveredAt = new Date();
         }
-
-        const updatedStatus = await OrderModel.findByIdAndUpdate(orderId, updatePayload, { new: true });
+        if (normalizedIncomingStatus === "cancelled" && previousStatus !== "cancelled") {
+            updateSet.cancelledFromStatus = previousStatus;
+        }
+        const updatedStatus = await OrderModel.findByIdAndUpdate(
+            orderId,
+            {
+                $set: updateSet,
+                $push: {
+                    statusHistory: { status: normalizedIncomingStatus, updatedAt: new Date() }
+                }
+            },
+            { new: true }
+        );
 
         // Only apply side-effects if status is changing to cancelled or delivered
         if (normalizedIncomingStatus === "cancelled" && previousStatus !== "cancelled") {
@@ -2016,6 +2050,7 @@ export const updateOrderRefundStatus = async (req, res) => {
 
         order.refundStatus = normalizedIncomingRefundStatus;
         order.refundReason = String(refundReason || "").trim();
+        appendRefundStatusHistory(order, normalizedIncomingRefundStatus);
         if (normalizedIncomingRefundStatus === "requested" && !order.refundRequestedAt) {
             order.refundRequestedAt = new Date();
         }
@@ -2045,6 +2080,481 @@ export const updateOrderRefundStatus = async (req, res) => {
             message: "Error updating order refund status: " + error.message,
             error: true,
             success: false,
+        });
+    }
+};
+
+export const cancelOrderBeforeDelivery = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { orderId } = req.params;
+        const { reason = "" } = req.body;
+
+        if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({
+                message: "Valid order ID is required",
+                error: true,
+                success: false
+            });
+        }
+
+        const order = await OrderModel.findById(orderId).populate("products.productId");
+
+        if (!order) {
+            return res.status(404).json({
+                message: "Order not found",
+                error: true,
+                success: false
+            });
+        }
+
+        if (String(order.userId) !== String(userId)) {
+            return res.status(403).json({
+                message: "Unauthorized - this is not your order",
+                error: true,
+                success: false
+            });
+        }
+
+        // Check if order can be cancelled (not yet delivered)
+        const cancelleableStatuses = ["pending", "confirmed", "packed", "shipped", "out_for_delivery"];
+        if (!cancelleableStatuses.includes(order.status)) {
+            return res.status(400).json({
+                message: `Order cannot be cancelled. Current status: ${order.status}`,
+                error: true,
+                success: false
+            });
+        }
+
+        // Cancel order and refund stock
+        const previousStatus = order.status;
+        order.status = "cancelled";
+        order.cancelledFromStatus = previousStatus;
+        appendOrderStatusHistory(order, "cancelled");
+
+        // If Razorpay payment, start refund process
+        if (order.paymentMethod === "Razorpay" && order.paymentStatus === "completed") {
+            order.refundStatus = "requested";
+            order.refundReason = reason || "User cancelled order";
+            order.refundRequestedAt = new Date();
+            order.refundAmount = order.totalAmount;
+            appendRefundStatusHistory(order, "requested");
+        }
+
+        // Restore stock
+        for (const item of order.products) {
+            if (item.productId) {
+                const product = item.productId;
+                product.stock += item.quantity;
+                product.sales = Math.max(0, Number(product.sales || 0) - item.quantity);
+                await product.save();
+            }
+        }
+
+        await order.save();
+
+        // Notify user
+        await notifyOrderParticipants({
+            orderDoc: order,
+            type: "order_cancelled",
+            title: "Order cancelled",
+            message: `Your order ${String(order._id).slice(-8).toUpperCase()} has been cancelled.${order.refundStatus === "requested" ? " Refund process initiated." : ""}`,
+            link: "/orders"
+        }).catch(() => null);
+
+        return res.status(200).json({
+            message: "Order cancelled successfully",
+            error: false,
+            success: true,
+            order
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error cancelling order: " + error.message,
+            error: true,
+            success: false
+        });
+    }
+};
+
+export const initiateReturn = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { orderId } = req.params;
+        const { reason, comment, bankDetails } = req.body;
+
+        if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({
+                message: "Valid order ID is required",
+                error: true,
+                success: false
+            });
+        }
+
+        if (!reason) {
+            return res.status(400).json({
+                message: "Return reason is required",
+                error: true,
+                success: false
+            });
+        }
+
+        const order = await OrderModel.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({
+                message: "Order not found",
+                error: true,
+                success: false
+            });
+        }
+
+        if (String(order.userId) !== String(userId)) {
+            return res.status(403).json({
+                message: "Unauthorized - this is not your order",
+                error: true,
+                success: false
+            });
+        }
+
+        // Check if order is delivered
+        if (order.status !== "delivered") {
+            return res.status(400).json({
+                message: "Order must be delivered to initiate return",
+                error: true,
+                success: false
+            });
+        }
+
+        // Check return window (default 30 days from delivery)
+        const returnDays = order.deliveredAt ? 30 : 30;
+        const deliveredDate = order.deliveredAt || order.createdAt;
+        const returnWindowEnd = new Date(deliveredDate);
+        returnWindowEnd.setDate(returnWindowEnd.getDate() + returnDays);
+
+        if (new Date() > returnWindowEnd) {
+            return res.status(400).json({
+                message: `Return window has expired. Return allowed within ${returnDays} days of delivery`,
+                error: true,
+                success: false
+            });
+        }
+
+        // Check if return already exists
+        const existingReturn = await ReturnRequestModel.findOne({ orderId, status: { $ne: "rejected" } });
+        if (existingReturn) {
+            return res.status(400).json({
+                message: "Return request already exists for this order",
+                error: true,
+                success: false
+            });
+        }
+
+        // Create return request
+        const returnRequest = new ReturnRequestModel({
+            orderId,
+            userId,
+            reason,
+            comment: comment || "",
+            status: "pending",
+            refundAmount: order.totalAmount
+        });
+
+        // Add bank details for COD orders
+        if (order.paymentMethod === "COD" && bankDetails) {
+            returnRequest.bankDetails = {
+                accountHolder: bankDetails.accountHolder || "",
+                accountNumber: bankDetails.accountNumber || "",
+                ifscCode: bankDetails.ifscCode || "",
+                bankName: bankDetails.bankName || ""
+            };
+        }
+
+        await returnRequest.save();
+
+        // Update order refund status
+        order.refundStatus = "requested";
+        order.refundReason = reason;
+        order.refundRequestedAt = new Date();
+        order.refundAmount = order.totalAmount;
+        appendRefundStatusHistory(order, "requested");
+        await order.save();
+
+        // Notify admin
+        await notifyOrderParticipants({
+            orderDoc: order,
+            type: "return_initiated",
+            title: "Return request initiated",
+            message: `Return request for order ${String(order._id).slice(-8).toUpperCase()} initiated. Reason: ${reason}`,
+            link: "/order-management"
+        }).catch(() => null);
+
+        return res.status(201).json({
+            message: "Return request initiated successfully",
+            error: false,
+            success: true,
+            returnRequest
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error initiating return: " + error.message,
+            error: true,
+            success: false
+        });
+    }
+};
+
+export const getReturnStatus = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { orderId } = req.params;
+
+        if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({
+                message: "Valid order ID is required",
+                error: true,
+                success: false
+            });
+        }
+
+        const order = await OrderModel.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({
+                message: "Order not found",
+                error: true,
+                success: false
+            });
+        }
+
+        if (String(order.userId) !== String(userId)) {
+            return res.status(403).json({
+                message: "Unauthorized",
+                error: true,
+                success: false
+            });
+        }
+
+        const returnRequest = await ReturnRequestModel.findOne({ orderId });
+
+        const accountNumber = String(returnRequest?.bankDetails?.accountNumber || "").trim();
+        const maskedAccountNumber = accountNumber
+            ? `${"*".repeat(Math.max(accountNumber.length - 4, 0))}${accountNumber.slice(-4)}`
+            : "";
+
+        const refundDestination = order.paymentMethod === "Razorpay"
+            ? {
+                mode: "razorpay",
+                label: "Original payment account (Razorpay)",
+                accountHolder: "",
+                accountNumberMasked: "",
+                bankName: "",
+                ifscCode: "",
+            }
+            : {
+                mode: "bank",
+                label: maskedAccountNumber
+                    ? `Bank Account ${maskedAccountNumber}`
+                    : "Bank account not available",
+                accountHolder: String(returnRequest?.bankDetails?.accountHolder || "").trim(),
+                accountNumberMasked: maskedAccountNumber,
+                bankName: String(returnRequest?.bankDetails?.bankName || "").trim(),
+                ifscCode: String(returnRequest?.bankDetails?.ifscCode || "").trim(),
+            };
+
+        const returnData = {
+            orderId,
+            orderStatus: order.status,
+            paymentMethod: order.paymentMethod,
+            refundStatus: order.refundStatus,
+            refundReason: order.refundReason,
+            refundAmount: order.refundAmount,
+            refundRequestedAt: order.refundRequestedAt,
+            refundProcessedAt: order.refundProcessedAt,
+            statusHistory: order.statusHistory || [],
+            refundStatusHistory: order.refundStatusHistory || [],
+            refundDestination,
+            returnRequest: returnRequest || null
+        };
+
+        return res.status(200).json({
+            message: "Return status fetched successfully",
+            error: false,
+            success: true,
+            data: returnData
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error fetching return status: " + error.message,
+            error: true,
+            success: false
+        });
+    }
+};
+
+export const getReturnRequests = async (req, res) => {
+    try {
+        const adminId = req.userId;
+        const globalAccess = await hasGlobalAdminAccess(adminId);
+        const ownedProductIds = globalAccess ? [] : await getAdminOwnedProductIds(adminId);
+
+        let { page = 1, limit = 10, status = "pending", sortBy = "latest" } = req.query;
+
+        page = Number(page);
+        limit = Number(limit);
+
+        if (!Number.isFinite(page) || page < 1) page = 1;
+        if (!Number.isFinite(limit) || limit < 1) limit = 10;
+        if (limit > 100) limit = 100;
+
+        const query = {};
+        if (status && status !== "all") {
+            query.status = status;
+        }
+
+        if (!globalAccess && ownedProductIds.length > 0) {
+            const orders = await OrderModel.find({ "products.productId": { $in: ownedProductIds } }).select("_id");
+            const orderIds = orders.map(o => o._id);
+            query.orderId = { $in: orderIds };
+        }
+
+        const sortOptions = {
+            "latest": { createdAt: -1 },
+            "oldest": { createdAt: 1 },
+            "high-to-low": { refundAmount: -1 },
+            "low-to-high": { refundAmount: 1 }
+        };
+        const sortQuery = sortOptions[sortBy] || { createdAt: -1 };
+
+        const skip = (page - 1) * limit;
+
+        const [returns, total] = await Promise.all([
+            ReturnRequestModel.find(query)
+                .populate("orderId")
+                .populate("userId", "name email phone")
+                .sort(sortQuery)
+                .skip(skip)
+                .limit(limit),
+            ReturnRequestModel.countDocuments(query)
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        return res.status(200).json({
+            message: "Return requests fetched successfully",
+            error: false,
+            success: true,
+            data: returns,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages,
+                hasNextPage: page < totalPages,
+                hasPrevPage: page > 1
+            }
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error fetching return requests: " + error.message,
+            error: true,
+            success: false
+        });
+    }
+};
+
+export const updateReturnStatus = async (req, res) => {
+    try {
+        const adminId = req.userId;
+        const { returnId } = req.params;
+        const { status } = req.body;
+
+        if (!returnId || !mongoose.Types.ObjectId.isValid(returnId)) {
+            return res.status(400).json({
+                message: "Valid return ID is required",
+                error: true,
+                success: false
+            });
+        }
+
+        const returnRequest = await ReturnRequestModel.findById(returnId).populate("orderId");
+
+        if (!returnRequest) {
+            return res.status(404).json({
+                message: "Return request not found",
+                error: true,
+                success: false
+            });
+        }
+
+        // Verify admin access
+        const order = returnRequest.orderId;
+        if (order && order.products && order.products.length > 0) {
+            const globalAccess = await hasGlobalAdminAccess(adminId);
+            if (!globalAccess) {
+                const ownedProductIds = await getAdminOwnedProductIds(adminId);
+                const hasAccess = order.products.some(p => ownedProductIds.some(id => String(id) === String(p.productId)));
+                if (!hasAccess) {
+                    return res.status(403).json({
+                        message: "Unauthorized",
+                        error: true,
+                        success: false
+                    });
+                }
+            }
+        }
+
+        const validStatuses = ["pending", "approved", "rejected", "pickup_completed", "refund_initiated", "refund_completed"];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                message: "Invalid status",
+                error: true,
+                success: false
+            });
+        }
+
+        returnRequest.status = status;
+
+        if (status === "pickup_completed") {
+            returnRequest.pickupCompletedAt = new Date();
+            // For Razorpay, start refund after pickup
+            if (order.paymentMethod === "Razorpay") {
+                order.refundStatus = "approved";
+                appendRefundStatusHistory(order, "approved");
+            }
+        } else if (status === "refund_initiated") {
+            returnRequest.refundInitiatedAt = new Date();
+            order.refundStatus = "initiated";
+            appendRefundStatusHistory(order, "initiated");
+        } else if (status === "refund_completed") {
+            returnRequest.refundCompletedAt = new Date();
+            order.refundStatus = "processed";
+            order.refundProcessedAt = new Date();
+            appendRefundStatusHistory(order, "processed");
+        } else if (status === "rejected") {
+            order.refundStatus = "rejected";
+            appendRefundStatusHistory(order, "rejected");
+        }
+
+        await returnRequest.save();
+        if (order) await order.save();
+
+        return res.status(200).json({
+            message: "Return status updated successfully",
+            error: false,
+            success: true,
+            returnRequest
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error updating return status: " + error.message,
+            error: true,
+            success: false
         });
     }
 };
