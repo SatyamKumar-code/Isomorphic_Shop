@@ -911,7 +911,7 @@ export const createOrderWithCOD = async (req, res) => {
                 title: "New order placed",
                 message: `Order ${String(order._id).slice(-8).toUpperCase()} has been placed successfully.`,
                 link: "/order-management",
-                notifyAdmin: true,
+                notifyAdmin: false,
             }).catch(() => null);
         }
 
@@ -1031,7 +1031,7 @@ export const createOrderWithRazorpay = async (req, res) => {
                 title: "New order placed",
                 message: `Order ${String(order._id).slice(-8).toUpperCase()} has been placed successfully.`,
                 link: "/order-management",
-                notifyAdmin: true,
+                notifyAdmin: false,
             }).catch(() => null);
         }
 
@@ -1895,6 +1895,7 @@ export const updateOrderStatus = async (req, res) => {
             title: "Order status updated",
             message: `Order ${String(updatedStatus._id).slice(-8).toUpperCase()} status changed to ${normalizedIncomingStatus.replace(/_/g, " ")}.`,
             link: "/order-management",
+            notifyAdmin: false,
         }).catch(() => null);
 
         return res.status(200).json({
@@ -2065,6 +2066,7 @@ export const updateOrderRefundStatus = async (req, res) => {
             title: "Refund status updated",
             message: `Order ${String(order._id).slice(-8).toUpperCase()} refund status changed to ${normalizedIncomingRefundStatus.replace(/_/g, " ")}.`,
             link: "/order-management",
+            notifyAdmin: false,
         }).catch(() => null);
 
         return res.status(200).json({
@@ -2158,6 +2160,8 @@ export const cancelOrderBeforeDelivery = async (req, res) => {
             title: "Order cancelled",
             message: `Your order ${String(order._id).slice(-8).toUpperCase()} has been cancelled.${order.refundStatus === "processed" ? " Refund has been processed." : (order.refundStatus === "requested" ? " Refund process initiated." : "")}`,
             link: "/orders"
+            ,
+            notifyAdmin: false,
         }).catch(() => null);
 
         return res.status(200).json({
@@ -2279,13 +2283,15 @@ export const initiateReturn = async (req, res) => {
         appendRefundStatusHistory(order, "requested");
         await order.save();
 
-        // Notify admin
+        // Notify sellers (do not notify admin)
         await notifyOrderParticipants({
             orderDoc: order,
             type: "return_initiated",
             title: "Return request initiated",
             message: `Return request for order ${String(order._id).slice(-8).toUpperCase()} initiated. Reason: ${reason}`,
             link: "/order-management"
+            ,
+            notifyAdmin: false,
         }).catch(() => null);
 
         return res.status(201).json({

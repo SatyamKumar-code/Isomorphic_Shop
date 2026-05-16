@@ -4,6 +4,8 @@ export const getNotifications = (params = {}) => api.get("/api/notification", { 
 
 export const markNotificationsAsRead = () => api.put("/api/notification/read");
 
+export const markNotificationAsRead = (id) => api.put(`/api/notification/${id}/read`);
+
 export const deleteReadNotifications = () => api.delete("/api/notification/read");
 
 export const deleteNotification = (id) => api.delete(`/api/notification/${id}`);

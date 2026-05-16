@@ -10,10 +10,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import DarkModeToggle from './DarkModeToggelButton';
 import { useAuth } from '../../Context/auth/useAuth';
 import useNotifications from '../../shared/hooks/useNotifications';
+import { markNotificationAsRead } from '../../features/notifications/notificationsAPI';
 
 const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, or reports' }) => {
   const { userData, logout } = useAuth();
-  const { notifications, unreadCount, isLoading, isMarkingRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, isLoading, isMarkingRead, markAllAsRead, refreshNotifications } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState(null);
@@ -36,7 +37,6 @@ const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, 
   const handleNotificationMenuOpen = async (event) => {
     setNotificationAnchorEl(event.currentTarget);
     setVisibleNotifications(notifications.filter((notification) => !notification.isRead));
-    await markAllAsRead();
   };
 
   const handleNotificationMenuClose = () => {
@@ -45,10 +45,31 @@ const Header = ({ title = 'Dashboard', searchPlaceholder = 'Search data, users, 
   };
 
   const handleNotificationClick = (notification) => {
-    handleNotificationMenuClose();
-    if (notification?.link) {
-      navigate(notification.link);
-    }
+    // mark this notification as read, then navigate
+    (async () => {
+      try {
+        await markNotificationAsRead(notification._id);
+        await refreshNotifications();
+      } catch {
+        // ignore
+      }
+      handleNotificationMenuClose();
+      try {
+        if (notification?.meta?.orderId) {
+          const orderId = String(notification.meta.orderId || "").trim();
+          if (orderId) {
+            navigate({ pathname: '/order-management', search: `search=${encodeURIComponent(orderId)}&focusOrder=${encodeURIComponent(orderId)}` });
+            return;
+          }
+        }
+
+        if (notification?.link) {
+          navigate(notification.link);
+        }
+      } catch {
+        if (notification?.link) navigate(notification.link);
+      }
+    })();
   };
 
   const handleViewAllNotifications = () => {

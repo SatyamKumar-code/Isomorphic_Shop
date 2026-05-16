@@ -125,3 +125,39 @@ export const deleteReadNotificationsController = async (req, res) => {
         });
     }
 };
+
+export const markNotificationReadController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const recipientFilter = getRecipientFilter(req);
+
+        const updatedNotification = await NotificationModel.findOneAndUpdate(
+            { _id: id, ...recipientFilter, isRead: false },
+            { $set: { isRead: true, readAt: new Date() } },
+            { new: true }
+        );
+
+        if (!updatedNotification) {
+            return res.status(404).json({
+                success: false,
+                error: true,
+                message: "Notification not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            error: false,
+            message: "Notification marked as read",
+            data: {
+                notification: updatedNotification,
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: true,
+            message: error.message,
+        });
+    }
+};
