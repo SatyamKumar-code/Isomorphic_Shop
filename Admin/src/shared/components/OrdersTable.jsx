@@ -45,7 +45,7 @@ const PaymentBadge = ({ status, paymentColor, children }) => {
 };
 
 const deliveryFlowStages = ['pending', 'confirmed', 'packed', 'shipped', 'out_for_delivery', 'delivered'];
-const refundFlowStages = ['requested', 'approved', 'pickup_completed', 'initiated', 'processed'];
+const refundFlowStages = ['requested', 'approved', 'pickup_completed', 'processed'];
 
 const formatStatusLabel = (value) => String(value || '')
     .split('_')
@@ -254,14 +254,12 @@ const OrdersTable = ({
             none: ['none', 'requested'],
             requested: ['requested', 'approved', 'rejected'],
             approved: ['approved', 'pickup_completed', 'rejected'],
-            pickup_completed: ['pickup_completed', 'initiated'],
-            initiated: ['initiated', 'processed'],
+            pickup_completed: ['pickup_completed', 'processed'],
             processed: ['processed'],
             rejected: ['rejected'],
         },
         cancelled: {
-            none: ['none', 'initiated'],
-            initiated: ['initiated', 'processed'],
+            none: ['none', 'processed'],
             processed: ['processed'],
             rejected: ['rejected'],
         },

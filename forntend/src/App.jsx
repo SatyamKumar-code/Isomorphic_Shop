@@ -18,6 +18,7 @@ import OrderDetails from './pages/orderDetails';
 import OrderStatus from './pages/orderStatus';
 import Products from './pages/products';
 import Addresses from './pages/addresses';
+import RefundAccounts from './pages/refundAccounts';
 
 const MyContext = createContext();
 
@@ -84,6 +85,7 @@ const App = () => {
             <Route path='/orders' exact={true} element={<Order />} />
             <Route path='/order/:id' exact={true} element={<OrderDetails />} />
             <Route path='/order/:id/status' exact={true} element={<OrderStatus />} />
+            <Route path='/refund-accounts' exact={true} element={<RefundAccounts />} />
           </Routes>
         </MyContext.Provider>
       </BrowserRouter>

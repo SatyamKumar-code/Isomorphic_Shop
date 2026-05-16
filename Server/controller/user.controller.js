@@ -82,6 +82,58 @@ const getAvailableYears = (users, orders) => {
     return Array.from(years).sort((a, b) => a - b);
 };
 
+const normalizeRefundAccountNumber = (value) => String(value || "").replace(/\D/g, "");
+const normalizeRefundIfsc = (value) => String(value || "").trim().toUpperCase();
+const normalizeRefundText = (value) => String(value || "").trim();
+
+const getRefundAccountFingerprint = ({ accountNumber, ifscCode }) => {
+    return `${normalizeRefundAccountNumber(accountNumber)}|${normalizeRefundIfsc(ifscCode)}`;
+};
+
+const maskRefundAccountNumber = (value) => {
+    const accountNumber = normalizeRefundAccountNumber(value);
+    if (!accountNumber) return "";
+    return `${"*".repeat(Math.max(accountNumber.length - 4, 0))}${accountNumber.slice(-4)}`;
+};
+
+const serializeRefundAccount = (account) => ({
+    _id: account._id,
+    accountHolder: normalizeRefundText(account.accountHolder),
+    accountNumber: normalizeRefundAccountNumber(account.accountNumber),
+    accountNumberMasked: maskRefundAccountNumber(account.accountNumber),
+    ifscCode: normalizeRefundIfsc(account.ifscCode),
+    bankName: normalizeRefundText(account.bankName),
+    lastUsedAt: account.lastUsedAt || null,
+    createdAt: account.createdAt || null,
+    updatedAt: account.updatedAt || null,
+});
+
+const sortRefundAccounts = (accounts = []) => {
+    return [...accounts].sort((left, right) => {
+        const leftUsed = left?.lastUsedAt ? new Date(left.lastUsedAt).getTime() : 0;
+        const rightUsed = right?.lastUsedAt ? new Date(right.lastUsedAt).getTime() : 0;
+        if (rightUsed !== leftUsed) return rightUsed - leftUsed;
+
+        const leftCreated = left?.createdAt ? new Date(left.createdAt).getTime() : 0;
+        const rightCreated = right?.createdAt ? new Date(right.createdAt).getTime() : 0;
+        return rightCreated - leftCreated;
+    });
+};
+
+const trimRefundAccountsToLimit = (accounts = [], limit = 4) => {
+    if (accounts.length <= limit) return accounts;
+
+    const sortedByAge = [...accounts].sort((left, right) => {
+        const leftCreated = left?.createdAt ? new Date(left.createdAt).getTime() : 0;
+        const rightCreated = right?.createdAt ? new Date(right.createdAt).getTime() : 0;
+        return leftCreated - rightCreated;
+    });
+
+    const toRemove = sortedByAge.slice(0, Math.max(0, sortedByAge.length - limit));
+    const removeIds = new Set(toRemove.map((account) => String(account._id)));
+    return accounts.filter((account) => !removeIds.has(String(account._id)));
+};
+
 const getAvailableMonthsByYear = (users, orders) => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -1472,7 +1524,7 @@ export const getAdminController = async (req, res) => {
                 success: false
             });
         }
-        
+
         return res.status(200).json({
             message: "User found",
             error: false,
@@ -1482,7 +1534,7 @@ export const getAdminController = async (req, res) => {
                 location: await getSellerLocation(user._id, user.role),
                 socialLinks: await getSellerSocialLinks(user._id, user.role),
                 // accessMode: getAccessModeFromRole(user.role),
-            } 
+            }
         });
 
     } catch (error) {
@@ -1505,15 +1557,15 @@ export const getUserController = async (req, res) => {
                 error: true,
                 success: false
             });
-        } 
-        
+        }
+
         return res.status(200).json({
             message: "User found",
             error: false,
             success: true,
             data: {
                 ...user.toObject(),
-            } 
+            }
         });
 
     } catch (error) {
@@ -1586,10 +1638,10 @@ export const socialLoginController = async (req, res) => {
             res.cookie('accessToken', accessToken, cookiesOptions);
             res.cookie('refreshToken', refreshToken, cookiesOptions);
 
-            return res.status(200).json({ 
-                message: "Login successful", 
-                error: false, 
-                success: true, 
+            return res.status(200).json({
+                message: "Login successful",
+                error: false,
+                success: true,
                 // data: { 
                 //     ...userResponse, 
                 //     accessToken, 
@@ -1625,9 +1677,9 @@ export const socialLoginController = async (req, res) => {
         res.cookie('refreshToken', refreshToken, cookiesOptions);
 
         return res.status(201).json({
-            message: "Login successful", 
-            error: false, 
-            success: true, 
+            message: "Login successful",
+            error: false,
+            success: true,
             // data: { ...userResponse, 
             //     accessToken, 
             //     refreshToken, 
@@ -2304,6 +2356,194 @@ export const updateUserDetails = async (req, res) => {
         })
     }
 }
+
+export const getRefundAccounts = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const user = await UserModel.findById(userId).select("refundAccounts").lean();
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false
+            });
+        }
+
+        const refundAccounts = sortRefundAccounts(user.refundAccounts || []).map(serializeRefundAccount);
+
+        return res.status(200).json({
+            message: "Refund accounts fetched successfully",
+            error: false,
+            success: true,
+            data: refundAccounts
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+            error: true,
+            success: false
+        });
+    }
+};
+
+export const saveRefundAccount = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const {
+            accountId,
+            accountHolder,
+            accountNumber,
+            confirmAccountNumber,
+            ifscCode,
+            bankName,
+        } = req.body;
+
+        const normalizedAccountHolder = normalizeRefundText(accountHolder);
+        const normalizedAccountNumber = normalizeRefundAccountNumber(accountNumber);
+        const normalizedConfirmAccountNumber = normalizeRefundAccountNumber(confirmAccountNumber);
+        const normalizedIfscCode = normalizeRefundIfsc(ifscCode);
+        const normalizedBankName = normalizeRefundText(bankName);
+
+        if (!normalizedAccountHolder || !normalizedAccountNumber || !normalizedConfirmAccountNumber || !normalizedIfscCode) {
+            return res.status(400).json({
+                message: "Account holder, account number, confirm account number, and IFSC code are required",
+                error: true,
+                success: false
+            });
+        }
+
+        if (normalizedAccountNumber !== normalizedConfirmAccountNumber) {
+            return res.status(400).json({
+                message: "Account number and confirm account number must match",
+                error: true,
+                success: false
+            });
+        }
+
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false
+            });
+        }
+
+        const currentAccounts = Array.isArray(user.refundAccounts) ? user.refundAccounts : [];
+        const fingerprint = getRefundAccountFingerprint({ accountNumber: normalizedAccountNumber, ifscCode: normalizedIfscCode });
+        const editAccountId = accountId ? String(accountId) : "";
+
+        const existingById = editAccountId
+            ? currentAccounts.find((account) => String(account._id) === editAccountId)
+            : null;
+        const existingByFingerprint = currentAccounts.find((account) => {
+            if (existingById && String(account._id) === String(existingById._id)) {
+                return false;
+            }
+
+            return getRefundAccountFingerprint(account) === fingerprint;
+        });
+
+        const saveTime = new Date();
+        let nextAccounts = currentAccounts.filter((account) => {
+            if (existingById && String(account._id) === String(existingById._id)) {
+                return false;
+            }
+
+            if (existingByFingerprint && String(account._id) === String(existingByFingerprint._id)) {
+                return false;
+            }
+
+            return true;
+        });
+
+        const nextAccount = {
+            accountHolder: normalizedAccountHolder,
+            accountNumber: normalizedAccountNumber,
+            ifscCode: normalizedIfscCode,
+            bankName: normalizedBankName,
+            lastUsedAt: saveTime,
+        };
+
+        if (existingById) {
+            nextAccounts.push({
+                ...existingById.toObject ? existingById.toObject() : existingById,
+                ...nextAccount,
+                lastUsedAt: saveTime,
+                updatedAt: saveTime,
+            });
+        } else if (existingByFingerprint) {
+            nextAccounts.push({
+                ...existingByFingerprint.toObject ? existingByFingerprint.toObject() : existingByFingerprint,
+                ...nextAccount,
+                lastUsedAt: saveTime,
+                updatedAt: saveTime,
+            });
+        } else {
+            nextAccounts.push(nextAccount);
+        }
+
+        nextAccounts = trimRefundAccountsToLimit(nextAccounts, 4);
+        user.refundAccounts = nextAccounts;
+        await user.save();
+
+        const refundAccounts = sortRefundAccounts(user.refundAccounts || []).map(serializeRefundAccount);
+
+        return res.status(200).json({
+            message: existingById || existingByFingerprint ? "Refund account updated successfully" : "Refund account saved successfully",
+            error: false,
+            success: true,
+            data: refundAccounts,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+            error: true,
+            success: false
+        });
+    }
+};
+
+export const deleteRefundAccount = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { accountId } = req.params;
+
+        if (!accountId || !mongoose.Types.ObjectId.isValid(accountId)) {
+            return res.status(400).json({
+                message: "Valid account ID is required",
+                error: true,
+                success: false,
+            });
+        }
+
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                error: true,
+                success: false,
+            });
+        }
+
+        user.refundAccounts = (Array.isArray(user.refundAccounts) ? user.refundAccounts : []).filter((account) => String(account._id) !== String(accountId));
+        await user.save();
+
+        return res.status(200).json({
+            message: "Refund account deleted successfully",
+            error: false,
+            success: true,
+            data: sortRefundAccounts(user.refundAccounts || []).map(serializeRefundAccount),
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+            error: true,
+            success: false,
+        });
+    }
+};
 
 export async function updateUserStatus(req, res) {
     try {

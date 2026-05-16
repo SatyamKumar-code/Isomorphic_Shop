@@ -52,6 +52,19 @@ const Setting = () => {
                     <IoIosArrowForward className='absolute right-2 text-2xl text-gray-700' />
                 </div>
 
+                <h1 className='text-[16px] font-bold mt-5'>Payments</h1>
+
+                <Link to="/refund-accounts" className='relative flex mt-3 w-full items-center gap-3 rounded-2xl bg-gray-100 p-4 transition hover:bg-gray-200'>
+                    <div className='flex h-11 w-11 items-center justify-center rounded-xl bg-white text-gray-700 shadow-sm'>
+                        <FaBell className='text-xl text-gray-700' />
+                    </div>
+                    <div className='min-w-0 flex-1'>
+                        <h1 className='font-bold text-gray-900'>Refund Accounts</h1>
+                        <p className='text-sm text-gray-600'>Update bank details used for COD refunds</p>
+                    </div>
+                    <IoIosArrowForward className='shrink-0 text-2xl text-gray-700' />
+                </Link>
+
                 <div className='relative flex mt-3 w-full justify-start items-center gap-3 bg-gray-100 p-3 rounded-lg'>
                     <FcAbout className='text-xl text-gray-700' />
                     <h1 className='font-bold text-gray-700'>Help Center</h1>

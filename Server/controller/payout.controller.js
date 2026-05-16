@@ -10,7 +10,7 @@ import { notifySellerPayoutUpdate } from "../utils/notificationService.js";
 const toTwoDecimals = (value) => Number(Number(value || 0).toFixed(2));
 const FALLBACK_COMMISSION_RATE = 10;
 const MIN_PAYOUT_HOLD_DAYS = 7;
-const REFUND_SETTLED_STATUSES = new Set(["approved", "pickup_completed", "initiated", "processed"]);
+const REFUND_SETTLED_STATUSES = new Set(["approved", "pickup_completed", "processed"]);
 
 
 // Fetch commission rate from DB, fallback to env/hardcoded

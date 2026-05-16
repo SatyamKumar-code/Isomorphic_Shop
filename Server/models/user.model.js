@@ -1,5 +1,28 @@
 import mongoose from "mongoose";
 
+const refundAccountSchema = new mongoose.Schema({
+    accountHolder: {
+        type: String,
+        default: ""
+    },
+    accountNumber: {
+        type: String,
+        default: ""
+    },
+    ifscCode: {
+        type: String,
+        default: ""
+    },
+    bankName: {
+        type: String,
+        default: ""
+    },
+    lastUsedAt: {
+        type: Date,
+        default: null
+    }
+}, { timestamps: true });
+
 const userSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -48,6 +71,10 @@ const userSchema = new mongoose.Schema({
     accountNumber: {
         type: String,
         default: ""
+    },
+    refundAccounts: {
+        type: [refundAccountSchema],
+        default: []
     },
     otp: {
         type: String,

@@ -2,17 +2,24 @@ import React, { useContext, useState, useEffect } from 'react';
 import { fetchDataFromApi, postData } from '../../utils/api';
 import { MyContext } from '../../App';
 import { MdClose } from 'react-icons/md';
+import { useNavigate } from 'react-router-dom';
 
 const OrderHelpModal = ({ orderId, orderStatus, paymentMethod, isOpen, onClose, onActionComplete }) => {
     const context = useContext(MyContext);
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('help'); // help, cancel, return
     const [isLoading, setIsLoading] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
     const [returnReason, setReturnReason] = useState('defective');
     const [returnComment, setReturnComment] = useState('');
-    const [bankDetails, setBankDetails] = useState({
+    const [refundAccounts, setRefundAccounts] = useState([]);
+    const [selectedRefundAccountId, setSelectedRefundAccountId] = useState('');
+    const [refundAccountMode, setRefundAccountMode] = useState('saved');
+    const [editingRefundAccountId, setEditingRefundAccountId] = useState('');
+    const [refundAccountForm, setRefundAccountForm] = useState({
         accountHolder: '',
         accountNumber: '',
+        confirmAccountNumber: '',
         ifscCode: '',
         bankName: ''
     });
@@ -21,8 +28,19 @@ const OrderHelpModal = ({ orderId, orderStatus, paymentMethod, isOpen, onClose, 
     useEffect(() => {
         if (isOpen && orderId) {
             loadReturnStatus();
+            if (paymentMethod === 'COD') {
+                loadRefundAccounts();
+            }
         }
-    }, [isOpen, orderId]);
+    }, [isOpen, orderId, paymentMethod]);
+
+    const emptyRefundAccountForm = {
+        accountHolder: '',
+        accountNumber: '',
+        confirmAccountNumber: '',
+        ifscCode: '',
+        bankName: ''
+    };
 
     const loadReturnStatus = async () => {
         try {
@@ -34,6 +52,81 @@ const OrderHelpModal = ({ orderId, orderStatus, paymentMethod, isOpen, onClose, 
             console.error('Error fetching return status:', error);
         }
     };
+
+    const loadRefundAccounts = async () => {
+        try {
+            const response = await fetchDataFromApi('/api/user/refund-accounts');
+            const accounts = Array.isArray(response?.data) ? response.data : [];
+            setRefundAccounts(accounts);
+            setSelectedRefundAccountId((currentSelected) => currentSelected || accounts[0]?._id || '');
+            if (!accounts.length) {
+                setRefundAccountMode('new');
+            }
+        } catch (error) {
+            console.error('Error fetching refund accounts:', error);
+        }
+    };
+
+    const getSelectedRefundAccount = () => {
+        return refundAccounts.find((account) => String(account._id) === String(selectedRefundAccountId)) || null;
+    };
+
+    const fillRefundAccountForm = (account) => {
+        if (!account) {
+            setRefundAccountForm(emptyRefundAccountForm);
+            return;
+        }
+
+        setRefundAccountForm({
+            accountHolder: account.accountHolder || '',
+            accountNumber: account.accountNumber || '',
+            confirmAccountNumber: '',
+            ifscCode: account.ifscCode || '',
+            bankName: account.bankName || ''
+        });
+    };
+
+    const handleSelectRefundAccount = (account) => {
+        setSelectedRefundAccountId(String(account._id));
+        setRefundAccountMode('saved');
+        setEditingRefundAccountId('');
+        setRefundAccountForm(emptyRefundAccountForm);
+    };
+
+    const handleStartNewRefundAccount = () => {
+        setRefundAccountMode('new');
+        setEditingRefundAccountId('');
+        setSelectedRefundAccountId('');
+        setRefundAccountForm(emptyRefundAccountForm);
+    };
+
+    const handleEditRefundAccount = (account) => {
+        setRefundAccountMode('edit');
+        setEditingRefundAccountId(String(account._id));
+        setSelectedRefundAccountId(String(account._id));
+        setRefundAccountForm({
+            accountHolder: account.accountHolder || '',
+            accountNumber: account.accountNumber || '',
+            confirmAccountNumber: '',
+            ifscCode: account.ifscCode || '',
+            bankName: account.bankName || ''
+        });
+    };
+
+    useEffect(() => {
+        if (refundAccounts.length && !selectedRefundAccountId && refundAccountMode === 'saved') {
+            setSelectedRefundAccountId(String(refundAccounts[0]._id));
+        }
+    }, [refundAccounts, selectedRefundAccountId, refundAccountMode]);
+
+    useEffect(() => {
+        if (refundAccountMode === 'saved') {
+            const selectedAccount = getSelectedRefundAccount();
+            if (selectedAccount) {
+                fillRefundAccountForm(selectedAccount);
+            }
+        }
+    }, [selectedRefundAccountId, refundAccountMode, refundAccounts]);
 
     const handleCancelOrder = async () => {
         if (!cancelReason.trim()) {
@@ -68,7 +161,17 @@ const OrderHelpModal = ({ orderId, orderStatus, paymentMethod, isOpen, onClose, 
         }
 
         if (paymentMethod === 'COD') {
-            if (!bankDetails.accountHolder || !bankDetails.accountNumber || !bankDetails.ifscCode) {
+            if (refundAccountMode === 'new' || refundAccountMode === 'edit' || !selectedRefundAccountId) {
+                if (!refundAccountForm.accountHolder || !refundAccountForm.accountNumber || !refundAccountForm.confirmAccountNumber || !refundAccountForm.ifscCode) {
+                    context.alertBox('error', 'Please fill all bank details for refund');
+                    return;
+                }
+
+                if (String(refundAccountForm.accountNumber).replace(/\D/g, '') !== String(refundAccountForm.confirmAccountNumber).replace(/\D/g, '')) {
+                    context.alertBox('error', 'Account number and confirm account number must match');
+                    return;
+                }
+            } else if (!getSelectedRefundAccount()) {
                 context.alertBox('error', 'Please fill all bank details for refund');
                 return;
             }
@@ -76,6 +179,71 @@ const OrderHelpModal = ({ orderId, orderStatus, paymentMethod, isOpen, onClose, 
 
         setIsLoading(true);
         try {
+            let bankDetails = null;
+
+            if (paymentMethod === 'COD') {
+                const selectedAccount = getSelectedRefundAccount();
+
+                if (refundAccountMode === 'saved' && selectedAccount) {
+                    const saveResponse = await postData('/api/user/refund-accounts', {
+                        accountId: selectedAccount._id,
+                        accountHolder: selectedAccount.accountHolder,
+                        accountNumber: selectedAccount.accountNumber,
+                        confirmAccountNumber: selectedAccount.accountNumber,
+                        ifscCode: selectedAccount.ifscCode,
+                        bankName: selectedAccount.bankName || ''
+                    });
+
+                    const savedAccounts = Array.isArray(saveResponse?.data) ? saveResponse.data : refundAccounts;
+                    setRefundAccounts(savedAccounts);
+                    const refreshedSelected = savedAccounts.find((account) =>
+                        String(account._id) === String(selectedAccount._id)
+                    ) || savedAccounts[0] || selectedAccount;
+                    setRefundAccountMode('saved');
+                    setEditingRefundAccountId('');
+                    setSelectedRefundAccountId(String(refreshedSelected._id));
+                    bankDetails = {
+                        accountHolder: refreshedSelected.accountHolder || '',
+                        accountNumber: refreshedSelected.accountNumber || '',
+                        ifscCode: refreshedSelected.ifscCode || '',
+                        bankName: refreshedSelected.bankName || ''
+                    };
+                } else {
+                    const saveResponse = await postData('/api/user/refund-accounts', {
+                        accountId: editingRefundAccountId || undefined,
+                        accountHolder: refundAccountForm.accountHolder,
+                        accountNumber: refundAccountForm.accountNumber,
+                        confirmAccountNumber: refundAccountForm.confirmAccountNumber,
+                        ifscCode: refundAccountForm.ifscCode,
+                        bankName: refundAccountForm.bankName
+                    });
+
+                    const savedAccounts = Array.isArray(saveResponse?.data) ? saveResponse.data : refundAccounts;
+                    setRefundAccounts(savedAccounts);
+                    const refreshedSelected = savedAccounts.find((account) =>
+                        String(account.accountNumber) === String(refundAccountForm.accountNumber).replace(/\D/g, '')
+                    ) || savedAccounts[0];
+                    if (refreshedSelected) {
+                        setRefundAccountMode('saved');
+                        setEditingRefundAccountId('');
+                        setSelectedRefundAccountId(String(refreshedSelected._id));
+                        bankDetails = {
+                            accountHolder: refreshedSelected.accountHolder || '',
+                            accountNumber: refreshedSelected.accountNumber || '',
+                            ifscCode: refreshedSelected.ifscCode || '',
+                            bankName: refreshedSelected.bankName || ''
+                        };
+                    } else {
+                        bankDetails = {
+                            accountHolder: refundAccountForm.accountHolder,
+                            accountNumber: refundAccountForm.accountNumber,
+                            ifscCode: refundAccountForm.ifscCode,
+                            bankName: refundAccountForm.bankName
+                        };
+                    }
+                }
+            }
+
             const response = await postData(`/api/order/${orderId}/return`, {
                 reason: returnReason,
                 comment: returnComment,
@@ -96,41 +264,62 @@ const OrderHelpModal = ({ orderId, orderStatus, paymentMethod, isOpen, onClose, 
         }
     };
 
-    if (!isOpen) return null;
+    // Do not early-return before all hooks are declared — keep hooks order stable
 
-    const canCancel = ['pending', 'confirmed', 'packed', 'shipped', 'out_for_delivery'].includes(orderStatus);
-    const canReturn = orderStatus === 'delivered';
+    // Use server-return-status when available to determine eligibility
+    const serverStatus = (returnStatus && returnStatus.orderStatus) ? String(returnStatus.orderStatus).toLowerCase() : String(orderStatus).toLowerCase();
+    const canCancel = ['pending', 'confirmed', 'packed', 'shipped', 'out_for_delivery'].includes(serverStatus);
+
+    // Compute return eligibility: must be delivered, within 30 days, and no existing return request
+    let canReturn = false;
+    try {
+        if (returnStatus && String(returnStatus.orderStatus).toLowerCase() === 'delivered' && !returnStatus.returnRequest) {
+            const deliveredEntry = (returnStatus.statusHistory || []).slice().reverse().find(s => String(s.status).toLowerCase() === 'delivered');
+            const deliveredAt = deliveredEntry ? new Date(deliveredEntry.updatedAt) : (returnStatus.deliveredAt ? new Date(returnStatus.deliveredAt) : null);
+            if (deliveredAt && !Number.isNaN(deliveredAt.getTime())) {
+                const now = new Date();
+                const diffDays = (now - deliveredAt) / (1000 * 60 * 60 * 24);
+                if (diffDays <= 30) canReturn = true;
+            }
+        } else if (!returnStatus) {
+            // fallback to basic delivered check if server data not yet loaded
+            canReturn = String(orderStatus).toLowerCase() === 'delivered';
+        }
+    } catch (e) {
+        canReturn = String(orderStatus).toLowerCase() === 'delivered';
+    }
+
+    // Keep active tab valid when eligibility changes
+    useEffect(() => {
+        if (activeTab === 'cancel' && !canCancel) setActiveTab('help');
+        if (activeTab === 'return' && !canReturn) setActiveTab('help');
+    }, [canCancel, canReturn]);
+
+    if (!isOpen) return null;
 
     return (
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50'>
-            <div className='bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto'>
+            {/* Mobile: full-screen sheet. Desktop (sm+): centered modal with rounded corners */}
+            <div className='bg-white w-full h-full p-4 overflow-y-auto max-h-screen sm:rounded-lg sm:p-6 sm:h-auto sm:max-h-[90vh] sm:max-w-md'>
                 <div className='flex justify-between items-center mb-4'>
                     <h3 className='text-lg font-bold'>Order Help</h3>
-                    <button onClick={onClose} className='text-gray-500 hover:text-gray-700'>
+                    <button onClick={onClose} className='text-gray-500 hover:text-gray-700 p-2 rounded-md'>
                         <MdClose className='text-2xl' />
                     </button>
                 </div>
 
                 {/* Tabs */}
-                <div className='flex gap-2 mb-4 border-b overflow-x-auto'>
+                <div className='flex gap-2 mb-4 border-b overflow-x-auto -mx-1'>
                     <button
                         onClick={() => setActiveTab('help')}
-                        className={`px-4 py-2 font-semibold whitespace-nowrap ${activeTab === 'help' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-600'}`}
+                        className={`px-3 py-3 sm:px-4 sm:py-2 font-semibold whitespace-nowrap ${activeTab === 'help' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-600'}`}
                     >
                         Help
                     </button>
-                    {(returnStatus?.refundStatus && returnStatus.refundStatus !== 'none') && (
-                        <button
-                            onClick={() => setActiveTab('status')}
-                            className={`px-4 py-2 font-semibold whitespace-nowrap ${activeTab === 'status' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-600'}`}
-                        >
-                            Status
-                        </button>
-                    )}
                     {canCancel && (
                         <button
                             onClick={() => setActiveTab('cancel')}
-                            className={`px-4 py-2 font-semibold whitespace-nowrap ${activeTab === 'cancel' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-600'}`}
+                            className={`px-3 py-3 sm:px-4 sm:py-2 font-semibold whitespace-nowrap ${activeTab === 'cancel' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-600'}`}
                         >
                             Cancel
                         </button>
@@ -138,96 +327,12 @@ const OrderHelpModal = ({ orderId, orderStatus, paymentMethod, isOpen, onClose, 
                     {canReturn && (
                         <button
                             onClick={() => setActiveTab('return')}
-                            className={`px-4 py-2 font-semibold whitespace-nowrap ${activeTab === 'return' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-600'}`}
+                            className={`px-3 py-3 sm:px-4 sm:py-2 font-semibold whitespace-nowrap ${activeTab === 'return' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-600'}`}
                         >
                             Return
                         </button>
                     )}
                 </div>
-
-                {/* Status Tab */}
-                {activeTab === 'status' && returnStatus && (
-                    <div className='space-y-4'>
-                        <div className='bg-blue-50 p-4 rounded-lg'>
-                            <h4 className='font-bold text-blue-900 mb-4'>Refund/Return Status</h4>
-
-                            {/* Refund Status */}
-                            {(returnStatus?.refundStatus && returnStatus.refundStatus !== 'none') && (
-                                <div className='space-y-3'>
-                                    <div>
-                                        <p className='text-sm font-semibold text-blue-900 mb-2'>📋 Refund Status: <span className='text-blue-600 capitalize'>{returnStatus.refundStatus}</span></p>
-                                    </div>
-
-                                    {/* Timeline for Razorpay Refund */}
-                                    {paymentMethod === 'Razorpay' && (
-                                        <div className='space-y-2 text-sm text-blue-800'>
-                                            <div className='flex items-center gap-2'>
-                                                <span className={`h-3 w-3 rounded-full ${returnStatus.refundStatus !== 'none' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                                                <span>Refund Requested</span>
-                                                {returnStatus?.refundRequestedAt && <span className='text-xs text-gray-600 ml-auto'>{new Date(returnStatus.refundRequestedAt).toLocaleDateString()}</span>}
-                                            </div>
-                                            <div className='flex items-center gap-2'>
-                                                <span className={`h-3 w-3 rounded-full ${['approved', 'pickup_completed', 'initiated', 'processed'].includes(returnStatus.refundStatus) ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                                                <span>Pickup Scheduled</span>
-                                            </div>
-                                            <div className='flex items-center gap-2'>
-                                                <span className={`h-3 w-3 rounded-full ${['initiated', 'processed'].includes(returnStatus.refundStatus) ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                                                <span>Refund Initiated</span>
-                                            </div>
-                                            <div className='flex items-center gap-2'>
-                                                <span className={`h-3 w-3 rounded-full ${returnStatus.refundStatus === 'processed' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                                                <span>Refund Completed</span>
-                                                {returnStatus?.refundProcessedAt && <span className='text-xs text-gray-600 ml-auto'>{new Date(returnStatus.refundProcessedAt).toLocaleDateString()}</span>}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Timeline for COD Refund */}
-                                    {paymentMethod === 'COD' && returnStatus?.returnId && (
-                                        <div className='space-y-2 text-sm text-blue-800'>
-                                            <div className='flex items-center gap-2'>
-                                                <span className={`h-3 w-3 rounded-full ${returnStatus.refundStatus !== 'none' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                                                <span>Return Requested</span>
-                                            </div>
-                                            <div className='flex items-center gap-2'>
-                                                <span className={`h-3 w-3 rounded-full ${['approved', 'pickup_completed', 'initiated', 'processed'].includes(returnStatus.refundStatus) ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                                                <span>Pickup Scheduled</span>
-                                            </div>
-                                            <div className='flex items-center gap-2'>
-                                                <span className={`h-3 w-3 rounded-full ${['initiated', 'processed'].includes(returnStatus.refundStatus) ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                                                <span>Pickup Completed</span>
-                                            </div>
-                                            <div className='flex items-center gap-2'>
-                                                <span className={`h-3 w-3 rounded-full ${returnStatus.refundStatus === 'processed' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                                                <span>Refund to Bank Account</span>
-                                                {returnStatus?.refundProcessedAt && <span className='text-xs text-gray-600 ml-auto'>{new Date(returnStatus.refundProcessedAt).toLocaleDateString()}</span>}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Refund Amount */}
-                                    {returnStatus?.refundAmount && (
-                                        <div className='mt-3 pt-3 border-t border-blue-200'>
-                                            <p className='text-sm font-semibold text-blue-900'>Refund Amount: <span className='text-blue-600'>₹{Number(returnStatus.refundAmount).toLocaleString('en-IN')}</span></p>
-                                        </div>
-                                    )}
-
-                                    {/* Rejection Reason */}
-                                    {returnStatus?.refundStatus === 'rejected' && returnStatus?.refundReason && (
-                                        <div className='mt-3 pt-3 border-t border-red-200 bg-red-50 p-3 rounded'>
-                                            <p className='text-sm font-semibold text-red-900 mb-1'>Rejection Reason:</p>
-                                            <p className='text-sm text-red-800'>{returnStatus.refundReason}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {(!returnStatus?.refundStatus || returnStatus.refundStatus === 'none') && (
-                                <p className='text-sm text-blue-800'>No active refund or return request.</p>
-                            )}
-                        </div>
-                    </div>
-                )}
 
                 {/* Help Tab */}
                 {activeTab === 'help' && (
@@ -309,43 +414,164 @@ const OrderHelpModal = ({ orderId, orderStatus, paymentMethod, isOpen, onClose, 
                         </div>
 
                         {paymentMethod === 'COD' && (
-                            <div className='bg-yellow-50 border border-yellow-200 p-3 rounded-lg'>
-                                <p className='text-sm font-semibold text-yellow-900 mb-3'>Bank Details for Refund</p>
-                                <input
-                                    type='text'
-                                    placeholder='Account Holder Name'
-                                    value={bankDetails.accountHolder}
-                                    onChange={(e) => setBankDetails({ ...bankDetails, accountHolder: e.target.value })}
-                                    className='w-full border border-gray-300 rounded p-2 text-sm mb-2'
-                                />
-                                <input
-                                    type='text'
-                                    placeholder='Account Number'
-                                    value={bankDetails.accountNumber}
-                                    onChange={(e) => setBankDetails({ ...bankDetails, accountNumber: e.target.value })}
-                                    className='w-full border border-gray-300 rounded p-2 text-sm mb-2'
-                                />
-                                <input
-                                    type='text'
-                                    placeholder='IFSC Code'
-                                    value={bankDetails.ifscCode}
-                                    onChange={(e) => setBankDetails({ ...bankDetails, ifscCode: e.target.value })}
-                                    className='w-full border border-gray-300 rounded p-2 text-sm mb-2'
-                                />
-                                <input
-                                    type='text'
-                                    placeholder='Bank Name'
-                                    value={bankDetails.bankName}
-                                    onChange={(e) => setBankDetails({ ...bankDetails, bankName: e.target.value })}
-                                    className='w-full border border-gray-300 rounded p-2 text-sm'
-                                />
+                            <div className='space-y-4'>
+                                <div className='rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4'>
+                                    <div className='flex items-center justify-between gap-3'>
+                                        <p className='text-sm font-semibold text-gray-900'>Saved refund accounts</p>
+                                        <div className='flex items-center gap-3'>
+                                            <button
+                                                type='button'
+                                                onClick={() => navigate('/refund-accounts')}
+                                                className='text-xs font-semibold text-gray-600 hover:text-gray-800'
+                                            >
+                                                Manage accounts
+                                            </button>
+                                            <button
+                                                type='button'
+                                                onClick={handleStartNewRefundAccount}
+                                                className='text-xs font-semibold text-blue-600 hover:text-blue-700'
+                                            >
+                                                Add new
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className='mt-3 space-y-2'>
+                                        {refundAccounts.length > 0 ? refundAccounts.map((account) => {
+                                            const isSelected = String(selectedRefundAccountId) === String(account._id) && refundAccountMode === 'saved';
+                                            return (
+                                                <div
+                                                    key={account._id}
+                                                    className={`rounded-lg border p-3 transition ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}
+                                                >
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => handleSelectRefundAccount(account)}
+                                                        className='w-full text-left'
+                                                    >
+                                                        <div className='flex items-start justify-between gap-3'>
+                                                            <div>
+                                                                <p className='text-sm font-semibold text-gray-900'>{account.accountHolder || 'Unnamed account'}</p>
+                                                                <p className='text-xs text-gray-600'>
+                                                                    {account.accountNumberMasked || 'Account number hidden'}{account.bankName ? ` • ${account.bankName}` : ''}{account.ifscCode ? ` • IFSC ${account.ifscCode}` : ''}
+                                                                </p>
+                                                            </div>
+                                                            <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                                                                {isSelected ? 'Selected' : 'Use'}
+                                                            </span>
+                                                        </div>
+                                                    </button>
+
+                                                    <div className='mt-3 flex flex-wrap gap-2'>
+                                                        <button
+                                                            type='button'
+                                                            onClick={() => handleSelectRefundAccount(account)}
+                                                            className='rounded-md border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50'
+                                                        >
+                                                            Use this
+                                                        </button>
+                                                        <button
+                                                            type='button'
+                                                            onClick={() => handleEditRefundAccount(account)}
+                                                            className='rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50'
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }) : (
+                                            <p className='rounded-lg border border-dashed border-gray-300 bg-white p-3 text-sm text-gray-500'>
+                                                No saved refund accounts yet. Add a new one below.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {(refundAccountMode === 'new' || refundAccountMode === 'edit' || !selectedRefundAccountId) && (
+                                    <div className='rounded-xl border border-yellow-200 bg-yellow-50 p-3 sm:p-4'>
+                                        <div className='mb-3 flex items-center justify-between gap-3'>
+                                            <p className='text-sm font-semibold text-yellow-900'>
+                                                {refundAccountMode === 'edit' ? 'Edit refund account' : 'Add new refund account'}
+                                            </p>
+                                            {refundAccountMode === 'edit' && (
+                                                <button
+                                                    type='button'
+                                                    onClick={() => {
+                                                        const account = getSelectedRefundAccount() || refundAccounts.find((item) => String(item._id) === String(editingRefundAccountId));
+                                                        if (account) {
+                                                            handleSelectRefundAccount(account);
+                                                        } else {
+                                                            setRefundAccountMode('saved');
+                                                            setEditingRefundAccountId('');
+                                                            setRefundAccountForm(emptyRefundAccountForm);
+                                                        }
+                                                    }}
+                                                    className='text-xs font-semibold text-yellow-800 hover:text-yellow-900'
+                                                >
+                                                    Cancel edit
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className='space-y-2'>
+                                            <input
+                                                type='text'
+                                                placeholder='Account Holder Name'
+                                                value={refundAccountForm.accountHolder}
+                                                onChange={(e) => setRefundAccountForm({ ...refundAccountForm, accountHolder: e.target.value })}
+                                                className='w-full rounded border border-gray-300 p-2 text-sm'
+                                            />
+                                            <input
+                                                type='text'
+                                                inputMode='numeric'
+                                                placeholder='Account Number'
+                                                value={refundAccountForm.accountNumber}
+                                                onChange={(e) => setRefundAccountForm({ ...refundAccountForm, accountNumber: e.target.value.replace(/\D/g, '') })}
+                                                className='w-full rounded border border-gray-300 p-2 text-sm'
+                                            />
+                                            <input
+                                                type='text'
+                                                inputMode='numeric'
+                                                placeholder='Confirm Account Number'
+                                                value={refundAccountForm.confirmAccountNumber}
+                                                onChange={(e) => setRefundAccountForm({ ...refundAccountForm, confirmAccountNumber: e.target.value.replace(/\D/g, '') })}
+                                                className='w-full rounded border border-gray-300 p-2 text-sm'
+                                            />
+                                            <input
+                                                type='text'
+                                                placeholder='IFSC Code'
+                                                value={refundAccountForm.ifscCode}
+                                                onChange={(e) => setRefundAccountForm({ ...refundAccountForm, ifscCode: e.target.value.toUpperCase() })}
+                                                className='w-full rounded border border-gray-300 p-2 text-sm'
+                                            />
+                                            <input
+                                                type='text'
+                                                placeholder='Bank Name'
+                                                value={refundAccountForm.bankName}
+                                                onChange={(e) => setRefundAccountForm({ ...refundAccountForm, bankName: e.target.value })}
+                                                className='w-full rounded border border-gray-300 p-2 text-sm'
+                                            />
+                                        </div>
+
+                                        <p className='mt-2 text-xs text-yellow-800'>
+                                            Enter the account number twice. The saved list keeps only 4 accounts and removes the oldest automatically.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {refundAccountMode === 'saved' && selectedRefundAccountId && getSelectedRefundAccount() && (
+                                    <div className='rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900'>
+                                        Refund will use {getSelectedRefundAccount().accountHolder || 'this account'} ending in {getSelectedRefundAccount().accountNumberMasked || '----'}.
+                                    </div>
+                                )}
                             </div>
                         )}
 
                         <div className='bg-blue-50 p-3 rounded-lg text-sm text-blue-800'>
                             {paymentMethod === 'Razorpay'
                                 ? '✓ Refund will be processed after product pickup'
-                                : '✓ Refund will be credited to your bank account after pickup'}
+                                : '✓ Refund will be credited to the selected bank account after pickup'}
                         </div>
 
                         <button

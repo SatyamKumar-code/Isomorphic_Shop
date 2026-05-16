@@ -150,8 +150,7 @@ const OrderStatus = () => {
                 if (order?.paymentMethod === 'Razorpay') {
                     timeline = [
                         ...timeline,
-                        // Direct to refund - no "Refund Requested" for cancellations
-                        { key: 'refund_initiated', label: 'Refund Initiated', icon: '✓', type: 'refund' },
+                        // Direct to refund - skip intermediate initiated step
                         { key: 'refund_completed', label: 'Refund Completed', icon: '✓', type: 'refund' }
                     ];
                 } else {
@@ -168,7 +167,6 @@ const OrderStatus = () => {
                         ...timeline,
                         { key: 'return_requested', label: 'Return Requested', icon: '📦', type: 'refund' },
                         { key: 'pickup_scheduled', label: 'Pickup Scheduled', icon: '📦', type: 'refund' },
-                        { key: 'refund_initiated', label: 'Refund Initiated', icon: '✓', type: 'refund' },
                         { key: 'refund_completed', label: 'Refund Completed', icon: '✓', type: 'refund' }
                     ];
                 } else {
@@ -193,12 +191,11 @@ const OrderStatus = () => {
         let refundStatusMap = {};
 
         if (isCancel) {
-            // For cancelled orders (no "Refund Requested", goes directly to "Refund Initiated")
+            // For cancelled orders go directly to refund completed or bank refund
             refundStatusMap = {
-                'requested': ['refund_initiated', 'refund_to_bank'],
-                'approved': ['refund_initiated', 'refund_to_bank'],
-                'pickup_completed': ['refund_initiated', 'refund_to_bank'],
-                'initiated': ['refund_initiated'],
+                'requested': [order?.paymentMethod === 'Razorpay' ? 'refund_completed' : 'refund_to_bank'],
+                'approved': [order?.paymentMethod === 'Razorpay' ? 'refund_completed' : 'refund_to_bank'],
+                'pickup_completed': [order?.paymentMethod === 'Razorpay' ? 'refund_completed' : 'refund_to_bank'],
                 'processed': [order?.paymentMethod === 'Razorpay' ? 'refund_completed' : 'refund_to_bank']
             };
         } else {
@@ -207,7 +204,6 @@ const OrderStatus = () => {
                 'requested': ['return_requested'],
                 'approved': ['pickup_scheduled'],
                 'pickup_completed': ['pickup_completed'],
-                'initiated': ['refund_initiated'],
                 'processed': [order?.paymentMethod === 'Razorpay' ? 'refund_completed' : 'refund_to_bank']
             };
         }
@@ -245,9 +241,15 @@ const OrderStatus = () => {
                             let isCompleted = false;
                             let isCurrent = false;
 
+                            // If refund is in a final state we should show it as completed (with timestamp)
+                            // and not as the active "In progress" step.
+                            const refundStatusLower = String(returnStatus?.refundStatus || '').toLowerCase();
+                            const isFinalRefund = refundStatusLower === 'processed' || refundStatusLower === 'rejected';
+
                             if (step.type === 'refund') {
                                 isCompleted = refundIdx >= idx;
-                                isCurrent = refundIdx === idx;
+                                // mark refund step as current only when it's not in a final state
+                                isCurrent = refundIdx === idx && !isFinalRefund;
                             } else if (step.type === 'cancel') {
                                 isCompleted = isCancelled;
                                 isCurrent = isCancelled && refundIdx === -1;
@@ -255,14 +257,15 @@ const OrderStatus = () => {
                                 isCompleted = idx <= cancelledFromIdx;
                             } else {
                                 isCompleted = idx <= currentIdx;
-                                isCurrent = idx === currentIdx;
+                                // When a refund/return timeline exists, the base order status (e.g. Delivered)
+                                // should be shown as completed with its timestamp, not as the active "In progress" step.
+                                isCurrent = idx === currentIdx && refundIdx === -1;
                             }
 
                             const refundStepToStatusKey = {
                                 return_requested: 'requested',
                                 pickup_scheduled: 'approved',
                                 pickup_completed: 'pickup_completed',
-                                refund_initiated: 'initiated',
                                 refund_completed: 'processed',
                                 refund_to_bank: 'processed',
                             };

@@ -54,8 +54,6 @@ const OrderDetails = () => {
     const [showHelpModal, setShowHelpModal] = useState(false);
     const [returnStatus, setReturnStatus] = useState(null);
 
-    console.log(order);
-
     useEffect(() => {
         const load = async () => {
             setLoading(true);
@@ -190,9 +188,7 @@ const OrderDetails = () => {
                                 {returnStatus?.refundStatus === 'pickup_completed' && (
                                     <p className='text-xs text-blue-600 mt-2 p-2 bg-blue-50 rounded'>✓ Your item has been picked up. Refund will be processed soon.</p>
                                 )}
-                                {returnStatus?.refundStatus === 'initiated' && (
-                                    <p className='text-xs text-blue-600 mt-2 p-2 bg-blue-50 rounded'>💳 Your refund has been initiated and will be credited shortly.</p>
-                                )}
+                                {/* Intermediate 'initiated' status removed; rely on pickup_completed/processed messages */}
                                 {returnStatus?.refundStatus === 'processed' && (
                                     <p className='text-xs text-green-600 mt-2 p-2 bg-green-50 rounded'>✓ Your refund has been successfully processed!</p>
                                 )}

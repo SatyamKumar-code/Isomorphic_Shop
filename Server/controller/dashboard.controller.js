@@ -117,7 +117,7 @@ const getProductScopeFilter = async (req) => {
     return { productOwnerId: req.userId };
 };
 
-const SETTLED_REFUND_STATUSES = new Set(["approved", "pickup_completed", "initiated", "processed"]);
+const SETTLED_REFUND_STATUSES = new Set(["approved", "pickup_completed", "processed"]);
 
 const escapeRegex = (value) => String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

@@ -81,7 +81,7 @@ const orderSchema = new mongoose.Schema({
     },
     refundStatus: {
         type: String,
-        enum: ["none", "requested", "approved", "pickup_completed", "initiated", "processed", "rejected"],
+        enum: ["none", "requested", "approved", "pickup_completed", "processed", "rejected"],
         default: "none"
     },
     refundStatusHistory: {
@@ -89,7 +89,7 @@ const orderSchema = new mongoose.Schema({
             {
                 status: {
                     type: String,
-                    enum: ["none", "requested", "approved", "pickup_completed", "initiated", "processed", "rejected"],
+                    enum: ["none", "requested", "approved", "pickup_completed", "processed", "rejected"],
                     required: true,
                 },
                 updatedAt: {

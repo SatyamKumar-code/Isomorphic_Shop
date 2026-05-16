@@ -66,7 +66,6 @@ const formatRefundStatus = (status) => {
         requested: "Refund Requested",
         approved: "Refund Approved",
         pickup_completed: "Pickup Completed",
-        initiated: "Refund Initiated",
         processed: "Refund Processed",
         rejected: "Refund Rejected",
     };
@@ -98,7 +97,6 @@ const normalizeRefundStatus = (value) => {
         no_refund: "none",
         refund_requested: "requested",
         refund_approved: "approved",
-        refund_initiated: "initiated",
         refund_processed: "processed",
     };
 
@@ -1934,7 +1932,7 @@ export const updateOrderRefundStatus = async (req, res) => {
             });
         }
 
-        const allowedRefundStatuses = ["none", "requested", "approved", "pickup_completed", "initiated", "processed", "rejected"];
+        const allowedRefundStatuses = ["none", "requested", "approved", "pickup_completed", "processed", "rejected"];
         if (!allowedRefundStatuses.includes(normalizedIncomingRefundStatus)) {
             return res.status(400).json({
                 message: "Invalid refund status value",
@@ -1988,14 +1986,14 @@ export const updateOrderRefundStatus = async (req, res) => {
                 none: ["requested"],
                 requested: ["approved", "rejected"],
                 approved: ["pickup_completed", "rejected"],
-                pickup_completed: ["initiated"],
-                initiated: ["processed"],
+                // After pickup_completed go directly to processed (skip initiated)
+                pickup_completed: ["processed"],
                 processed: ["processed"],
                 rejected: ["rejected"],
             },
             cancelled: {
-                none: ["initiated"],
-                initiated: ["processed"],
+                // For cancelled orders, go directly to processed
+                none: ["processed"],
                 processed: ["processed"],
                 rejected: ["rejected"],
             },
@@ -2132,13 +2130,13 @@ export const cancelOrderBeforeDelivery = async (req, res) => {
         order.cancelledFromStatus = previousStatus;
         appendOrderStatusHistory(order, "cancelled");
 
-        // If Razorpay payment, start refund process
+        // If Razorpay payment, mark refund as processed immediately for cancellations (automatic refund)
         if (order.paymentMethod === "Razorpay" && order.paymentStatus === "completed") {
-            order.refundStatus = "requested";
+            order.refundStatus = "processed";
             order.refundReason = reason || "User cancelled order";
-            order.refundRequestedAt = new Date();
             order.refundAmount = order.totalAmount;
-            appendRefundStatusHistory(order, "requested");
+            order.refundProcessedAt = new Date();
+            appendRefundStatusHistory(order, "processed");
         }
 
         // Restore stock
@@ -2158,7 +2156,7 @@ export const cancelOrderBeforeDelivery = async (req, res) => {
             orderDoc: order,
             type: "order_cancelled",
             title: "Order cancelled",
-            message: `Your order ${String(order._id).slice(-8).toUpperCase()} has been cancelled.${order.refundStatus === "requested" ? " Refund process initiated." : ""}`,
+            message: `Your order ${String(order._id).slice(-8).toUpperCase()} has been cancelled.${order.refundStatus === "processed" ? " Refund has been processed." : (order.refundStatus === "requested" ? " Refund process initiated." : "")}`,
             link: "/orders"
         }).catch(() => null);
 
@@ -2508,7 +2506,7 @@ export const updateReturnStatus = async (req, res) => {
             }
         }
 
-        const validStatuses = ["pending", "approved", "rejected", "pickup_completed", "refund_initiated", "refund_completed"];
+        const validStatuses = ["pending", "approved", "rejected", "pickup_completed", "refund_completed"];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({
                 message: "Invalid status",
@@ -2526,10 +2524,6 @@ export const updateReturnStatus = async (req, res) => {
                 order.refundStatus = "approved";
                 appendRefundStatusHistory(order, "approved");
             }
-        } else if (status === "refund_initiated") {
-            returnRequest.refundInitiatedAt = new Date();
-            order.refundStatus = "initiated";
-            appendRefundStatusHistory(order, "initiated");
         } else if (status === "refund_completed") {
             returnRequest.refundCompletedAt = new Date();
             order.refundStatus = "processed";

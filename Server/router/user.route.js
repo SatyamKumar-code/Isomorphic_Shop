@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginUserController, registerUserController, registerSellerController, verifyEmailController, refreshTokenController, userAvatarController, adminAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, updateSellerApprovalStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController, adminSendResetPasswordLinkController, adminForceLogoutUserController, adminUpdateCustomerNoteController, getAdminAccessModeController, adminChangePasswordController, socialLoginController, getAdminController } from "../controller/user.controller.js";
+import { loginUserController, registerUserController, registerSellerController, verifyEmailController, refreshTokenController, userAvatarController, adminAvatarController, logoutController, removeImageFromCloudinary, updateUserDetails, updateUserStatus, updateSellerApprovalStatus, forgotPasswordController, verifyForgotPasswordOtpController, resetPasswordController, resetPasswordWithOtpController, getUserController, getCustomersController, adminSendResetPasswordLinkController, adminForceLogoutUserController, adminUpdateCustomerNoteController, getAdminAccessModeController, adminChangePasswordController, socialLoginController, getAdminController, getRefundAccounts, saveRefundAccount, deleteRefundAccount } from "../controller/user.controller.js";
 import upload from "../middlewares/multer.js";
 import userMiddleware from "../middlewares/userMiddleware.js";
 import adminMiddleware from "../middlewares/adminMiddleware.js";
@@ -25,6 +25,10 @@ userRouter.put("/user-avatar", userMiddleware, upload.array('avatar'), userAvata
 userRouter.put("/admin/user-avatar", adminMiddleware, upload.array('avatar'), adminAvatarController);
 userRouter.delete("/deleteImage", userMiddleware, removeImageFromCloudinary);
 userRouter.put("/", userMiddleware, updateUserDetails);
+userRouter.get("/refund-accounts", userMiddleware, getRefundAccounts);
+userRouter.post("/refund-accounts", userMiddleware, saveRefundAccount);
+userRouter.put("/refund-accounts/:accountId", userMiddleware, saveRefundAccount);
+userRouter.delete("/refund-accounts/:accountId", userMiddleware, deleteRefundAccount);
 userRouter.put("/updateUserStatus/:id", adminMiddleware, updateUserStatus);
 userRouter.put("/admin/sellers/:id/approval", adminMiddleware, updateSellerApprovalStatus);
 userRouter.post("/admin/send-reset-link/:id", adminMiddleware, adminSendResetPasswordLinkController);

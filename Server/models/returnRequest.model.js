@@ -23,7 +23,7 @@ const returnRequestSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ["pending", "approved", "rejected", "pickup_completed", "refund_initiated", "refund_completed"],
+        enum: ["pending", "approved", "rejected", "pickup_completed", "refund_completed"],
         default: "pending"
     },
     bankDetails: {
