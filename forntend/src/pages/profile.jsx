@@ -15,6 +15,7 @@ const Profile = () => {
 
     const context = useContext(MyContext);
     const navigate = useNavigate();
+    const isAuthReady = context?.isAuthReady;
 
 
     const handleLogout = () => {
@@ -27,10 +28,14 @@ const Profile = () => {
     }
 
     useEffect(() => {
-        if (!context?.isLoggedIn) {
+        if (isAuthReady && !context?.isLoggedIn) {
             navigate("/login");
         }
-    }, [context?.isLoggedIn, navigate]);
+    }, [context?.isLoggedIn, isAuthReady, navigate]);
+
+    if (!isAuthReady) {
+        return null;
+    }
 
     return (
         context?.isLoggedIn === true && (
@@ -40,11 +45,14 @@ const Profile = () => {
                     <h1 className='text-3xl font-bold'>{context?.userData?.name || 'User'}</h1>
                     <p className='text-gray-600'>{context?.userData?.email || ''}</p>
                 </div>
-                <div className='relative flex mt-3   w-full justify-start items-center gap-3 bg-gray-100 p-3 rounded-lg'>
+                <Link to="/profile/manage" className='relative flex mt-3 w-full justify-start items-center gap-3 rounded-lg bg-gray-100 p-3 transition hover:bg-gray-200'>
                     <FaUser className='text-xl text-gray-700' />
-                    <h1 className='font-bold text-gray-700'>Profile</h1>
+                    <div>
+                        <h1 className='font-bold text-gray-700'>Profile</h1>
+                        <p className='text-xs text-gray-500'>Update photo and name</p>
+                    </div>
                     <IoIosArrowForward className='absolute right-2 text-2xl text-gray-700' />
-                </div>
+                </Link>
 
                 <div className='relative flex mt-3 w-full justify-start items-center gap-3 bg-gray-100 p-3 rounded-lg'>
                     <Link to="/setting" className='flex items-center gap-3 w-full'>

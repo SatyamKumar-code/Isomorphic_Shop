@@ -132,6 +132,18 @@ export const editData = async (url, updateData) => {
     return res.data;
 }
 
+export const putData = async (url, updateData) => {
+    const params = {
+        headers: {
+            ...getHeaders('application/json'),
+        },
+        withCredentials: true,
+    };
+
+    const { data } = await axios.put(buildApiUrl(url), updateData, params);
+    return data;
+}
+
 export const deleteData = async (url) => {
     const params = {
         headers: {

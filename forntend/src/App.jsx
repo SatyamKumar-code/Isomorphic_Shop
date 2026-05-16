@@ -9,6 +9,7 @@ import VerifyEmail from './pages/verifyEmail';
 import { fetchDataFromApi } from './utils/api';
 import Search from './pages/search';
 import Profile from './pages/profile';
+import ManageProfile from './pages/profileManage';
 import Setting from './pages/setting';
 import ProductDetails from './components/productDetails';
 import Cart from './pages/cart';
@@ -26,6 +27,7 @@ const App = () => {
 
   const [userData, setUserData] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   const alertBox = (type, msg) => {
     if (type === "Success") {
@@ -50,6 +52,8 @@ const App = () => {
       console.log("Auth check error:", err);
       setUserData(null);
       setIsLoggedIn(false);
+    } finally {
+      setIsAuthReady(true);
     }
   }
 
@@ -62,7 +66,8 @@ const App = () => {
     userData,
     setUserData,
     isLoggedIn,
-    setIsLoggedIn
+    setIsLoggedIn,
+    isAuthReady,
   }
 
   return (
@@ -78,6 +83,7 @@ const App = () => {
             <Route path='/addresses' exact={true} element={<Addresses />} />
             <Route path='/products' exact={true} element={<Products />} />
             <Route path='/profile' exact={true} element={<Profile />} />
+            <Route path='/profile/manage' exact={true} element={<ManageProfile />} />
             <Route path='/setting' exact={true} element={<Setting />} />
             <Route path='/product/:id' exact={true} element={<ProductDetails />} />
             <Route path='/cart' exact={true} element={<Cart />} />

@@ -18,6 +18,7 @@ const normalizeDigits = (value) => String(value || '').replace(/\D/g, '');
 const RefundAccounts = () => {
     const context = useContext(MyContext);
     const navigate = useNavigate();
+    const isAuthReady = context?.isAuthReady;
     const [accounts, setAccounts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -26,10 +27,10 @@ const RefundAccounts = () => {
     const [form, setForm] = useState(emptyForm);
 
     useEffect(() => {
-        if (!context?.isLoggedIn) {
+        if (isAuthReady && !context?.isLoggedIn) {
             navigate('/login');
         }
-    }, [context?.isLoggedIn, navigate]);
+    }, [context?.isLoggedIn, isAuthReady, navigate]);
 
     const loadAccounts = async () => {
         setIsLoading(true);
@@ -138,11 +139,9 @@ const RefundAccounts = () => {
         }
     };
 
-    const subtitle = useMemo(() => {
-        return accounts.length
-            ? 'Manage the bank accounts used for COD return refunds.'
-            : 'Save up to 4 refund accounts for faster COD return refunds.';
-    }, [accounts.length]);
+    if (!isAuthReady) {
+        return null;
+    }
 
     if (!context?.isLoggedIn) {
         return null;
@@ -150,16 +149,15 @@ const RefundAccounts = () => {
 
     return (
         <div className='min-h-screen bg-[#f4f5f7] pb-10'>
-            <div className='flex items-center gap-4 w-full px-4 py-4 bg-white border-b border-gray-200'>
+            <div className='flex items-center gap-4 w-full px-1 py-4 bg-white border-b border-gray-200'>
                 <BackButton />
                 <div>
                     <h2 className='font-bold text-[22px] text-gray-900'>Refund Accounts</h2>
-                    <p className='text-sm text-gray-500'>{subtitle}</p>
                 </div>
             </div>
 
-            <div className='mx-auto w-full max-w-3xl px-4 pt-4'>
-                <div className='rounded-3xl bg-white p-4 shadow-sm sm:p-6'>
+            <div className='mx-auto w-full max-w-3xl px-0 sm:px-4 pt-4'>
+                <div className='p-0 sm:p-6'>
                     <div className='mb-4 flex items-center justify-between gap-3'>
                         <div>
                             <p className='text-sm font-semibold text-gray-900'>Saved accounts</p>
@@ -176,10 +174,10 @@ const RefundAccounts = () => {
 
                     <div className='space-y-3'>
                         {isLoading ? (
-                            <div className='rounded-2xl border border-dashed border-gray-300 p-5 text-sm text-gray-500'>Loading accounts...</div>
+                            <div className='rounded-xl border border-dashed border-gray-300 p-5 text-sm text-gray-500'>Loading accounts...</div>
                         ) : accounts.length ? (
                             accounts.map((account) => (
-                                <div key={account._id} className='rounded-2xl border border-gray-200 bg-gray-50 p-4'>
+                                <div key={account._id} className='rounded-xl border border-gray-200 bg-gray-50 p-4'>
                                     <div className='flex items-start justify-between gap-3'>
                                         <div className='min-w-0 flex-1'>
                                             <p className='truncate text-base font-semibold text-gray-900'>{account.accountHolder || 'Unnamed account'}</p>
@@ -211,18 +209,18 @@ const RefundAccounts = () => {
                                 </div>
                             ))
                         ) : (
-                            <div className='rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500'>
+                            <div className='rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3 sm:p-5 text-sm text-gray-500'>
                                 No refund accounts saved yet.
                             </div>
                         )}
                     </div>
 
                     {showForm && (
-                        <div className='mt-5 rounded-3xl border border-yellow-200 bg-yellow-50 p-4 sm:p-5'>
+                        <div className='mt-5 rounded-xl border border-yellow-200 bg-yellow-50 p-4 sm:p-5'>
                             <div className='mb-4 flex items-start justify-between gap-3'>
                                 <div>
                                     <h3 className='text-lg font-bold text-yellow-900'>{editingAccountId ? 'Edit refund account' : 'Add new refund account'}</h3>
-                                    <p className='text-sm text-yellow-800'>Enter the account number twice. Both entries must match before saving.</p>
+                                    
                                 </div>
                                 <button
                                     type='button'
@@ -274,13 +272,7 @@ const RefundAccounts = () => {
                             </div>
 
                             <div className='mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end'>
-                                <button
-                                    type='button'
-                                    onClick={resetForm}
-                                    className='rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50'
-                                >
-                                    Cancel
-                                </button>
+                                
                                 <button
                                     type='button'
                                     onClick={saveAccount}
@@ -294,7 +286,7 @@ const RefundAccounts = () => {
                     )}
                 </div>
 
-                <div className='mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900'>
+                <div className='mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900'>
                     These accounts are reused on COD returns. Editing or adding a new account still requires matching the account number twice.
                 </div>
             </div>

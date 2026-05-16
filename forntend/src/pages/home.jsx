@@ -32,7 +32,7 @@ const Home = () => {
                     context?.isLoggedIn === true && (
                         <>
                             <div className='flex items-center'>
-                                <img src="profile.png" alt="" width="45px!" height="45px" />
+                                <img src={context.userData?.avatar || "profile.png"} alt="Profile" className='w-11.25 h-11.25 rounded-full object-cover' />
                                 <div className='ml-2 leading-4 '>
                                     <span className='text-gray-600'>Hello!</span>
                                     <h2 className='font-bold'>{context.userData?.name}</h2>

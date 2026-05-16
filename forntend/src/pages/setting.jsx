@@ -19,19 +19,6 @@ const Setting = () => {
                 </div>
             </div>
             <div>
-                <h1 className='text-[16px] font-bold mt-5'>Account</h1>
-                <div className='relative flex items-center mt-3 bg-gray-100 rounded-lg w-full'>
-                    <img src="profile.png" className='w-15 h-15 rounded-full' />
-                    <div className='ml-3'>
-                        <h1 className='text-md font-bold'>Satyam kumar</h1>
-                        <p className='text-gray-600'>satyamkumar@example.com</p>
-
-                    </div>
-                    <IoIosArrowForward className='absolute right-2 text-2xl text-gray-700' />
-                </div>
-                <hr className='my-3' />
-
-                <h1 className='text-[16px] font-bold mt-5'>Setting</h1>
 
                 <div className='relative flex mt-3   w-full justify-start items-center gap-3 bg-gray-100 p-3 rounded-lg'>
                     <FaBell className='text-xl text-gray-700' />
