@@ -98,3 +98,28 @@ export const notifySellerPayoutUpdate = async ({ sellerId, type, title, message,
         meta,
     });
 };
+
+export const notifyOrderUser = async ({ orderDoc, type, title, message, link = "/orders", meta = {} }) => {
+    if (!orderDoc?.userId) {
+        return null;
+    }
+
+    const orderId = String(orderDoc?._id || "");
+    const notificationMeta = {
+        orderId,
+        shortOrderId: shortOrderId(orderId),
+        status: orderDoc?.status || "",
+        refundStatus: orderDoc?.refundStatus || "",
+        ...meta,
+    };
+
+    return createNotification({
+        recipientRole: "user",
+        recipientId: orderDoc.userId,
+        type,
+        title,
+        message,
+        link,
+        meta: notificationMeta,
+    });
+};

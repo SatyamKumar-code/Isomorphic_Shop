@@ -8,6 +8,13 @@ const getRecipientFilter = (req) => {
         };
     }
 
+    if (req.userRole === "user") {
+        return {
+            recipientRole: "user",
+            recipientId: req.userId,
+        };
+    }
+
     return {
         recipientRole: "admin",
     };

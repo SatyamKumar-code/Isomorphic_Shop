@@ -6,7 +6,7 @@ import UserModel from "../models/user.model.js";
 import AddressModel from "../models/address.model.js";
 import ReturnRequestModel from "../models/returnRequest.model.js";
 import razorpay from "../config/razorpay.js";
-import { notifyOrderParticipants } from "../utils/notificationService.js";
+import { notifyOrderParticipants, notifyOrderUser } from "../utils/notificationService.js";
 
 
 // Helper to validate, decrement stock, and clear cart atomically, returning a deep clone of products
@@ -1889,13 +1889,12 @@ export const updateOrderStatus = async (req, res) => {
             }
         }
 
-        await notifyOrderParticipants({
+        await notifyOrderUser({
             orderDoc: updatedStatus,
             type: "order_status_updated",
             title: "Order status updated",
             message: `Order ${String(updatedStatus._id).slice(-8).toUpperCase()} status changed to ${normalizedIncomingStatus.replace(/_/g, " ")}.`,
-            link: "/order-management",
-            notifyAdmin: false,
+            link: "/orders",
         }).catch(() => null);
 
         return res.status(200).json({
@@ -2060,6 +2059,7 @@ export const updateOrderRefundStatus = async (req, res) => {
 
         await order.save();
 
+        // Notify sellers about refund status change
         await notifyOrderParticipants({
             orderDoc: order,
             type: "order_refund_updated",
@@ -2068,6 +2068,17 @@ export const updateOrderRefundStatus = async (req, res) => {
             link: "/order-management",
             notifyAdmin: false,
         }).catch(() => null);
+
+        // Notify user about refund status
+        if (normalizedIncomingRefundStatus === "processed") {
+            await notifyOrderUser({
+                orderDoc: order,
+                type: "order_refund_processed",
+                title: "Refund processed",
+                message: `Your refund for order ${String(order._id).slice(-8).toUpperCase()} has been processed.`,
+                link: "/orders",
+            }).catch(() => null);
+        }
 
         return res.status(200).json({
             message: "Order refund status updated successfully",
@@ -2153,14 +2164,13 @@ export const cancelOrderBeforeDelivery = async (req, res) => {
 
         await order.save();
 
-        // Notify user
+        // Notify seller about order cancellation
         await notifyOrderParticipants({
             orderDoc: order,
             type: "order_cancelled",
             title: "Order cancelled",
-            message: `Your order ${String(order._id).slice(-8).toUpperCase()} has been cancelled.${order.refundStatus === "processed" ? " Refund has been processed." : (order.refundStatus === "requested" ? " Refund process initiated." : "")}`,
-            link: "/orders"
-            ,
+            message: `Order ${String(order._id).slice(-8).toUpperCase()} has been cancelled by customer.${order.refundStatus === "processed" ? " Refund has been processed." : (order.refundStatus === "requested" ? " Refund process initiated." : "")}`,
+            link: "/order-management",
             notifyAdmin: false,
         }).catch(() => null);
 
