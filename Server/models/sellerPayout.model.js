@@ -48,7 +48,6 @@ const sellerPayoutSchema = new mongoose.Schema({
     },
 }, { timestamps: true });
 
-sellerPayoutSchema.index({ sellerId: 1 }, { unique: true });
 sellerPayoutSchema.index({ payoutDue: -1, updatedAt: -1 });
 
 const SellerPayoutModel = mongoose.model("seller_payout", sellerPayoutSchema);

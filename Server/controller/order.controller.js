@@ -1893,8 +1893,7 @@ export const updateOrderStatus = async (req, res) => {
             orderDoc: updatedStatus,
             type: "order_status_updated",
             title: "Order status updated",
-            message: `Order ${String(updatedStatus._id).slice(-8).toUpperCase()} status changed to ${normalizedIncomingStatus.replace(/_/g, " ")}.`,
-            link: "/orders",
+            message: `Our ${String(updatedStatus?.products?.[0]?.productId?.productName).slice(0, 50).toUpperCase()} has been ${normalizedIncomingStatus.replace(/_/g, " ")}.`,
         }).catch(() => null);
 
         return res.status(200).json({
@@ -2064,7 +2063,7 @@ export const updateOrderRefundStatus = async (req, res) => {
             orderDoc: order,
             type: "order_refund_updated",
             title: "Refund status updated",
-            message: `Order ${String(order._id).slice(-8).toUpperCase()} refund status changed to ${normalizedIncomingRefundStatus.replace(/_/g, " ")}.`,
+            message: `Order ${String(order?.products?.[0]?.productId?.productName).slice(0, 50).toUpperCase()} refund status ${normalizedIncomingRefundStatus.replace(/_/g, " ")}.`,
             link: "/order-management",
             notifyAdmin: false,
         }).catch(() => null);
@@ -2075,8 +2074,7 @@ export const updateOrderRefundStatus = async (req, res) => {
                 orderDoc: order,
                 type: "order_refund_processed",
                 title: "Refund processed",
-                message: `Your refund for order ${String(order._id).slice(-8).toUpperCase()} has been processed.`,
-                link: "/orders",
+                message: `Your refund for order ${String(order?.products?.[0]?.productId?.productName).slice(0, 50).toUpperCase()} has been processed.`,
             }).catch(() => null);
         }
 

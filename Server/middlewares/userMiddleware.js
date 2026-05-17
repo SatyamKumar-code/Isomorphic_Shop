@@ -43,6 +43,7 @@ const userMiddleware = async (req, res, next) => {
         }
 
         req.userId = decoded.id;
+        req.userRole = decoded.role;
         next();
 
     } catch (error) {
@@ -73,6 +74,7 @@ export const optionalUserMiddleware = async (req, res, next) => {
 
         if (decoded && decoded.role === "user") {
             req.userId = decoded.id;
+            req.userRole = decoded.role;
         }
 
         next();

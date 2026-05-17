@@ -6,7 +6,6 @@ const sellerSocialLinksSchema = new mongoose.Schema({
         ref: "User",
         required: true,
         unique: true,
-        index: true,
     },
     instagramLink: {
         type: String,
@@ -21,8 +20,6 @@ const sellerSocialLinksSchema = new mongoose.Schema({
         default: "",
     },
 }, { timestamps: true });
-
-sellerSocialLinksSchema.index({ userId: 1 }, { unique: true });
 
 const SellerSocialLinksModel = mongoose.model("SellerSocialLinks", sellerSocialLinksSchema);
 
